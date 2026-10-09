@@ -12,7 +12,7 @@ import (
 	"golang.org/x/crypto/bcrypt"
 )
 
-type configuration struct{ DatabaseURL, Addr, BusinessName, AdminName, AdminPhone, AdminPassword string }
+type configuration struct{ DatabaseURL, Addr, BusinessName, AdminName, AdminPhone, AdminPassword, WhatsAppDatabaseURL string }
 
 func loadConfig(path string) (configuration, error) {
 	file, err := os.Open(path)
@@ -46,7 +46,7 @@ func loadConfig(path string) (configuration, error) {
 		}
 		return values[key]
 	}
-	c := configuration{get("DATABASE_URL"), get("API_ADDR"), get("BOOTSTRAP_BUSINESS_NAME"), get("BOOTSTRAP_ADMIN_NAME"), get("BOOTSTRAP_ADMIN_PHONE"), get("BOOTSTRAP_ADMIN_PASSWORD")}
+	c := configuration{get("DATABASE_URL"), get("API_ADDR"), get("BOOTSTRAP_BUSINESS_NAME"), get("BOOTSTRAP_ADMIN_NAME"), get("BOOTSTRAP_ADMIN_PHONE"), get("BOOTSTRAP_ADMIN_PASSWORD"), get("WHATSAPP_DATABASE_URL")}
 	if c.DatabaseURL == "" {
 		return c, errors.New("DATABASE_URL is required")
 	}

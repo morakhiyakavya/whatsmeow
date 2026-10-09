@@ -24,6 +24,7 @@ type api struct {
 	db        *sql.DB
 	limiter   loginLimiter
 	dummyHash []byte
+	whatsapp  *whatsAppService
 }
 
 func main() {
@@ -69,6 +70,16 @@ func run(envPath string, bootstrap bool) error {
 	if err != nil {
 		return errors.New("could not initialize authentication")
 	}
+	if config.WhatsAppDatabaseURL != "" {
+		app.whatsapp, err = openWhatsAppService(ctx, config.WhatsAppDatabaseURL)
+		if err != nil {
+			return err
+		}
+		defer app.whatsapp.close()
+		if err = app.whatsapp.resume(); err != nil {
+			return errors.New("could not restore mapped WhatsApp accounts")
+		}
+	}
 	server := &http.Server{Addr: config.Addr, Handler: app.routes(), ReadHeaderTimeout: 5 * time.Second, ReadTimeout: 10 * time.Second, WriteTimeout: 15 * time.Second, IdleTimeout: 60 * time.Second}
 	serverErr := make(chan error, 1)
 	listener, err := net.Listen("tcp", config.Addr)
@@ -108,6 +119,10 @@ func (a *api) routes() http.Handler {
 	mux.HandleFunc("GET /api/businesses/{businessID}/whatsapp-accounts", a.protect(false, a.listWhatsAppAccounts))
 	mux.HandleFunc("POST /api/businesses/{businessID}/whatsapp-accounts", a.protect(false, a.createWhatsAppAccount))
 	mux.HandleFunc("GET /api/businesses/{businessID}/whatsapp-accounts/{id}", a.protect(false, a.getWhatsAppAccount))
+	mux.HandleFunc("POST /api/businesses/{businessID}/whatsapp-accounts/{id}/pair", a.protect(false, a.pairWhatsAppAccount))
+	mux.HandleFunc("POST /api/businesses/{businessID}/whatsapp-accounts/{id}/connect", a.protect(false, a.connectWhatsAppAccount))
+	mux.HandleFunc("GET /api/businesses/{businessID}/whatsapp-accounts/{id}/connection", a.protect(false, a.whatsAppConnection))
+	mux.HandleFunc("GET /api/businesses/{businessID}/whatsapp-accounts/{id}/qr", a.protect(false, a.whatsAppQR))
 	mux.HandleFunc("GET /api/businesses/{businessID}/transactions", a.protect(false, a.listTransactions))
 	mux.HandleFunc("POST /api/businesses/{businessID}/transactions", a.protect(false, a.createTransaction))
 	mux.HandleFunc("GET /api/businesses/{businessID}/transactions/{id}", a.protect(false, a.getTransaction))

@@ -42,6 +42,32 @@ Authorization: Bearer {{token}}
 GET {{base}}/api/businesses/{{business}}/whatsapp-accounts/{{whatsapp_account}}
 Authorization: Bearer {{token}}
 
+### Start QR pairing (registering user only; retries reuse the running attempt)
+POST {{base}}/api/businesses/{{business}}/whatsapp-accounts/{{whatsapp_account}}/pair
+Authorization: Bearer {{token}}
+Content-Type: application/json
+
+{"method":"qr"}
+
+### Alternatively start phone-code pairing; use your real WhatsApp phone
+POST {{base}}/api/businesses/{{business}}/whatsapp-accounts/{{whatsapp_account}}/pair
+Authorization: Bearer {{token}}
+Content-Type: application/json
+
+{"method":"phone","phone_number":"+919000000001"}
+
+### Poll current state and pairing code (owner only; treat codes as secrets)
+GET {{base}}/api/businesses/{{business}}/whatsapp-accounts/{{whatsapp_account}}/connection
+Authorization: Bearer {{token}}
+
+### Render the current QR as a PNG with authenticated headers
+GET {{base}}/api/businesses/{{business}}/whatsapp-accounts/{{whatsapp_account}}/qr
+Authorization: Bearer {{token}}
+
+### Retry a saved connection; startup also restores active mapped sessions
+POST {{base}}/api/businesses/{{business}}/whatsapp-accounts/{{whatsapp_account}}/connect
+Authorization: Bearer {{token}}
+
 ### Create a customer
 POST {{base}}/api/businesses/{{business}}/customers
 Authorization: Bearer {{token}}

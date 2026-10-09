@@ -355,6 +355,9 @@ func TestManualLedgerIntegration(t *testing.T) {
 	t.Run("WhatsApp account ownership", func(t *testing.T) {
 		testWhatsAppAccounts(t, db, admin, client, cashier, other, businessID, otherBusiness, cashierID)
 	})
+	t.Run("WhatsApp pairing lifecycle", func(t *testing.T) {
+		testWhatsAppPairing(t, dsn, db, app, client, cashier, other, businessID, cashierID)
+	})
 	status, object, _ = other.request("GET", "/api/businesses/"+otherBusiness+"/transactions/"+transactionID, nil, "")
 	expectStatus(t, 404, status, object)
 	status, object, _ = other.request("GET", "/api/businesses/"+otherBusiness+"/transactions/"+transactionID+"/history", nil, "")

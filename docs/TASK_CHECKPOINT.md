@@ -23,3 +23,9 @@ None.
    - Paths: `.gitignore`, `docs/TASK_CHECKPOINT.md`.
 
 Application work predating this policy remains outside the count until reviewed and recorded in a later batch. Smaller batches below are explicitly authorized by the user's request for multiple reversible commits.
+
+### Batch 2 — PostgreSQL ledger foundation
+
+1. Review and checkpoint the existing application schema, API migration, schema tests and database design.
+   - Verification: reviewed SQL, design and test runner; `database/Test-Schema.ps1 -WithApiTests -WithSessionTests` passed all schema, restricted-role API and synthetic session persistence assertions; staged diff passed `git diff --cached --check`.
+   - Paths: `database/001_initial.sql`, `database/002_api.sql`, `database/Test-Schema.ps1`, `database/schema_test.sql`, `docs/POS_DATABASE_DESIGN.md`, `docs/TASK_CHECKPOINT.md`.

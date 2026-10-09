@@ -29,3 +29,9 @@ Application work predating this policy remains outside the count until reviewed 
 1. Review and checkpoint the existing application schema, API migration, schema tests and database design.
    - Verification: reviewed SQL, design and test runner; `database/Test-Schema.ps1 -WithApiTests -WithSessionTests` passed all schema, restricted-role API and synthetic session persistence assertions; staged diff passed `git diff --cached --check`.
    - Paths: `database/001_initial.sql`, `database/002_api.sql`, `database/Test-Schema.ps1`, `database/schema_test.sql`, `docs/POS_DATABASE_DESIGN.md`, `docs/TASK_CHECKPOINT.md`.
+
+### Batch 3 — PostgreSQL private-text viewer
+
+1. Review and checkpoint the existing QR login, explicit session selection, contact resolution and bounded private-text viewer.
+   - Verification: reviewed implementation, fixtures and documentation; root/viewer `go test ./...`, viewer `go vet ./...` and isolated PostgreSQL session persistence checks passed; staged diff passed `git diff --cached --check`; session data and local environment configuration are ignored.
+   - Paths: `examples/login/.env.example.ps1`, `examples/login/.gitignore`, `examples/login/README.md`, `examples/login/contacts.go`, `examples/login/contacts_test.go`, `examples/login/go.mod`, `examples/login/go.sum`, `examples/login/main.go`, `examples/login/main_test.go`, `examples/login/session.go`, `examples/login/session_test.go`, `examples/login/viewer.go`, `examples/login/viewer_test.go`, `docs/TASK_CHECKPOINT.md`.

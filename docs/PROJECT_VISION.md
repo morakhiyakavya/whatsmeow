@@ -144,7 +144,7 @@ The web and mobile applications communicate with the Go backend. Account credent
 - Revoked or invalid sessions require relinking.
 - Application account IDs remain stable even if a linked-device credential is replaced.
 
-The current implementation has PostgreSQL-backed terminal QR login. Web/mobile pairing screens and phone-number pairing are planned, not implemented yet.
+The current implementation has PostgreSQL-backed terminal QR login and authenticated backend QR/phone-code pairing endpoints with PNG rendering, stable account mapping, saved-session reconnection and revocation handling. Web/mobile pairing screens remain planned.
 
 ## AI decisions and transaction history
 
@@ -200,18 +200,19 @@ Implemented and tested:
 - Exact decimal strings at the API boundary, creation idempotency with original request fingerprints, optimistic edits, and bounded pagination/filtering.
 - Local `ipo_platform` PostgreSQL database setup with separate owner/runtime roles and randomly generated credentials in an ignored, access-restricted root `.env`.
 - Isolated API integration tests under a restricted database role, including concurrent creation retries, business isolation, permissions, and immutable transaction history.
-- Authenticated WhatsApp account registration/list/detail APIs: stable account IDs, business ownership and the signed-in registering user; restricted runtime grants prevent callers from claiming session bindings. New records remain unpaired until the pairing milestone.
+- Authenticated WhatsApp account registration/list/detail APIs: stable account IDs, business ownership and the signed-in registering user; restricted runtime grants prevent callers from claiming session bindings.
+- Backend QR/phone pairing, owner-only code/PNG retrieval, verified bindings, saved-session recovery and revocation handling; cross-process account locks and isolated protocol lifecycle tests. A live phone pairing still needs user interaction and has not yet been verified.
 
 Still to implement or connect:
 
 - Remote deployment configuration and live PostgreSQL-backed WhatsApp pairing. The local database and application connection are now configured and checked.
 - Password reset, public account onboarding, staff membership management, and expansion of the baseline admin/cashier permissions.
-- Authenticated QR/phone pairing that binds the registered business/account record to a verified WhatsApp session, plus reconnection and relinking under the same stable account ID.
+- Web/mobile pairing screens on the implemented QR/phone API, plus live phone validation and deployment hardening of the trusted worker credentials/capacity.
 - Persistent WhatsApp ingestion into the application message archive; the manual business APIs are implemented.
 - Sending a WhatsApp message to the selected customer after a manual transaction is saved, using the creating user's linked WhatsApp account.
 - AI integration, transaction extraction, reconciliation, and business-rule execution.
 - Web and mobile interfaces for linking accounts, viewing conversations, entering transactions, and inspecting history/evidence.
-- Phone-number pairing in the application UI.
+- Phone-number pairing screens in the application UI; the backend and local helper now support phone codes.
 - Subject 1/Subject 2 analytics and their business formulas.
 
 The previous SQLite `session.db` has been preserved. Its real account data has not been migrated to PostgreSQL. A PostgreSQL-backed first login currently requires fresh pairing.
@@ -220,8 +221,8 @@ The previous SQLite `session.db` has been preserved. Its real account data has n
 
 Keep each milestone in a separate local commit after its relevant checks pass:
 
-1. **Account registry (implemented):** register and inspect accounts through authenticated business routes. Session identity comes from the future pairing worker.
-2. **Authenticated pairing:** authorize the account and registering staff member, display QR/phone codes, persist the verified device binding, and reconnect using that mapping. Retain the stable application ID through relinking and prevent duplicate active clients.
+1. **Account registry (implemented):** register and inspect accounts through authenticated business routes. Session identity comes from the trusted pairing worker.
+2. **Authenticated pairing (backend implemented):** owner-only QR/phone codes and QR PNGs, verified bindings, saved-session recovery, stable IDs through relinking and database account locks. Validate a real phone before treating live interoperability as verified.
 3. **Persistent private-text ingestion:** reuse the viewer's filtering and PN/LID normalization, archive messages with delivery deduplication and revisions, and expose business-scoped conversation reads.
 4. **Manual confirmation delivery:** send from the creating user's verified linked account after the transaction commits; track retries and associate the outgoing message with the existing transaction.
 5. **AI extraction and reconciliation:** retain exact evidence, validate versioned business rules, and reconcile follow-up messages before automatic transaction writes.
@@ -251,4 +252,5 @@ Inventory, payment settlement, and media processing are not part of the agreed i
 - WhatsApp account pagination migration: `database/003_whatsapp_accounts.sql`
 - Local database creation: `scripts/Setup-LocalDatabase.ps1`
 - API startup and smoke check: `scripts/Start-Api.ps1`, `scripts/Smoke-Api.ps1`
+- Local pairing helper and offline self-check: `scripts/Pair-WhatsApp.ps1`, `scripts/Test-PairWhatsApp.ps1`
 - Manual API examples: `backend/requests.http`

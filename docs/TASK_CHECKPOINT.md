@@ -59,3 +59,9 @@ Application work predating this policy remains outside the count until reviewed 
    - Verification: backend `go test ./...` and `go vet ./...` passed; isolated PostgreSQL API/session checks passed with fake protocol clients, including owner-only codes, QR PNGs, retry reuse, canonical UUIDs, cross-process locks, phone codes, restart recovery, revocation, missing credentials and disabled membership. Local API startup/storage initialization and read-only smoke passed. Live phone pairing and race instrumentation were not run (CGO is disabled).
    - Paths: `backend/config.go`, `backend/main.go`, `backend/go.mod`, `backend/go.sum`, `backend/whatsapp_service.go`, `backend/whatsapp_pairing.go`, `backend/whatsapp_service_test.go`, `backend/integration_test.go`, `backend/requests.http`, `docs/TASK_CHECKPOINT.md`.
    - Limits: 32 active accounts per worker, 64 connection states, no passkey pairing support; a crash between library credential persistence and account binding requires fresh pairing. No arbitrary session adoption or customer messages.
+
+### Batch 7 — Local pairing helper and lifecycle documentation
+
+1. Add a local QR/phone pairing helper with offline checks and document the implemented lifecycle, permissions, setup and limits.
+   - Verification: `scripts/Test-PairWhatsApp.ps1` passed offline QR, phone, saved-session, failure and cleanup assertions without reading real configuration or calling HTTP; PowerShell parser checks passed; reviewed documentation/diffs and local links against implemented routes. No live WhatsApp pairing was attempted; the temporary local smoke server was stopped.
+   - Paths: `scripts/Pair-WhatsApp.ps1`, `scripts/Test-PairWhatsApp.ps1`, `backend/README.md`, `docs/PROJECT_VISION.md`, `docs/POS_DATABASE_DESIGN.md`, `docs/TASK_CHECKPOINT.md`.

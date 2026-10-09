@@ -56,7 +56,7 @@ The root `.env` contains randomly generated local credentials:
 |---|---|
 | `DATABASE_URL` | `ipo_platform_api` runtime role; no schema ownership, transaction deletion or truncation |
 | `MIGRATION_DATABASE_URL` | `ipo_platform_owner`, which owns the application schemas |
-| `WHATSAPP_DATABASE_URL` | Owner connection for the viewer's library-managed WhatsApp migrations/session store |
+| `WHATSAPP_DATABASE_URL` | Trusted pairing worker/viewer connection for WhatsApp migrations, sessions and verified account bindings |
 | `BOOTSTRAP_ADMIN_PASSWORD` | Initial app password, hashed with bcrypt when bootstrapped |
 
 PostgreSQL listens on localhost:5432; the application database is `ipo_platform`.
@@ -104,6 +104,7 @@ request checks the active membership and business state against PostgreSQL.
 |---|---|---|
 | View/create customers | Yes | Yes |
 | Register/view WhatsApp accounts in their business | Yes | Yes |
+| Pair/connect an account or read its pairing code | Registering user only | Registering user only |
 | View IPOs and form types | Yes | Yes |
 | Create IPOs in the shared catalogue | Yes | No |
 | View/create staff in their business | Yes | No |
@@ -131,6 +132,10 @@ IDs from `/api/me`. Supplying another business ID never confers access.
 | GET | `/form-types` | Supported form catalogue |
 | GET, POST | `/whatsapp-accounts` | List/register business-owned WhatsApp accounts |
 | GET | `/whatsapp-accounts/{id}` | Read one business-owned account |
+| POST | `/whatsapp-accounts/{id}/pair` | Start QR or phone-code pairing (registering user) |
+| POST | `/whatsapp-accounts/{id}/connect` | Reconnect the mapped saved session (registering user) |
+| GET | `/whatsapp-accounts/{id}/connection` | Connection state and current code (registering user) |
+| GET | `/whatsapp-accounts/{id}/qr` | Current QR as an uncached PNG (registering user) |
 | GET, POST | `/transactions` | List/create transactions |
 | GET, PUT | `/transactions/{id}` | Read or fully replace editable transaction fields |
 | POST | `/transactions/{id}/cancel` | Preserve the transaction with cancelled status |
@@ -198,13 +203,12 @@ contain 1–256 bytes. Each successful POST creates a new account; retain its re
 ID and use GET to inspect it. There is no registration replay key in this increment.
 Caller-supplied business/user IDs, phone numbers, device JIDs and lifecycle fields
 are rejected. The runtime role can insert only the three ownership/label columns;
-it cannot supply or update session bindings. Responses omit the protocol device JID.
+it cannot supply or update session bindings. Account metadata responses omit the protocol device JID.
 
 `paired` means a binding is persisted; it does not mean WhatsApp is online.
-`unlinked` means the record has an unlink timestamp. Only a future trusted pairing
-worker can establish or clear those bindings after an authorized pairing flow.
-The terminal viewer remains separate and does not attach its saved sessions to
-these records. No live QR/phone pairing or session adoption endpoint is implemented.
+`unlinked` means the record has an unlink timestamp. The trusted pairing worker
+establishes verified bindings and clears revoked/missing sessions. The terminal
+viewer remains separate and does not attach its saved sessions to these records.
 
 To revert this increment, revert its Git commit and remove only the additive index
 and registration grant as the database owner. Existing account records can remain:
@@ -220,5 +224,77 @@ Integration tests also cover account ownership, admin/cashier registration,
 cross-business denial, forged binding rejection, restricted column grants,
 pagination and stable account identity across simulated pairing/unlinking.
 
-Authenticated QR pairing and reconnection are next, followed by message ingestion,
-manual confirmation sending, web/mobile UI, AI extraction/reconciliation and analytics.
+## Authenticated pairing and reconnecting
+
+Set `WHATSAPP_DATABASE_URL` in the server environment/configuration, pointing to
+the same PostgreSQL database as `DATABASE_URL`. The local `.env` already does this.
+The worker initializes library tables under `whatsapp`; no application migration
+or extra privileges for `ipo_platform_api` are required by this increment.
+Without the worker URL, manual APIs continue to work and connection routes return 503.
+The worker's local owner connection can update bindings; deployment should supply
+a dedicated trusted role with WhatsApp schema and account binding permissions.
+
+1. Register an account, then retain its returned UUID. All following routes require
+   a bearer token for that same registering user, including when another staff member is an admin.
+2. `POST /whatsapp-accounts/{id}/pair` with `{"method":"qr"}` starts QR pairing.
+   Alternatively send `{"method":"phone","phone_number":"+YOUR_REAL_NUMBER"}`.
+3. Poll `GET .../{id}/connection` every two seconds. `awaiting_qr` returns QR data
+   in `code` and its `expires_at`; `GET .../{id}/qr` renders the current code as PNG.
+   `awaiting_phone` returns the phone code. These responses use `Cache-Control: no-store`;
+   never log, share or retain pairing codes in application storage.
+4. Scan the PNG from WhatsApp's Linked devices screen, or choose Link with phone
+   number and enter the phone code. Pairing must reach `connected` before it is complete.
+   `finishing_pairing` covers WhatsApp's required reconnect after accepting the pairing.
+
+For the local bootstrap admin, the helper performs authenticated polling and logs
+out its temporary application session when finished. Register the account first
+through `backend/requests.http`, then run:
+
+```powershell
+./scripts/Pair-WhatsApp.ps1 -AccountId 'YOUR-REGISTERED-UUID'
+# Open the temporary PNG path printed by the helper; it refreshes as codes rotate.
+# Or, when linking from the same phone:
+./scripts/Pair-WhatsApp.ps1 -AccountId 'YOUR-REGISTERED-UUID' -Method phone -WhatsAppPhone '+YOUR_REAL_NUMBER'
+```
+
+The helper deletes its temporary QR file on exit. Other staff use their own tokens
+through the documented API; the helper uses only the local bootstrap credentials.
+`POST /pair` retries reuse the same active method/number; changing either during an
+attempt returns 409. Starting a connection returns 202; inspect `/connection` for
+asynchronous failures such as `busy`, `connection_failed`, `pairing_failed` or
+`binding_failed`. A persisted account already paired returns 409 from `/pair`.
+
+Saved mapped sessions reconnect on API startup. Owners can also `POST .../{id}/connect`;
+retries reuse an existing connected client. Temporary interruptions reconnect through
+whatsmeow. If the primary phone revokes the device, the worker clears the binding and
+reports `needs_relink`; the application account ID and business records remain intact.
+Missing saved credentials also require relinking. Use the same account UUID for a new
+pairing. To explicitly unlink, revoke the device in WhatsApp's Linked devices screen.
+
+Each active account holds a PostgreSQL advisory lock on a dedicated connection.
+Another API process reports `busy` before loading its session keys. Workers discard
+the lock connection on exit, and recheck account/membership/business eligibility and
+database connectivity every 15 seconds. Failed checks stop the connection. Do not
+run the standalone viewer using a session simultaneously managed by this API;
+the viewer does not participate in application account locks.
+
+This initial worker supports 32 active accounts per process and retains at most
+64 connection states. Startup restores at most 32 eligible mappings. Increase
+the worker/pool capacity before larger deployments. A crash after the library saves
+new credentials but before their verified binding is written can leave an unclaimed
+device: remove that stale device on the phone and pair again. Existing arbitrary
+saved sessions are never adopted through caller-supplied JIDs. Passkey pairing
+challenges are currently reported as pairing failures.
+
+The isolated integration suite uses fake protocol clients plus real PostgreSQL to
+check QR PNGs, owner-only secret access, retry reuse, phone codes, verified binding,
+restart recovery, revoked/missing sessions, disabled membership and cross-process
+account locks. It never pairs a real phone. The helper has an offline self-check:
+
+```powershell
+./scripts/Test-PairWhatsApp.ps1
+```
+
+Message ingestion, manual confirmation sending, web/mobile UI, AI extraction and
+reconciliation, and analytics remain subsequent milestones. This worker does not
+send customer messages or archive conversations yet.

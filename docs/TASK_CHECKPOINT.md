@@ -45,3 +45,10 @@ Application work predating this policy remains outside the count until reviewed 
 2. Review and checkpoint local setup/start/smoke scripts, example configuration, API requests and project documentation.
    - Verification: reviewed configuration, script error handling, credential exclusions and documentation/diffs; parsed all PowerShell scripts; reviewed HTTP examples against implemented routes; setup refuses existing resources. Live smoke and new local database provisioning were not rerun.
    - Paths: `.env.example`, `README.md`, `backend/README.md`, `backend/requests.http`, `docs/PROJECT_VISION.md`, `scripts/Setup-LocalDatabase.ps1`, `scripts/Smoke-Api.ps1`, `scripts/Start-Api.ps1`, `scripts/Start-WhatsAppViewer.ps1`, `docs/TASK_CHECKPOINT.md`.
+
+### Batch 5 — Authenticated WhatsApp account registry
+
+1. Add authenticated, business-owned WhatsApp account registration/list/detail APIs, indexed pagination, restricted registration grants and the next delivery sequence.
+   - Verification: backend `go test ./...` and `go vet ./...` passed; isolated schema/API integration tests passed, including ownership, pagination, forged binding rejection and stable IDs through simulated pairing/unlinking; applied migration 003 and column grants locally and verified binding INSERT/UPDATE remains forbidden; live local API smoke passed and its temporary server was stopped; PowerShell syntax, local Markdown links and content/diffs reviewed.
+   - Paths: `backend/whatsapp_accounts.go`, `backend/whatsapp_accounts_test.go`, `backend/main.go`, `backend/integration_test.go`, `backend/README.md`, `backend/requests.http`, `database/003_whatsapp_accounts.sql`, `database/Test-Schema.ps1`, `scripts/Setup-LocalDatabase.ps1`, `scripts/Smoke-Api.ps1`, `docs/PROJECT_VISION.md`, `docs/POS_DATABASE_DESIGN.md`, `docs/TASK_CHECKPOINT.md`.
+   - Limits: live QR/phone pairing, reconnection and session adoption remain next; registration POST has no replay key. The additive local database index/grant need the documented SQL rollback if this increment is reverted.

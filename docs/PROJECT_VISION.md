@@ -200,12 +200,13 @@ Implemented and tested:
 - Exact decimal strings at the API boundary, creation idempotency with original request fingerprints, optimistic edits, and bounded pagination/filtering.
 - Local `ipo_platform` PostgreSQL database setup with separate owner/runtime roles and randomly generated credentials in an ignored, access-restricted root `.env`.
 - Isolated API integration tests under a restricted database role, including concurrent creation retries, business isolation, permissions, and immutable transaction history.
+- Authenticated WhatsApp account registration/list/detail APIs: stable account IDs, business ownership and the signed-in registering user; restricted runtime grants prevent callers from claiming session bindings. New records remain unpaired until the pairing milestone.
 
 Still to implement or connect:
 
 - Remote deployment configuration and live PostgreSQL-backed WhatsApp pairing. The local database and application connection are now configured and checked.
 - Password reset, public account onboarding, staff membership management, and expansion of the baseline admin/cashier permissions.
-- Business/account mapping in an authenticated backend.
+- Authenticated QR/phone pairing that binds the registered business/account record to a verified WhatsApp session, plus reconnection and relinking under the same stable account ID.
 - Persistent WhatsApp ingestion into the application message archive; the manual business APIs are implemented.
 - Sending a WhatsApp message to the selected customer after a manual transaction is saved, using the creating user's linked WhatsApp account.
 - AI integration, transaction extraction, reconciliation, and business-rule execution.
@@ -214,6 +215,18 @@ Still to implement or connect:
 - Subject 1/Subject 2 analytics and their business formulas.
 
 The previous SQLite `session.db` has been preserved. Its real account data has not been migrated to PostgreSQL. A PostgreSQL-backed first login currently requires fresh pairing.
+
+## Next delivery sequence
+
+Keep each milestone in a separate local commit after its relevant checks pass:
+
+1. **Account registry (implemented):** register and inspect accounts through authenticated business routes. Session identity comes from the future pairing worker.
+2. **Authenticated pairing:** authorize the account and registering staff member, display QR/phone codes, persist the verified device binding, and reconnect using that mapping. Retain the stable application ID through relinking and prevent duplicate active clients.
+3. **Persistent private-text ingestion:** reuse the viewer's filtering and PN/LID normalization, archive messages with delivery deduplication and revisions, and expose business-scoped conversation reads.
+4. **Manual confirmation delivery:** send from the creating user's verified linked account after the transaction commits; track retries and associate the outgoing message with the existing transaction.
+5. **AI extraction and reconciliation:** retain exact evidence, validate versioned business rules, and reconcile follow-up messages before automatic transaction writes.
+
+The web/mobile screens can then build on these contracts. Subject analytics follow once their formulas are agreed.
 
 ## Decisions still open
 
@@ -235,6 +248,7 @@ Inventory, payment settlement, and media processing are not part of the agreed i
 - Schema/session validation runner: `database/Test-Schema.ps1`
 - Manual API, permissions, setup and usage: `backend/README.md`
 - API authentication/idempotency migration: `database/002_api.sql`
+- WhatsApp account pagination migration: `database/003_whatsapp_accounts.sql`
 - Local database creation: `scripts/Setup-LocalDatabase.ps1`
 - API startup and smoke check: `scripts/Start-Api.ps1`, `scripts/Smoke-Api.ps1`
 - Manual API examples: `backend/requests.http`

@@ -23,7 +23,9 @@ try {
     $taskBusiness = $taskMe.businesses[0]
     $taskForms = Invoke-RestMethod -Uri "$taskBase/api/businesses/$($taskBusiness.id)/form-types" -Headers $taskHeaders
     if ($taskForms.items.Count -ne 7) { throw 'Form catalogue check failed' }
-    Write-Output "Health, login, business access and form catalogue passed for $($taskBusiness.name)."
+    $taskAccounts = Invoke-RestMethod -Uri "$taskBase/api/businesses/$($taskBusiness.id)/whatsapp-accounts?limit=1" -Headers $taskHeaders
+    if ($null -eq $taskAccounts.items) { throw 'WhatsApp account list check failed' }
+    Write-Output "Health, login, business access, form catalogue and WhatsApp account reads passed for $($taskBusiness.name)."
 } finally {
     $null = Invoke-RestMethod -Method Post -Uri "$taskBase/api/logout" -Headers $taskHeaders
 }

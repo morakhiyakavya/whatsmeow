@@ -8,6 +8,7 @@
 @ipo = COPY_IPO_ID
 @customer = COPY_CUSTOMER_ID
 @transaction = COPY_TRANSACTION_ID
+@whatsapp_account = COPY_WHATSAPP_ACCOUNT_ID
 
 ### Sign in
 POST {{base}}/api/login
@@ -25,6 +26,21 @@ Authorization: Bearer {{token}}
 Content-Type: application/json
 
 {"code":"DEMO-IPO","name":"Demo IPO","opens_on":"2026-10-05","closes_on":"2026-10-08"}
+
+### Register ownership before pairing (creates an unpaired account)
+POST {{base}}/api/businesses/{{business}}/whatsapp-accounts
+Authorization: Bearer {{token}}
+Content-Type: application/json
+
+{"label":"Cashier phone"}
+
+### View business-owned WhatsApp accounts
+GET {{base}}/api/businesses/{{business}}/whatsapp-accounts?limit=50
+Authorization: Bearer {{token}}
+
+### Inspect the stable account ID returned by registration
+GET {{base}}/api/businesses/{{business}}/whatsapp-accounts/{{whatsapp_account}}
+Authorization: Bearer {{token}}
 
 ### Create a customer
 POST {{base}}/api/businesses/{{business}}/customers

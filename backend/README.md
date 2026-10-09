@@ -2,8 +2,8 @@
 
 This Go service implements the manual ledger milestone. It uses PostgreSQL for
 application sign-in, business membership, customers, the shared IPO/form catalogue,
-transactions, and complete immutable transaction history. No frontend is required
-to exercise the API.
+transactions, complete immutable transaction history, and business-owned WhatsApp
+account registration. No frontend is required to exercise the API.
 
 ## Local setup and start
 
@@ -44,8 +44,8 @@ In another terminal:
 ./scripts/Smoke-Api.ps1
 ```
 
-This checks health, login, business access and the catalogue, then logs out. It
-does not create demo customers or ledger entries. For a full flow, use
+This checks health, login, business access, the catalogue and WhatsApp account
+reads, then logs out. It does not create demo customers or ledger entries. For a full flow, use
 `backend/requests.http` or the isolated integration runner below.
 
 ## Database credentials
@@ -65,9 +65,17 @@ Git and its Windows ACL grants access only to the current user and SYSTEM.
 The connection uses `sslmode=disable` for local development. A remote deployment
 needs verified TLS and credentials supplied privately to the server.
 
-For an existing database, apply `database/001_initial.sql` and `002_api.sql` once,
-in that order, as its migration owner. The API does not execute migrations on
-startup. For an existing installation of the initial schema, apply only `002`.
+For a new database, apply `database/001_initial.sql`, `002_api.sql` and
+`003_whatsapp_accounts.sql` once, in that order, as its migration owner. The API
+does not execute migrations on startup. Apply only missing migrations to an
+existing database. For the local installation that already has migrations 001/002:
+
+```powershell
+# From the repository root; enter the owner password privately when prompted.
+& 'C:/Program Files/PostgreSQL/17/bin/psql.exe' -X -h localhost -U ipo_platform_owner -d ipo_platform -v ON_ERROR_STOP=1 -f database/003_whatsapp_accounts.sql
+& 'C:/Program Files/PostgreSQL/17/bin/psql.exe' -X -h localhost -U ipo_platform_owner -d ipo_platform -v ON_ERROR_STOP=1 -c 'GRANT INSERT (business_id, label, linked_by_user_id) ON ipo_pos.whatsapp_accounts TO ipo_platform_api;'
+```
+
 The runtime grants are in `scripts/Setup-LocalDatabase.ps1`; use your runtime role
 name when applying them elsewhere. The narrowly scoped identity-column UPDATE
 grants let PostgreSQL's transaction guard take `FOR SHARE` row locks. The runtime
@@ -95,6 +103,7 @@ request checks the active membership and business state against PostgreSQL.
 | Operation | Admin | Cashier |
 |---|---|---|
 | View/create customers | Yes | Yes |
+| Register/view WhatsApp accounts in their business | Yes | Yes |
 | View IPOs and form types | Yes | Yes |
 | Create IPOs in the shared catalogue | Yes | No |
 | View/create staff in their business | Yes | No |
@@ -120,6 +129,8 @@ IDs from `/api/me`. Supplying another business ID never confers access.
 | GET, POST | `/customers` | List/create customers, including referrals |
 | GET, POST | `/ipos` | List/create shared IPO catalogue entries |
 | GET | `/form-types` | Supported form catalogue |
+| GET, POST | `/whatsapp-accounts` | List/register business-owned WhatsApp accounts |
+| GET | `/whatsapp-accounts/{id}` | Read one business-owned account |
 | GET, POST | `/transactions` | List/create transactions |
 | GET, PUT | `/transactions/{id}` | Read or fully replace editable transaction fields |
 | POST | `/transactions/{id}/cancel` | Preserve the transaction with cancelled status |
@@ -173,5 +184,41 @@ validation, concurrent creation retries, mismatched idempotency requests,
 optimistic edits, cancellation, pagination/filtering and immutable history.
 They never modify your regular database or real WhatsApp accounts.
 
-WhatsApp message ingestion into the business archive, manual confirmation sending,
-web/mobile UI, AI extraction/reconciliation and analytics remain subsequent milestones.
+## WhatsApp account registration
+
+Create an account with `POST /whatsapp-accounts` and `{"label":"Cashier phone"}`.
+The API assigns a stable UUID, the authorized business and the signed-in user as
+`linked_by_user_id`. Both admins and cashiers can register their own accounts and
+view their business's accounts. Another business's account ID returns 404 when
+queried through an authorized business route. Lists use bounded cursor pagination.
+
+Registration prepares the ownership record for pairing. It returns
+`pairing_state: "unpaired"` and a null phone number. The label is trimmed and must
+contain 1–256 bytes. Each successful POST creates a new account; retain its returned
+ID and use GET to inspect it. There is no registration replay key in this increment.
+Caller-supplied business/user IDs, phone numbers, device JIDs and lifecycle fields
+are rejected. The runtime role can insert only the three ownership/label columns;
+it cannot supply or update session bindings. Responses omit the protocol device JID.
+
+`paired` means a binding is persisted; it does not mean WhatsApp is online.
+`unlinked` means the record has an unlink timestamp. Only a future trusted pairing
+worker can establish or clear those bindings after an authorized pairing flow.
+The terminal viewer remains separate and does not attach its saved sessions to
+these records. No live QR/phone pairing or session adoption endpoint is implemented.
+
+To revert this increment, revert its Git commit and remove only the additive index
+and registration grant as the database owner. Existing account records can remain:
+
+```sql
+BEGIN;
+REVOKE INSERT (business_id, label, linked_by_user_id) ON ipo_pos.whatsapp_accounts FROM ipo_platform_api;
+DROP INDEX ipo_pos.whatsapp_accounts_created_idx;
+COMMIT;
+```
+
+Integration tests also cover account ownership, admin/cashier registration,
+cross-business denial, forged binding rejection, restricted column grants,
+pagination and stable account identity across simulated pairing/unlinking.
+
+Authenticated QR pairing and reconnection are next, followed by message ingestion,
+manual confirmation sending, web/mobile UI, AI extraction/reconciliation and analytics.

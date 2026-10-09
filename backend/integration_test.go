@@ -118,6 +118,7 @@ func TestManualLedgerIntegration(t *testing.T) {
             ipo_pos.ipos,ipo_pos.manual_transaction_requests,ipo_pos.transaction_versions TO ipo_api_test;
         GRANT INSERT,UPDATE ON ipo_pos.customers,ipo_pos.transactions TO ipo_api_test;
 		GRANT INSERT,DELETE ON ipo_pos.login_sessions TO ipo_api_test;
+		GRANT INSERT (business_id,label,linked_by_user_id) ON ipo_pos.whatsapp_accounts TO ipo_api_test;
 		GRANT UPDATE (id) ON ipo_pos.businesses,ipo_pos.users TO ipo_api_test;
 		GRANT UPDATE (user_id) ON ipo_pos.business_memberships TO ipo_api_test;`)
 	if err != nil {
@@ -351,6 +352,9 @@ func TestManualLedgerIntegration(t *testing.T) {
 	status, object, _ = other.request("POST", "/api/login", map[string]string{"phone_number": second.AdminPhone, "password": second.AdminPassword}, "")
 	expectStatus(t, 200, status, object)
 	other.Token = field(t, object, "access_token")
+	t.Run("WhatsApp account ownership", func(t *testing.T) {
+		testWhatsAppAccounts(t, db, admin, client, cashier, other, businessID, otherBusiness, cashierID)
+	})
 	status, object, _ = other.request("GET", "/api/businesses/"+otherBusiness+"/transactions/"+transactionID, nil, "")
 	expectStatus(t, 404, status, object)
 	status, object, _ = other.request("GET", "/api/businesses/"+otherBusiness+"/transactions/"+transactionID+"/history", nil, "")

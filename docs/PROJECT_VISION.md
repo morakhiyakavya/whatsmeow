@@ -201,13 +201,13 @@ Implemented and tested:
 - Local `ipo_platform` PostgreSQL database setup with separate owner/runtime roles and randomly generated credentials in an ignored, access-restricted root `.env`.
 - Isolated API integration tests under a restricted database role, including concurrent creation retries, business isolation, permissions, and immutable transaction history.
 - Authenticated WhatsApp account registration/list/detail APIs: stable account IDs, business ownership and the signed-in registering user; restricted runtime grants prevent callers from claiming session bindings.
-- Backend QR/phone pairing, owner-only code/PNG retrieval, verified bindings, saved-session recovery and revocation handling; cross-process account locks and isolated protocol lifecycle tests. A live phone pairing still needs user interaction and has not yet been verified.
+- Backend QR/phone pairing, owner-only code/PNG retrieval, verified bindings, saved-session recovery and revocation handling; cross-process account locks and isolated protocol lifecycle tests. Live phone-code pairing and automatic restoration after a backend restart were verified locally on 2026-10-10.
 
 Still to implement or connect:
 
-- Remote deployment configuration and live PostgreSQL-backed WhatsApp pairing. The local database and application connection are now configured and checked.
+- Remote deployment configuration. Local PostgreSQL-backed WhatsApp pairing and saved-session restoration are configured and verified.
 - Password reset, public account onboarding, staff membership management, and expansion of the baseline admin/cashier permissions.
-- Web/mobile pairing screens on the implemented QR/phone API, plus live phone validation and deployment hardening of the trusted worker credentials/capacity.
+- Web/mobile pairing screens on the implemented QR/phone API and deployment hardening of the trusted worker credentials/capacity.
 - Persistent WhatsApp ingestion into the application message archive; the manual business APIs are implemented.
 - Sending a WhatsApp message to the selected customer after a manual transaction is saved, using the creating user's linked WhatsApp account.
 - AI integration, transaction extraction, reconciliation, and business-rule execution.
@@ -222,7 +222,7 @@ The previous SQLite `session.db` has been preserved. Its real account data has n
 Keep each milestone in a separate local commit after its relevant checks pass:
 
 1. **Account registry (implemented):** register and inspect accounts through authenticated business routes. Session identity comes from the trusted pairing worker.
-2. **Authenticated pairing (backend implemented):** owner-only QR/phone codes and QR PNGs, verified bindings, saved-session recovery, stable IDs through relinking and database account locks. Validate a real phone before treating live interoperability as verified.
+2. **Authenticated pairing (backend implemented and phone-tested):** owner-only QR/phone codes and QR PNGs, verified bindings, saved-session recovery, stable IDs through relinking and database account locks. Live phone-code pairing and automatic restoration passed locally; live QR pairing and device revocation remain unchecked.
 3. **Persistent private-text ingestion:** reuse the viewer's filtering and PN/LID normalization, archive messages with delivery deduplication and revisions, and expose business-scoped conversation reads.
 4. **Manual confirmation delivery:** send from the creating user's verified linked account after the transaction commits; track retries and associate the outgoing message with the existing transaction.
 5. **AI extraction and reconciliation:** retain exact evidence, validate versioned business rules, and reconcile follow-up messages before automatic transaction writes.

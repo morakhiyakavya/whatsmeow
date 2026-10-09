@@ -295,6 +295,12 @@ account locks. It never pairs a real phone. The helper has an offline self-check
 ./scripts/Test-PairWhatsApp.ps1
 ```
 
+Live phone-code pairing was verified locally on 2026-10-10. The registered account
+retained its ID and verified phone binding after backend restarts, and startup
+restored the connection without another pairing or connect request. The connected
+response no longer exposed a pairing code. Live QR pairing and device revocation
+have not been checked; those paths have isolated protocol tests.
+
 Message ingestion, manual confirmation sending, web/mobile UI, AI extraction and
 reconciliation, and analytics remain subsequent milestones. This worker does not
 send customer messages or archive conversations yet.

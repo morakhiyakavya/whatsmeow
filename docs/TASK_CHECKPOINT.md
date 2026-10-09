@@ -65,3 +65,9 @@ Application work predating this policy remains outside the count until reviewed 
 1. Add a local QR/phone pairing helper with offline checks and document the implemented lifecycle, permissions, setup and limits.
    - Verification: `scripts/Test-PairWhatsApp.ps1` passed offline QR, phone, saved-session, failure and cleanup assertions without reading real configuration or calling HTTP; PowerShell parser checks passed; reviewed documentation/diffs and local links against implemented routes. No live WhatsApp pairing was attempted; the temporary local smoke server was stopped.
    - Paths: `scripts/Pair-WhatsApp.ps1`, `scripts/Test-PairWhatsApp.ps1`, `backend/README.md`, `docs/PROJECT_VISION.md`, `docs/POS_DATABASE_DESIGN.md`, `docs/TASK_CHECKPOINT.md`.
+
+### Batch 8 — Live phone pairing verification
+
+1. Verify live phone-code pairing and automatic startup restoration, and record the completed milestone.
+   - Verification: paired the user's phone through the authenticated helper; confirmed the stable account ID, verified phone binding and absence of a pairing code after connection. Restarted the backend and confirmed `connected` using read-only account/status requests without a pair/connect request. Reviewed documentation content/diff; no customer messages were sent; the temporary test server was stopped. Live QR pairing, device revocation and race instrumentation remain unchecked.
+   - Paths: `backend/README.md`, `docs/PROJECT_VISION.md`, `docs/TASK_CHECKPOINT.md`.

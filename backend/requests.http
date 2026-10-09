@@ -1,0 +1,68 @@
+# Example requests for any HTTP client; replace variables from prior responses.
+# These examples create development records when you execute them.
+@base = http://127.0.0.1:8180
+@phone = +919000000001
+@password = COPY_BOOTSTRAP_ADMIN_PASSWORD_FROM_ENV
+@token = COPY_ACCESS_TOKEN_FROM_LOGIN
+@business = COPY_BUSINESS_ID_FROM_ME
+@ipo = COPY_IPO_ID
+@customer = COPY_CUSTOMER_ID
+@transaction = COPY_TRANSACTION_ID
+
+### Sign in
+POST {{base}}/api/login
+Content-Type: application/json
+
+{"phone_number":"{{phone}}","password":"{{password}}"}
+
+### Find your business ID
+GET {{base}}/api/me
+Authorization: Bearer {{token}}
+
+### Create an IPO (admin)
+POST {{base}}/api/businesses/{{business}}/ipos
+Authorization: Bearer {{token}}
+Content-Type: application/json
+
+{"code":"DEMO-IPO","name":"Demo IPO","opens_on":"2026-10-05","closes_on":"2026-10-08"}
+
+### Create a customer
+POST {{base}}/api/businesses/{{business}}/customers
+Authorization: Bearer {{token}}
+Content-Type: application/json
+
+{"name":"Demo Customer","referral_note":"Example entry"}
+
+### Create a transaction: total = 625.00. Repeat this request to check replay.
+POST {{base}}/api/businesses/{{business}}/transactions
+Authorization: Bearer {{token}}
+Idempotency-Key: demo-order-1
+Content-Type: application/json
+
+{"ipo_id":"{{ipo}}","customer_id":"{{customer}}","occurred_at":"2026-10-04T10:00:00+05:30","form_type_code":"CE","category":"subject_1","ce_pe_value":"20","quantity":"2.5","rate":"250"}
+
+### Correct quantity: total = 812.50. Repeating with version 1 returns 409.
+PUT {{base}}/api/businesses/{{business}}/transactions/{{transaction}}
+Authorization: Bearer {{token}}
+Content-Type: application/json
+
+{"ipo_id":"{{ipo}}","customer_id":"{{customer}}","occurred_at":"2026-10-04T10:00:00+05:30","form_type_code":"CE","category":"subject_1","ce_pe_value":"20","quantity":"3.25","rate":"250","expected_version":1,"change_reason":"Corrected form quantity"}
+
+### Cancel while retaining the record and every snapshot
+POST {{base}}/api/businesses/{{business}}/transactions/{{transaction}}/cancel
+Authorization: Bearer {{token}}
+Content-Type: application/json
+
+{"expected_version":2,"change_reason":"Customer cancelled"}
+
+### Inspect history
+GET {{base}}/api/businesses/{{business}}/transactions/{{transaction}}/history
+Authorization: Bearer {{token}}
+
+### List confirmed transactions
+GET {{base}}/api/businesses/{{business}}/transactions?status=confirmed&limit=50
+Authorization: Bearer {{token}}
+
+### Log out
+POST {{base}}/api/logout
+Authorization: Bearer {{token}}

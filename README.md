@@ -1,4 +1,9 @@
 # whatsmeow
+
+The IPO transaction application built on this checkout has a runnable Go API in
+[backend](backend/README.md). Its [project vision](docs/PROJECT_VISION.md),
+local PostgreSQL setup, and manual transaction examples are documented there.
+
 [![Go Reference](https://pkg.go.dev/badge/go.mau.fi/whatsmeow.svg)](https://pkg.go.dev/go.mau.fi/whatsmeow)
 
 whatsmeow is a Go library for the WhatsApp web multidevice API.
@@ -15,6 +20,10 @@ discussions.
 ## Usage
 The [godoc](https://pkg.go.dev/go.mau.fi/whatsmeow) includes docs for all methods and event types.
 There's also a [simple example](https://pkg.go.dev/go.mau.fi/whatsmeow#example-package) at the top.
+
+For a runnable message viewer with QR login using this checkout, see
+[examples/login](examples/login/README.md). It includes Windows setup commands
+and saves the session locally for subsequent runs.
 
 ## Features
 Most core features are already present:

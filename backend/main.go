@@ -1,0 +1,187 @@
+package main
+
+import (
+	"context"
+	"database/sql"
+	"encoding/json"
+	"errors"
+	"flag"
+	"fmt"
+	"io"
+	"log"
+	"net"
+	"net/http"
+	"os"
+	"os/signal"
+	"syscall"
+	"time"
+
+	"github.com/jackc/pgx/v5/pgconn"
+	_ "github.com/jackc/pgx/v5/stdlib"
+)
+
+type api struct {
+	db        *sql.DB
+	limiter   loginLimiter
+	dummyHash []byte
+}
+
+func main() {
+	envPath := flag.String("env", "../.env", "local configuration file")
+	bootstrap := flag.Bool("bootstrap", false, "create the initial business/admin, then exit")
+	flag.Parse()
+	if err := run(*envPath, *bootstrap); err != nil {
+		// Driver errors and connection URLs may contain credentials.
+		log.Print(err)
+		os.Exit(1)
+	}
+}
+
+func run(envPath string, bootstrap bool) error {
+	config, err := loadConfig(envPath)
+	if err != nil {
+		return err
+	}
+	db, err := sql.Open("pgx", config.DatabaseURL)
+	if err != nil {
+		return errors.New("invalid DATABASE_URL configuration")
+	}
+	defer db.Close()
+	db.SetMaxOpenConns(10)
+	db.SetMaxIdleConns(5)
+	db.SetConnMaxLifetime(30 * time.Minute)
+	ctx, stop := signal.NotifyContext(context.Background(), os.Interrupt, syscall.SIGTERM)
+	defer stop()
+	readyCtx, cancel := context.WithTimeout(ctx, 10*time.Second)
+	err = db.PingContext(readyCtx)
+	cancel()
+	if err != nil {
+		return errors.New("cannot connect to PostgreSQL; check DATABASE_URL and server availability")
+	}
+	if bootstrap {
+		return bootstrapAdmin(ctx, db, config)
+	}
+	var schemaReady bool
+	if err := db.QueryRowContext(ctx, "SELECT to_regclass('ipo_pos.manual_transaction_requests') IS NOT NULL").Scan(&schemaReady); err != nil || !schemaReady {
+		return errors.New("apply database/001_initial.sql and database/002_api.sql before starting the API")
+	}
+	app, err := newAPI(db)
+	if err != nil {
+		return errors.New("could not initialize authentication")
+	}
+	server := &http.Server{Addr: config.Addr, Handler: app.routes(), ReadHeaderTimeout: 5 * time.Second, ReadTimeout: 10 * time.Second, WriteTimeout: 15 * time.Second, IdleTimeout: 60 * time.Second}
+	serverErr := make(chan error, 1)
+	listener, err := net.Listen("tcp", config.Addr)
+	if err != nil {
+		return fmt.Errorf("HTTP listener: %w", err)
+	}
+	go func() { serverErr <- server.Serve(listener) }()
+	log.Printf("IPO API listening on http://%s", config.Addr)
+	select {
+	case err := <-serverErr:
+		if !errors.Is(err, http.ErrServerClosed) {
+			return fmt.Errorf("HTTP server: %w", err)
+		}
+	case <-ctx.Done():
+		shutdownCtx, shutdownCancel := context.WithTimeout(context.Background(), 10*time.Second)
+		defer shutdownCancel()
+		if err := server.Shutdown(shutdownCtx); err != nil {
+			return errors.New("HTTP server shutdown failed")
+		}
+	}
+	return nil
+}
+
+func (a *api) routes() http.Handler {
+	mux := http.NewServeMux()
+	mux.HandleFunc("GET /health", a.health)
+	mux.HandleFunc("POST /api/login", a.login)
+	mux.HandleFunc("POST /api/logout", a.logout)
+	mux.HandleFunc("GET /api/me", a.me)
+	mux.HandleFunc("GET /api/businesses/{businessID}/staff", a.protect(true, a.listStaff))
+	mux.HandleFunc("POST /api/businesses/{businessID}/staff", a.protect(true, a.createStaff))
+	mux.HandleFunc("GET /api/businesses/{businessID}/customers", a.protect(false, a.listCustomers))
+	mux.HandleFunc("POST /api/businesses/{businessID}/customers", a.protect(false, a.createCustomer))
+	mux.HandleFunc("GET /api/businesses/{businessID}/ipos", a.protect(false, a.listIPOs))
+	mux.HandleFunc("POST /api/businesses/{businessID}/ipos", a.protect(true, a.createIPO))
+	mux.HandleFunc("GET /api/businesses/{businessID}/form-types", a.protect(false, a.listFormTypes))
+	mux.HandleFunc("GET /api/businesses/{businessID}/transactions", a.protect(false, a.listTransactions))
+	mux.HandleFunc("POST /api/businesses/{businessID}/transactions", a.protect(false, a.createTransaction))
+	mux.HandleFunc("GET /api/businesses/{businessID}/transactions/{id}", a.protect(false, a.getTransaction))
+	mux.HandleFunc("PUT /api/businesses/{businessID}/transactions/{id}", a.protect(false, a.editTransaction))
+	mux.HandleFunc("POST /api/businesses/{businessID}/transactions/{id}/cancel", a.protect(false, a.cancelTransaction))
+	mux.HandleFunc("GET /api/businesses/{businessID}/transactions/{id}/history", a.protect(false, a.transactionHistory))
+	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.Header().Set("Cache-Control", "no-store")
+		w.Header().Set("X-Content-Type-Options", "nosniff")
+		ctx, cancel := context.WithTimeout(r.Context(), 10*time.Second)
+		defer cancel()
+		mux.ServeHTTP(w, r.WithContext(ctx))
+	})
+}
+
+func (a *api) health(w http.ResponseWriter, r *http.Request) {
+	ctx, cancel := context.WithTimeout(r.Context(), time.Second)
+	defer cancel()
+	if a.db.PingContext(ctx) != nil {
+		fail(w, 503, "database_unavailable", "Database is unavailable")
+		return
+	}
+	writeJSON(w, 200, map[string]string{"status": "ok"})
+}
+
+func writeJSON(w http.ResponseWriter, status int, v any) {
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(status)
+	_ = json.NewEncoder(w).Encode(v)
+}
+
+func fail(w http.ResponseWriter, status int, code, message string) {
+	writeJSON(w, status, map[string]any{"error": map[string]string{"code": code, "message": message}})
+}
+
+func decode(w http.ResponseWriter, r *http.Request, v any) bool {
+	r.Body = http.MaxBytesReader(w, r.Body, 64<<10)
+	dec := json.NewDecoder(r.Body)
+	dec.DisallowUnknownFields()
+	if err := dec.Decode(v); err != nil {
+		fail(w, 400, "invalid_json", "Supply one JSON object with supported fields (maximum 64 KiB)")
+		return false
+	}
+	if err := dec.Decode(new(any)); err != io.EOF {
+		fail(w, 400, "invalid_json", "Supply exactly one JSON object")
+		return false
+	}
+	return true
+}
+
+func dbFailure(w http.ResponseWriter, err error) {
+	if errors.Is(err, sql.ErrNoRows) {
+		fail(w, 404, "not_found", "Record not found")
+		return
+	}
+	var pgErr *pgconn.PgError
+	if errors.As(err, &pgErr) {
+		switch pgErr.Code {
+		case "23505":
+			fail(w, 409, "conflict", "A record with this identity already exists")
+			return
+		case "23503", "23514", "23502", "22003", "22007", "22P02", "P0001":
+			fail(w, 400, "invalid_record", "The record violates validation or references an unavailable record")
+			return
+		}
+		log.Printf("database request failed (SQLSTATE %s)", pgErr.Code)
+	} else {
+		log.Printf("database request failed (%T)", err)
+	}
+	fail(w, 500, "internal_error", "The request could not be completed")
+}
+
+func queryJSON(w http.ResponseWriter, r *http.Request, db *sql.DB, status int, query string, args ...any) {
+	var data json.RawMessage
+	if err := db.QueryRowContext(r.Context(), query, args...).Scan(&data); err != nil {
+		dbFailure(w, err)
+		return
+	}
+	writeJSON(w, status, data)
+}

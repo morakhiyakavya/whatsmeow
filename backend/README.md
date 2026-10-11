@@ -74,7 +74,8 @@ needs verified TLS and credentials supplied privately to the server.
 
 For a new database, apply `database/001_initial.sql`, `002_api.sql` and
 `003_whatsapp_accounts.sql`, `004_contact_names.sql` and
-`005_transaction_confirmations.sql`, then `006_passwordless_sessions.sql` once,
+`005_transaction_confirmations.sql`, `006_passwordless_sessions.sql`, then
+`007_whatsapp_number_checks.sql` once,
 in that order, as its migration owner. The API
 does not execute migrations on startup. Apply only missing migrations to an
 existing database. For the local installation that already has migrations 001/002:
@@ -101,6 +102,15 @@ ipo_pos.whatsapp_accounts` to the runtime role, in addition to its existing gran
 The identity-column grant permits row locking without granting binding/generation
 updates. Existing users, sessions and account IDs are preserved; conflicting active
 user/number links make the migration fail safely. Review those conflicts explicitly.
+
+After migration 006, apply `007_whatsapp_number_checks.sql` and grant `SELECT ON
+ipo_pos.whatsapp_number_checks` to the runtime role. Only the trusted worker needs
+`INSERT, UPDATE` on this table; the local worker uses the migration owner. Do not
+grant result writes to the ordinary API role. The local setup/test scripts already
+apply migration 007. Startup requires it, including when the worker is disabled.
+
+Migration 007 rollback: revert/stop its callers before removing the table. Export
+stored checks if needed; dropping the table loses those observations only.
 
 Migration 006 rollback needs a database backup and a deliberate session transition,
 not only a Git revert. Stop/revert its callers, revoke the newly linked app sessions,
@@ -183,6 +193,7 @@ IDs from `/api/me`. Supplying another business ID never confers access.
 | GET | `/whatsapp-accounts/{id}` | Read one business-owned account |
 | POST | `/whatsapp-accounts/{id}/pair` | Start QR or phone-code pairing (registering user) |
 | POST | `/whatsapp-accounts/{id}/connect` | Reconnect the mapped saved session (registering user) |
+| POST | `/whatsapp-accounts/{id}/check-number` | Check one number through the registering user's connected account |
 | GET | `/whatsapp-accounts/{id}/connection` | Connection state and current code (registering user) |
 | GET | `/whatsapp-accounts/{id}/qr` | Current QR as an uncached PNG (registering user) |
 | POST | `/whatsapp-accounts/{id}/disconnect` | Owner-only local revocation and best-effort remote unlink |
@@ -273,6 +284,43 @@ COMMIT;
 Integration tests also cover account ownership, admin/cashier registration,
 cross-business denial, forged binding rejection, restricted column grants,
 pagination and stable account identity across simulated pairing/unlinking.
+
+## WhatsApp number registration checks
+
+Use `POST /api/businesses/{businessID}/whatsapp-accounts/{id}/check-number` with
+the registering user's bearer token and `{"phone_number":"+919876543210"}`.
+The account must be paired and connected. Another staff member, including an admin,
+cannot use this account for checks; other businesses cannot access it.
+
+A successful response includes `phone_number`, `registered` and an ISO timestamp
+in `checked_at`, for example
+`{"phone_number":"+919876543210","registered":true,"checked_at":"2026-10-11T12:00:00Z"}`.
+`registered:false` means WhatsApp reports the number as unregistered. This is a
+registration check, not proof that the caller owns the queried number. Results can
+change. Each successful check saves its result in `ipo_pos.whatsapp_number_checks`,
+one row per business and phone number, with the checking account ID and timestamp.
+Repeated checks replace that row; upstream failures preserve the previous result.
+An unchecked number has no row, so unknown is never treated as false. No message is sent.
+
+The existing `GET /api/businesses/{businessID}/contacts?phone_number=%2B919876543210`
+returns `whatsapp_registered` (`true`, `false`, or `null` when unchecked) and
+`whatsapp_checked_at` without performing another WhatsApp query. Status is shared
+within the business and independent of names, customer IDs and contact suppliers.
+Deleting a supplied name does not delete a successful number check. The POST always
+queries WhatsApp again; stored results are not used to bypass a fresh lookup.
+
+Numbers use the existing international-format validation (`+`, nonzero country-code
+start, 7–15 digits); unknown JSON fields are rejected. Invalid input returns 400,
+an unpaired/disconnected account returns 409, unavailable WhatsApp configuration or
+a failed result write returns 503, an upstream error or incomplete response returns 502, and a timeout
+returns 504. Error responses never contain `registered:false`; registration is
+unknown when the lookup fails. Lookup errors do not expose upstream details.
+
+Checks run serially inside the existing account worker, with an eight-second budget
+including time waiting for that worker. Request cancellation and service shutdown
+cancel the lookup. Use this endpoint for individual checks; bulk contact scanning
+and a dedicated lookup rate limiter are not implemented. Apply migration 007 and
+its SELECT grant before starting this version of the API.
 
 ## Authenticated pairing and reconnecting
 

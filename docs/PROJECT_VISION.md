@@ -165,6 +165,13 @@ The web and mobile applications communicate with the Go backend. Account credent
 
 The current implementation has PostgreSQL-backed terminal QR login and authenticated backend QR/phone-code pairing endpoints with PNG rendering, stable account mapping, saved-session reconnection and revocation handling. Web/mobile pairing screens remain planned.
 
+Authenticated account owners can check whether one international phone number is
+registered on WhatsApp through their existing connected account. Successful
+results are stored once per business/number with a check timestamp and account
+provenance, and are readable through the shared-contact lookup. Unchecked numbers
+remain unknown and failed lookups preserve prior observations. Stored status is
+not proof of number ownership and does not replace a fresh registration check.
+
 ## AI decisions and transaction history
 
 ### Automatic transaction evidence
@@ -315,6 +322,7 @@ Inventory, payment settlement, and media processing are not part of the agreed i
 - Shared contact names and customer attribution migration: `database/004_contact_names.sql`
 - Durable sale confirmation migration: `database/005_transaction_confirmations.sql`
 - Passwordless session/link revocation migration: `database/006_passwordless_sessions.sql`
+- Phone-number registration result migration: `database/007_whatsapp_number_checks.sql`
 - Local database creation: `scripts/Setup-LocalDatabase.ps1`
 - API startup and smoke check: `scripts/Start-Api.ps1`, `scripts/Smoke-Api.ps1`
 - Local pairing helper and offline self-check: `scripts/Pair-WhatsApp.ps1`, `scripts/Test-PairWhatsApp.ps1`

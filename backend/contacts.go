@@ -67,7 +67,12 @@ func (a *api) lookupContact(w http.ResponseWriter, r *http.Request, user actor) 
         SELECT n.*,u.name AS supplied_by_name FROM ipo_pos.contact_names n
         JOIN ipo_pos.users u ON u.id=n.supplied_by_user_id
         WHERE n.business_id=$1 AND n.phone_number=$2
+    ), registration AS (
+        SELECT registered,checked_at FROM ipo_pos.whatsapp_number_checks
+        WHERE business_id=$1 AND phone_number=$2
     ) SELECT jsonb_build_object('phone_number',$2::text,
+        'whatsapp_registered',(SELECT registered FROM registration),
+        'whatsapp_checked_at',(SELECT checked_at FROM registration),
         'customer_count',(SELECT count(*) FROM customers),
         'customers',COALESCE((SELECT jsonb_agg(to_jsonb(c)) FROM
             (SELECT * FROM customers ORDER BY id LIMIT 100) c),'[]'::jsonb),

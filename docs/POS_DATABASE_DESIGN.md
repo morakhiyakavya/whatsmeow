@@ -132,6 +132,39 @@ Exact database uniqueness prevents repeated delivery/job/API writes. It cannot d
 
 ## WhatsApp sessions in the same PostgreSQL database
 
+Phone numbers and account details are stored as follows. Phone numbers are text in
+international format, including `+` and country code; they are not integer IDs.
+
+| Table | Relevant columns | Identity and purpose |
+|---|---|---|
+| `ipo_pos.users` | `id`, `name`, `phone_number`, `created_at`, `disabled_at` | Staff phone is globally unique; memberships link the user to businesses. |
+| `ipo_pos.customers` | `business_id`, `id`, `name`, `phone_number`, `name_supplied_by_user_id`, `referred_by_customer_id`, `referral_note`, `created_at`, `archived_at` | Primary key `(business_id,id)`; phone is optional and nonunique. |
+| `ipo_pos.contact_names` | `business_id`, `phone_number`, `supplied_by_user_id`, `name`, `source`, `received_at`, `updated_at` | Primary key `(business_id,phone_number,supplied_by_user_id)`; preserves each staff member's name for a number. |
+| `ipo_pos.whatsapp_number_checks` | `business_id`, `phone_number`, `registered`, `checked_at`, `whatsapp_account_id` | Primary key `(business_id,phone_number)`; one successful registration result per business/number. |
+| `ipo_pos.whatsapp_accounts` | `business_id`, `id`, `label`, `phone_number`, `device_jid`, `linked_by_user_id`, `created_at`, `unlinked_at`, `auth_generation` | Primary key `(business_id,id)`; stable application account linked to its staff owner and verified WhatsApp device. |
+
+[Migration 007](../database/007_whatsapp_number_checks.sql) adds the boolean
+`whatsapp_number_checks.registered`: true means registered, false means unregistered.
+No row means unchecked/unknown. `checked_at` records the database timestamp of the
+saved successful result; the business-scoped account foreign key identifies the
+connection used. The trusted worker inserts/updates results; the runtime role can
+only read them. Successful checks overwrite prior observations, including true to
+false; failures retain them. The contact lookup reads these columns by business
+and number. Status is not duplicated across customers or contact-name suppliers,
+and existing phone numbers are not automatically checked or backfilled.
+
+The account `phone_number` is the sender's number verified during pairing; its
+`device_jid` identifies the saved linked-device session. Neither field describes
+customer registration. Before pairing both may be null; revocation clears the
+device binding, retains the account ID and records `unlinked_at`. A persisted
+binding does not prove the connection is currently online. `auth_generation`
+invalidates dependent POS sessions when binding identity changes. Partial unique
+indexes allow one active linked account per staff user and per sender number.
+
+Actual encryption keys and saved protocol sessions live in the separate
+library-managed `whatsapp.*` tables, linked through `device_jid`. They are server
+credentials and are never returned with public account details.
+
 Two schemas separate application data from protocol credentials:
 
 ```text

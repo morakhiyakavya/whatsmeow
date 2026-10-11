@@ -63,7 +63,7 @@ func testContactNames(t *testing.T, db *sql.DB, admin, cashier testClient, base,
 	}
 	status, obj, _ = cashier.request("GET", base+"/contacts?phone_number=%2B919000001099", nil, "")
 	expectStatus(t, 200, status, obj)
-	if obj["suggested_name"] != nil {
+	if obj["suggested_name"] != nil || obj["whatsapp_registered"] != nil || obj["whatsapp_checked_at"] != nil {
 		t.Fatal("unknown number invented an identity")
 	}
 	status, obj, _ = cashier.request("GET", base+"/contacts?phone_number=123", nil, "")

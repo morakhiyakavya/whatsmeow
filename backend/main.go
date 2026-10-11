@@ -64,8 +64,8 @@ func run(envPath string, bootstrap bool) error {
 		return bootstrapAdmin(ctx, db, config)
 	}
 	var schemaReady bool
-	if err := db.QueryRowContext(ctx, "SELECT to_regclass('ipo_pos.login_attempts') IS NOT NULL AND to_regclass('ipo_pos.device_login_tokens') IS NOT NULL").Scan(&schemaReady); err != nil || !schemaReady {
-		return errors.New("apply application migrations through database/006_passwordless_sessions.sql before starting the API")
+	if err := db.QueryRowContext(ctx, "SELECT to_regclass('ipo_pos.login_attempts') IS NOT NULL AND to_regclass('ipo_pos.device_login_tokens') IS NOT NULL AND to_regclass('ipo_pos.whatsapp_number_checks') IS NOT NULL").Scan(&schemaReady); err != nil || !schemaReady {
+		return errors.New("apply application migrations through database/007_whatsapp_number_checks.sql before starting the API")
 	}
 	app, err := newAPI(db)
 	if err != nil {
@@ -136,6 +136,7 @@ func (a *api) routes() http.Handler {
 	mux.HandleFunc("GET /api/businesses/{businessID}/whatsapp-accounts/{id}", a.protect(false, a.getWhatsAppAccount))
 	mux.HandleFunc("POST /api/businesses/{businessID}/whatsapp-accounts/{id}/pair", a.protect(false, a.pairWhatsAppAccount))
 	mux.HandleFunc("POST /api/businesses/{businessID}/whatsapp-accounts/{id}/connect", a.protect(false, a.connectWhatsAppAccount))
+	mux.HandleFunc("POST /api/businesses/{businessID}/whatsapp-accounts/{id}/check-number", a.protect(false, a.checkWhatsAppNumber))
 	mux.HandleFunc("GET /api/businesses/{businessID}/whatsapp-accounts/{id}/connection", a.protect(false, a.whatsAppConnection))
 	mux.HandleFunc("GET /api/businesses/{businessID}/whatsapp-accounts/{id}/qr", a.protect(false, a.whatsAppQR))
 	mux.HandleFunc("GET /api/businesses/{businessID}/transactions", a.protect(false, a.listTransactions))

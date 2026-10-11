@@ -27,6 +27,7 @@ type pairingClient interface {
 	GetQRChannel(context.Context) (<-chan whatsmeow.QRChannelItem, error)
 	PairPhone(context.Context, string, bool, whatsmeow.PairClientType, string) (string, error)
 	Logout(context.Context) error
+	IsOnWhatsApp(context.Context, []string) ([]types.IsOnWhatsAppResponse, error)
 }
 
 type connectionState struct {
@@ -39,10 +40,11 @@ type connectionState struct {
 type accountConnection struct {
 	mu sync.Mutex
 	connectionState
-	phone  string
-	done   chan struct{}
-	proof  []byte
-	logout chan chan error
+	phone        string
+	done         chan struct{}
+	proof        []byte
+	logout       chan chan error
+	numberChecks chan numberCheck
 }
 
 func (c *accountConnection) state() connectionState {
@@ -157,7 +159,7 @@ func (s *whatsAppService) start(user actor, id, method, phone string, proof ...[
 	if active >= 32 {
 		return nil, errors.New("connection_capacity")
 	}
-	c := &accountConnection{connectionState: connectionState{State: "connecting", Method: method}, phone: phone, done: make(chan struct{}), proof: loginProof, logout: make(chan chan error)}
+	c := &accountConnection{connectionState: connectionState{State: "connecting", Method: method}, phone: phone, done: make(chan struct{}), proof: loginProof, logout: make(chan chan error), numberChecks: make(chan numberCheck)}
 	s.accounts[key] = c
 	s.wg.Add(1)
 	go func() {
@@ -280,6 +282,32 @@ func (s *whatsAppService) run(user actor, id string, c *accountConnection) strin
 	defer deliveries.Stop()
 	for {
 		select {
+		case request := <-c.numberChecks:
+			checkCtx, stop := context.WithCancel(request.ctx)
+			stopOnShutdown := context.AfterFunc(ctx, stop)
+			var current sql.NullString
+			err = conn.QueryRowContext(checkCtx, activeWhatsAppAccount, user.BusinessID, id, user.UserID).Scan(&current)
+			result := numberCheckResult{err: err}
+			if errors.Is(err, sql.ErrNoRows) || (err == nil && (current != saved || !saved.Valid || c.state().State != "connected")) {
+				result.err = errNumberCheckUnavailable
+			} else if err == nil {
+				result.registered, result.err = checkRegisteredNumber(checkCtx, client, request.phone)
+				if result.err == nil {
+					result.err = conn.QueryRowContext(checkCtx, `INSERT INTO ipo_pos.whatsapp_number_checks
+						(business_id,phone_number,registered,whatsapp_account_id) VALUES($1,$2,$3,$4)
+						ON CONFLICT (business_id,phone_number) DO UPDATE
+						SET registered=EXCLUDED.registered,checked_at=clock_timestamp(),whatsapp_account_id=EXCLUDED.whatsapp_account_id
+						RETURNING checked_at`, user.BusinessID, request.phone, result.registered, id).Scan(&result.checkedAt)
+					if result.err != nil && checkCtx.Err() == nil {
+						result.err = errNumberCheckStorage
+					} else if checkCtx.Err() != nil {
+						result.err = checkCtx.Err()
+					}
+				}
+			}
+			stopOnShutdown()
+			stop()
+			request.result <- result
 		case result := <-c.logout:
 			logoutCtx, stop := context.WithTimeout(ctx, 5*time.Second)
 			logoutErr := client.Logout(logoutCtx)

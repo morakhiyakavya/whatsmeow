@@ -20,11 +20,19 @@ import (
 )
 
 type fakePairingClient struct {
-	device  *store.Device
-	handler whatsmeow.EventHandler
-	qr      chan whatsmeow.QRChannelItem
-	phone   chan string
-	sender  confirmationSender
+	device      *store.Device
+	handler     whatsmeow.EventHandler
+	qr          chan whatsmeow.QRChannelItem
+	phone       chan string
+	sender      confirmationSender
+	numberCheck func(context.Context, []string) ([]types.IsOnWhatsAppResponse, error)
+}
+
+func (f *fakePairingClient) IsOnWhatsApp(ctx context.Context, phones []string) ([]types.IsOnWhatsAppResponse, error) {
+	if f.numberCheck != nil {
+		return f.numberCheck(ctx, phones)
+	}
+	return nil, errors.New("unexpected number check in pairing-only fixture")
 }
 
 func (f *fakePairingClient) AddEventHandler(h whatsmeow.EventHandler) uint32 { f.handler = h; return 1 }
@@ -119,9 +127,11 @@ func testWhatsAppPairing(t *testing.T, dsn string, db *sql.DB, app *api, admin, 
 	expectStatus(t, 201, status, object)
 	id := field(t, object, "id")
 	path := base + "/" + id
-	for _, suffix := range []string{"/connection", "/qr", "/pair", "/connect"} {
+	status, object, _ = cashier.request("POST", path+"/check-number", map[string]string{"phone_number": "+919000001010"}, "")
+	expectStatus(t, 409, status, object)
+	for _, suffix := range []string{"/connection", "/qr", "/pair", "/connect", "/check-number"} {
 		method := "GET"
-		if suffix == "/pair" || suffix == "/connect" {
+		if suffix == "/pair" || suffix == "/connect" || suffix == "/check-number" {
 			method = "POST"
 		}
 		status, object, _ = admin.request(method, path+suffix, map[string]string{}, "")
@@ -195,6 +205,7 @@ func testWhatsAppPairing(t *testing.T, dsn string, db *sql.DB, app *api, admin, 
 	fake.qr <- whatsmeow.QRChannelSuccess
 	fake.handler(&events.ManualLoginReconnect{})
 	awaitConnection(t, s, businessID, id, "connected")
+	testWhatsAppNumbers(t, db, cashier, other, s, fake, upperPath)
 	status, object, _ = cashier.request("GET", path, nil, "")
 	expectStatus(t, 200, status, object)
 	if field(t, object, "pairing_state") != "paired" || field(t, object, "phone_number") != "+999000000011" || field(t, object, "id") != id {

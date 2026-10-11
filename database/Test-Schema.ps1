@@ -30,7 +30,7 @@ try {
     if ($LASTEXITCODE -ne 0) { throw 'Temporary database startup failed' }
     $started = $true
 
-    foreach ($sqlFile in @('001_initial.sql', '002_api.sql', '003_whatsapp_accounts.sql', '004_contact_names.sql', '005_transaction_confirmations.sql', '006_passwordless_sessions.sql', 'schema_test.sql')) {
+    foreach ($sqlFile in @('001_initial.sql', '002_api.sql', '003_whatsapp_accounts.sql', '004_contact_names.sql', '005_transaction_confirmations.sql', '006_passwordless_sessions.sql', '007_whatsapp_number_checks.sql', 'schema_test.sql')) {
         $taskSqlPath = Join-Path $PSScriptRoot $sqlFile
         & (Join-Path $PostgresBin 'psql.exe') --no-psqlrc --set ON_ERROR_STOP=1 --host=127.0.0.1 --port $taskPort --username=schema_test --dbname=postgres --file $taskSqlPath
         if ($LASTEXITCODE -ne 0) { throw "Schema validation failed: $sqlFile" }

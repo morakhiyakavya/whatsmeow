@@ -133,6 +133,13 @@ Authorization: Bearer {{token}}
 POST {{base}}/api/businesses/{{business}}/whatsapp-accounts/{{whatsapp_account}}/connect
 Authorization: Bearer {{token}}
 
+### Check one number using my connected WhatsApp account (registration, not ownership)
+POST {{base}}/api/businesses/{{business}}/whatsapp-accounts/{{whatsapp_account}}/check-number
+Authorization: Bearer {{token}}
+Content-Type: application/json
+
+{"phone_number":"+919000001010"}
+
 ### Upload selected mobile contact names (supplier comes from your token)
 POST {{base}}/api/businesses/{{business}}/contacts
 Authorization: Bearer {{token}}

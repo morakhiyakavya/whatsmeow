@@ -51,6 +51,14 @@ BEGIN
     PERFORM pg_temp.expect_failure(format('UPDATE customers SET referred_by_customer_id=id WHERE business_id=%L AND id=%L', shop, customer), '23514');
     INSERT INTO ipos(code,name) VALUES ('TEST-IPO','Synthetic IPO') RETURNING id INTO offering;
     INSERT INTO whatsapp_accounts(business_id,label,linked_by_user_id) VALUES (shop,'Test account',staff) RETURNING id INTO account;
+    INSERT INTO whatsapp_number_checks(business_id,phone_number,registered,whatsapp_account_id)
+        VALUES (shop,'+919000000002',false,account);
+    PERFORM pg_temp.assert_true((SELECT registered=false AND checked_at IS NOT NULL FROM whatsapp_number_checks
+        WHERE business_id=shop AND phone_number='+919000000002'), 'registration is a stored boolean with a check timestamp');
+    PERFORM pg_temp.expect_failure(format('INSERT INTO whatsapp_number_checks(business_id,phone_number,registered,whatsapp_account_id) VALUES(%L,''+919000000002'',true,%L)',shop,account), '23505');
+    PERFORM pg_temp.expect_failure(format('INSERT INTO whatsapp_number_checks(business_id,phone_number,registered,whatsapp_account_id) VALUES(%L,''123'',false,%L)',shop,account), '23514');
+    PERFORM pg_temp.expect_failure(format('INSERT INTO whatsapp_number_checks(business_id,phone_number,registered,whatsapp_account_id) VALUES(%L,''+919000000003'',NULL,%L)',shop,account), '23502');
+    PERFORM pg_temp.expect_failure(format('INSERT INTO whatsapp_number_checks(business_id,phone_number,registered,whatsapp_account_id) VALUES(%L,''+919000000002'',true,%L)',other_shop,account), '23503');
     INSERT INTO conversations(business_id,whatsapp_account_id,customer_id) VALUES (shop,account,customer) RETURNING id INTO chat;
     INSERT INTO conversations(business_id,whatsapp_account_id) VALUES (shop,account) RETURNING id INTO other_chat;
     INSERT INTO conversation_aliases VALUES (shop,account,'919000000002@s.whatsapp.net',chat), (shop,account,'123456@lid',chat);

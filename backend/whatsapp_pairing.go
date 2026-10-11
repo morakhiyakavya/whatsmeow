@@ -1,6 +1,7 @@
 package main
 
 import (
+	"context"
 	"database/sql"
 	"net/http"
 	"strings"
@@ -8,6 +9,40 @@ import (
 
 	"rsc.io/qr"
 )
+
+func (a *api) disconnectWhatsAppAccount(w http.ResponseWriter, r *http.Request, user actor) {
+	id, jid, ok := a.ownedWhatsAppAccount(w, r, user)
+	if !ok {
+		return
+	}
+	// Revoke locally first, even when the network cannot confirm remote device removal.
+	if jid.Valid {
+		if err := a.whatsapp.clearBinding(r.Context(), user, id, jid.String); err != nil {
+			dbFailure(w, err)
+			return
+		}
+	}
+	a.whatsapp.mu.Lock()
+	c := a.whatsapp.accounts[strings.ToLower(user.BusinessID+"/"+id)]
+	a.whatsapp.mu.Unlock()
+	remote := false
+	if c != nil {
+		ctx, cancel := context.WithTimeout(r.Context(), 7*time.Second)
+		defer cancel()
+		result := make(chan error, 1)
+		select {
+		case c.logout <- result:
+			select {
+			case err := <-result:
+				remote = err == nil
+			case <-ctx.Done():
+			}
+		case <-c.done:
+		case <-ctx.Done():
+		}
+	}
+	writeJSON(w, 200, map[string]any{"state": "needs_relink", "remote_unlink_confirmed": remote})
+}
 
 func (a *api) ownedWhatsAppAccount(w http.ResponseWriter, r *http.Request, user actor) (string, sql.NullString, bool) {
 	id := r.PathValue("id")

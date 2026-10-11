@@ -34,6 +34,7 @@ DATABASE_URL=postgresql://ipo_platform_api:$taskApiPassword@localhost:5432/ipo_p
 MIGRATION_DATABASE_URL=postgresql://ipo_platform_owner:$taskOwnerPassword@localhost:5432/ipo_platform?sslmode=disable
 WHATSAPP_DATABASE_URL=postgresql://ipo_platform_owner:$taskOwnerPassword@localhost:5432/ipo_platform?sslmode=disable
 API_ADDR=127.0.0.1:8180
+ALLOW_PASSWORD_LOGIN=true
 BOOTSTRAP_BUSINESS_NAME=Local IPO Business
 BOOTSTRAP_ADMIN_NAME=Local Administrator
 BOOTSTRAP_ADMIN_PHONE=+919000000001
@@ -48,7 +49,7 @@ $taskAcl.SetOwner($taskIdentity)
 $taskAcl.AddAccessRule([Security.AccessControl.FileSystemAccessRule]::new($taskIdentity, 'FullControl', 'Allow'))
 $taskAcl.AddAccessRule([Security.AccessControl.FileSystemAccessRule]::new([Security.Principal.SecurityIdentifier]::new('S-1-5-18'), 'FullControl', 'Allow'))
 Set-Acl -LiteralPath $taskEnvPath -AclObject $taskAcl
-foreach ($taskMigration in @('001_initial.sql', '002_api.sql', '003_whatsapp_accounts.sql', '004_contact_names.sql', '005_transaction_confirmations.sql')) {
+foreach ($taskMigration in @('001_initial.sql', '002_api.sql', '003_whatsapp_accounts.sql', '004_contact_names.sql', '005_transaction_confirmations.sql', '006_passwordless_sessions.sql')) {
     $taskSql = Get-Content -Raw -LiteralPath (Join-Path $taskRoot "database/$taskMigration")
     Invoke-LocalSql 'ipo_platform' ("SET ROLE ipo_platform_owner;`n" + $taskSql)
 }
@@ -64,10 +65,14 @@ GRANT INSERT, UPDATE ON ipo_pos.customers, ipo_pos.transactions TO ipo_platform_
 GRANT INSERT, UPDATE, DELETE ON ipo_pos.contact_names TO ipo_platform_api;
 GRANT INSERT ON ipo_pos.transaction_confirmations TO ipo_platform_api;
 GRANT INSERT, DELETE ON ipo_pos.login_sessions TO ipo_platform_api;
+GRANT UPDATE ON ipo_pos.login_sessions TO ipo_platform_api;
+GRANT INSERT, UPDATE, DELETE ON ipo_pos.device_login_tokens TO ipo_platform_api;
+GRANT UPDATE (consumed_at) ON ipo_pos.login_attempts TO ipo_platform_api;
 -- Session bindings can only be supplied by the future trusted pairing worker.
 GRANT INSERT (business_id, label, linked_by_user_id) ON ipo_pos.whatsapp_accounts TO ipo_platform_api;
 -- SELECT ... FOR SHARE in transaction guards needs UPDATE on at least one column.
 GRANT UPDATE (id) ON ipo_pos.businesses, ipo_pos.users TO ipo_platform_api;
 GRANT UPDATE (user_id) ON ipo_pos.business_memberships TO ipo_platform_api;
+GRANT UPDATE (id) ON ipo_pos.whatsapp_accounts TO ipo_platform_api;
 '@
 Write-Output "Created ipo_platform, separate migration/API roles, and $taskEnvPath. Passwords were not printed."

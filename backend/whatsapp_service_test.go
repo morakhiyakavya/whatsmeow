@@ -29,6 +29,7 @@ type fakePairingClient struct {
 
 func (f *fakePairingClient) AddEventHandler(h whatsmeow.EventHandler) uint32 { f.handler = h; return 1 }
 func (f *fakePairingClient) Disconnect()                                     {}
+func (f *fakePairingClient) Logout(ctx context.Context) error                { return f.device.Delete(ctx) }
 func (f *fakePairingClient) GenerateMessageID() types.MessageID {
 	if f.sender != nil {
 		return f.sender.GenerateMessageID()
@@ -228,6 +229,12 @@ func testWhatsAppPairing(t *testing.T, dsn string, db *sql.DB, app *api, admin, 
 	}
 	resumed.handler(&events.LoggedOut{})
 	awaitConnection(t, restored, businessID, id, "needs_relink")
+	status, object, _ = cashier.request("GET", "/api/me", nil, "")
+	expectStatus(t, 401, status, object)
+	app.limiter = loginLimiter{windows: make(map[string]loginWindow)}
+	status, object, _ = cashier.request("POST", "/api/login", map[string]string{"phone_number": "+919000001003", "password": "cashier-password-12345"}, "")
+	expectStatus(t, 200, status, object)
+	cashier.Token = field(t, object, "access_token")
 	status, object, _ = cashier.request("GET", path, nil, "")
 	expectStatus(t, 200, status, object)
 	if field(t, object, "pairing_state") != "unlinked" || field(t, object, "id") != id {
@@ -259,13 +266,16 @@ func testWhatsAppPairing(t *testing.T, dsn string, db *sql.DB, app *api, admin, 
 	status, object, _ = cashier.request("POST", path+"/connect", nil, "")
 	expectStatus(t, 202, status, object)
 	awaitConnection(t, restored, businessID, id, "needs_relink")
+	status, object, _ = cashier.request("POST", "/api/login", map[string]string{"phone_number": "+919000001003", "password": "cashier-password-12345"}, "")
+	expectStatus(t, 200, status, object)
+	cashier.Token = field(t, object, "access_token")
 	if len(created) != 0 {
 		t.Fatal("missing credentials adopted an unrelated session")
 	}
 	if _, err = restored.db.Exec("UPDATE ipo_pos.business_memberships SET disabled_at=now() WHERE business_id=$1 AND user_id=$2", businessID, cashierID); err != nil {
 		t.Fatal(err)
 	}
-	if err = restored.bind(ctx, actor{UserID: cashierID, BusinessID: businessID}, id, jid.String(), "+999000000011"); err == nil {
+	if err = restored.bind(ctx, actor{UserID: cashierID, BusinessID: businessID}, id, jid.String(), "+999000000011", nil); err == nil {
 		t.Fatal("pairing persisted after the owner's membership was disabled")
 	}
 	if _, err = restored.db.Exec("UPDATE ipo_pos.business_memberships SET disabled_at=NULL WHERE business_id=$1 AND user_id=$2", businessID, cashierID); err != nil {

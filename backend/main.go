@@ -21,10 +21,11 @@ import (
 )
 
 type api struct {
-	db        *sql.DB
-	limiter   loginLimiter
-	dummyHash []byte
-	whatsapp  *whatsAppService
+	db            *sql.DB
+	limiter       loginLimiter
+	dummyHash     []byte
+	whatsapp      *whatsAppService
+	passwordLogin bool
 }
 
 func main() {
@@ -63,13 +64,14 @@ func run(envPath string, bootstrap bool) error {
 		return bootstrapAdmin(ctx, db, config)
 	}
 	var schemaReady bool
-	if err := db.QueryRowContext(ctx, "SELECT to_regclass('ipo_pos.manual_transaction_requests') IS NOT NULL AND to_regclass('ipo_pos.contact_names') IS NOT NULL AND to_regclass('ipo_pos.transaction_confirmations') IS NOT NULL").Scan(&schemaReady); err != nil || !schemaReady {
-		return errors.New("apply application migrations through database/005_transaction_confirmations.sql before starting the API")
+	if err := db.QueryRowContext(ctx, "SELECT to_regclass('ipo_pos.login_attempts') IS NOT NULL AND to_regclass('ipo_pos.device_login_tokens') IS NOT NULL").Scan(&schemaReady); err != nil || !schemaReady {
+		return errors.New("apply application migrations through database/006_passwordless_sessions.sql before starting the API")
 	}
 	app, err := newAPI(db)
 	if err != nil {
 		return errors.New("could not initialize authentication")
 	}
+	app.passwordLogin = config.PasswordLogin
 	if config.WhatsAppDatabaseURL != "" {
 		app.whatsapp, err = openWhatsAppService(ctx, config.WhatsAppDatabaseURL)
 		if err != nil {
@@ -108,6 +110,16 @@ func (a *api) routes() http.Handler {
 	mux.HandleFunc("GET /health", a.health)
 	mux.HandleFunc("POST /api/login", a.login)
 	mux.HandleFunc("POST /api/logout", a.logout)
+	mux.HandleFunc("POST /api/auth/whatsapp/start", a.startWhatsAppLogin)
+	mux.HandleFunc("POST /api/auth/whatsapp/status", a.whatsAppLoginStatus)
+	mux.HandleFunc("POST /api/auth/whatsapp/exchange", a.exchangeWhatsAppLogin)
+	mux.HandleFunc("POST /api/auth/refresh", a.refreshSession)
+	mux.HandleFunc("POST /api/auth/device-tokens", a.createDeviceToken)
+	mux.HandleFunc("POST /api/auth/device-tokens/exchange", a.exchangeDeviceToken)
+	mux.HandleFunc("GET /api/sessions", a.listSessions)
+	mux.HandleFunc("DELETE /api/sessions/{id}", a.removeSession)
+	mux.HandleFunc("POST /api/logout-all", a.logoutAll)
+	mux.HandleFunc("POST /api/businesses/{businessID}/whatsapp-accounts/{id}/disconnect", a.protect(false, a.disconnectWhatsAppAccount))
 	mux.HandleFunc("GET /api/me", a.me)
 	mux.HandleFunc("GET /api/businesses/{businessID}/staff", a.protect(true, a.listStaff))
 	mux.HandleFunc("POST /api/businesses/{businessID}/staff", a.protect(true, a.createStaff))

@@ -9,6 +9,64 @@
 @customer = COPY_CUSTOMER_ID
 @transaction = COPY_TRANSACTION_ID
 @whatsapp_account = COPY_WHATSAPP_ACCOUNT_ID
+@whatsapp_login_phone = COPY_PROVISIONED_REAL_PHONE
+@attempt = COPY_PRIVATE_ATTEMPT_TOKEN
+@device_token = COPY_TOKEN_DISPLAYED_ON_ORIGINAL_DEVICE
+@refresh = COPY_CURRENT_REFRESH_TOKEN
+@session = COPY_OWN_SESSION_ID
+
+### Passwordless first-device login: use a provisioned actual WhatsApp phone
+POST {{base}}/api/auth/whatsapp/start
+Content-Type: application/json
+
+{"phone_number":"{{whatsapp_login_phone}}","device_name":"My phone"}
+
+### Poll the private attempt; enter its code in WhatsApp Linked devices
+POST {{base}}/api/auth/whatsapp/status
+Content-Type: application/json
+
+{"attempt_token":"{{attempt}}"}
+
+### Exchange only after verified; capture access/refresh/account IDs
+POST {{base}}/api/auth/whatsapp/exchange
+Content-Type: application/json
+
+{"attempt_token":"{{attempt}}"}
+
+### Original signed-in device: generate a two-minute, one-use token for display
+POST {{base}}/api/auth/device-tokens
+Authorization: Bearer {{token}}
+Content-Type: application/json
+
+{}
+
+### Additional device: redeem the displayed token without another WhatsApp link
+POST {{base}}/api/auth/device-tokens/exchange
+Content-Type: application/json
+
+{"device_token":"{{device_token}}","device_name":"Office laptop"}
+
+### Rotate credentials; replace both stored tokens atomically
+POST {{base}}/api/auth/refresh
+Content-Type: application/json
+
+{"refresh_token":"{{refresh}}"}
+
+### List my signed-in POS devices (no credentials returned)
+GET {{base}}/api/sessions
+Authorization: Bearer {{token}}
+
+### Revoke one of my POS sessions
+DELETE {{base}}/api/sessions/{{session}}
+Authorization: Bearer {{token}}
+
+### End all my POS sessions; keep the shared WhatsApp link
+POST {{base}}/api/logout-all
+Authorization: Bearer {{token}}
+
+### Disconnect WhatsApp and revoke all my POS sessions; preserves user/history
+POST {{base}}/api/businesses/{{business}}/whatsapp-accounts/{{whatsapp_account}}/disconnect
+Authorization: Bearer {{token}}
 
 # To request a sale receipt, add "whatsapp_account_id":"{{whatsapp_account}}"
 # to the existing transaction POST body. Use your own paired account.
@@ -17,7 +75,7 @@
 GET {{base}}/api/businesses/{{business}}/transactions/{{transaction}}/confirmation
 Authorization: Bearer {{token}}
 
-### Sign in
+### Legacy local sign-in only when ALLOW_PASSWORD_LOGIN=true
 POST {{base}}/api/login
 Content-Type: application/json
 

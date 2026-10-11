@@ -12,7 +12,10 @@ import (
 	"golang.org/x/crypto/bcrypt"
 )
 
-type configuration struct{ DatabaseURL, Addr, BusinessName, AdminName, AdminPhone, AdminPassword, WhatsAppDatabaseURL string }
+type configuration struct {
+	DatabaseURL, Addr, BusinessName, AdminName, AdminPhone, AdminPassword, WhatsAppDatabaseURL string
+	PasswordLogin                                                                              bool
+}
 
 func loadConfig(path string) (configuration, error) {
 	file, err := os.Open(path)
@@ -46,7 +49,12 @@ func loadConfig(path string) (configuration, error) {
 		}
 		return values[key]
 	}
-	c := configuration{get("DATABASE_URL"), get("API_ADDR"), get("BOOTSTRAP_BUSINESS_NAME"), get("BOOTSTRAP_ADMIN_NAME"), get("BOOTSTRAP_ADMIN_PHONE"), get("BOOTSTRAP_ADMIN_PASSWORD"), get("WHATSAPP_DATABASE_URL")}
+	c := configuration{DatabaseURL: get("DATABASE_URL"), Addr: get("API_ADDR"), BusinessName: get("BOOTSTRAP_BUSINESS_NAME"), AdminName: get("BOOTSTRAP_ADMIN_NAME"), AdminPhone: get("BOOTSTRAP_ADMIN_PHONE"), AdminPassword: get("BOOTSTRAP_ADMIN_PASSWORD"), WhatsAppDatabaseURL: get("WHATSAPP_DATABASE_URL")}
+	setting := get("ALLOW_PASSWORD_LOGIN")
+	if setting != "" && setting != "true" && setting != "false" {
+		return c, errors.New("ALLOW_PASSWORD_LOGIN must be true or false")
+	}
+	c.PasswordLogin = setting == "true"
 	if c.DatabaseURL == "" {
 		return c, errors.New("DATABASE_URL is required")
 	}

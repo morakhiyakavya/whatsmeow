@@ -258,11 +258,15 @@ func (a *api) createStaff(w http.ResponseWriter, r *http.Request, user actor) {
 	if input.Role == "" {
 		input.Role = "cashier"
 	}
-	if !validText(input.Name, 256) || !phonePattern.MatchString(input.Phone) || !validPassword(input.Password) || (input.Role != "admin" && input.Role != "cashier") {
-		fail(w, 400, "invalid_staff", "Supply a name, international phone, 12–72 byte password and admin/cashier role")
+	if !validText(input.Name, 256) || !phonePattern.MatchString(input.Phone) || (input.Password != "" && !validPassword(input.Password)) || (input.Role != "admin" && input.Role != "cashier") {
+		fail(w, 400, "invalid_staff", "Supply a name, international phone, admin/cashier role and optional 12–72 byte password")
 		return
 	}
-	hash, err := bcrypt.GenerateFromPassword([]byte(input.Password), bcrypt.DefaultCost)
+	var hash []byte
+	var err error
+	if input.Password != "" {
+		hash, err = bcrypt.GenerateFromPassword([]byte(input.Password), bcrypt.DefaultCost)
+	}
 	if err != nil {
 		fail(w, 500, "internal_error", "Could not create staff credentials")
 		return
@@ -282,9 +286,11 @@ func (a *api) createStaff(w http.ResponseWriter, r *http.Request, user actor) {
 		dbFailure(w, err)
 		return
 	}
-	if _, err = tx.ExecContext(r.Context(), "INSERT INTO ipo_pos.user_credentials(user_id,password_hash) VALUES($1,$2)", id, string(hash)); err != nil {
-		dbFailure(w, err)
-		return
+	if input.Password != "" {
+		if _, err = tx.ExecContext(r.Context(), "INSERT INTO ipo_pos.user_credentials(user_id,password_hash) VALUES($1,$2)", id, string(hash)); err != nil {
+			dbFailure(w, err)
+			return
+		}
 	}
 	if err = tx.Commit(); err != nil {
 		dbFailure(w, err)

@@ -170,6 +170,7 @@ func testConfirmationDelivery(t *testing.T, dsn string, db *sql.DB, cashier test
 				t.Fatal(err)
 			}
 		case "sender":
+			expected = "cancelled"
 			currentJID = "919000001003:56@s.whatsapp.net"
 			if _, err = db.Exec(`UPDATE ipo_pos.whatsapp_accounts SET device_jid=$2 WHERE id=$1`, account, currentJID); err != nil {
 				t.Fatal(err)
@@ -184,6 +185,15 @@ func testConfirmationDelivery(t *testing.T, dsn string, db *sql.DB, cashier test
 		}
 		if _, err = db.Exec(`UPDATE ipo_pos.whatsapp_accounts SET device_jid=$2 WHERE id=$1`, account, jidText); err != nil {
 			t.Fatal(err)
+		}
+		if kind == "sender" {
+			status, obj, _ = cashier.request("POST", "/api/login", map[string]string{"phone_number": "+919000001003", "password": "cashier-password-12345"}, "")
+			expectStatus(t, 200, status, obj)
+			cashier.Token = field(t, obj, "access_token")
+			var reason string
+			if err = db.QueryRow(`SELECT error_code FROM ipo_pos.transaction_confirmations WHERE transaction_id=$1`, queuedID).Scan(&reason); err != nil || reason != "sender_unlinked" {
+				t.Fatal("binding replacement did not stop old pending receipts")
+			}
 		}
 	}
 	interruptedID := queue("interrupted-send")

@@ -62,9 +62,11 @@ func (l *loginLimiter) allow(remote string) bool {
 func validPassword(s string) bool { return len(s) >= 12 && len(s) <= 72 }
 
 func (a *api) login(w http.ResponseWriter, r *http.Request) {
-	if !a.limiter.allow(r.RemoteAddr) {
-		w.Header().Set("Retry-After", "60")
-		fail(w, 429, "rate_limited", "Too many sign-in attempts; retry in one minute")
+	if !a.passwordLogin {
+		fail(w, 403, "password_login_disabled", "Use WhatsApp login or a device login token")
+		return
+	}
+	if !a.limitedAuth(w, r) {
 		return
 	}
 	var input struct {
@@ -95,12 +97,11 @@ func (a *api) login(w http.ResponseWriter, r *http.Request) {
 		fail(w, 401, "invalid_credentials", "Invalid phone number or password")
 		return
 	}
-	bytes := make([]byte, 32)
-	if _, err = rand.Read(bytes); err != nil {
+	token, hashToken, err := newSecret()
+	if err != nil {
 		fail(w, 500, "internal_error", "Could not create a session")
 		return
 	}
-	hashToken := sha256.Sum256(bytes)
 	expiry := time.Now().UTC().Add(12 * time.Hour)
 	tx, err := a.db.BeginTx(r.Context(), nil)
 	if err != nil {
@@ -108,11 +109,11 @@ func (a *api) login(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	defer tx.Rollback()
-	if _, err = tx.ExecContext(r.Context(), "DELETE FROM ipo_pos.login_sessions WHERE expires_at<=now()"); err != nil {
+	if _, err = tx.ExecContext(r.Context(), "DELETE FROM ipo_pos.login_sessions WHERE expires_at<=now() AND (refresh_expires_at IS NULL OR refresh_expires_at<=now())"); err != nil {
 		dbFailure(w, err)
 		return
 	}
-	if _, err = tx.ExecContext(r.Context(), "INSERT INTO ipo_pos.login_sessions(token_hash,user_id,expires_at) VALUES($1,$2,$3)", hashToken[:], id, expiry); err != nil {
+	if _, err = tx.ExecContext(r.Context(), "INSERT INTO ipo_pos.login_sessions(token_hash,user_id,expires_at) VALUES($1,$2,$3)", hashToken, id, expiry); err != nil {
 		dbFailure(w, err)
 		return
 	}
@@ -120,7 +121,25 @@ func (a *api) login(w http.ResponseWriter, r *http.Request) {
 		dbFailure(w, err)
 		return
 	}
-	writeJSON(w, 200, map[string]any{"access_token": base64.RawURLEncoding.EncodeToString(bytes), "token_type": "Bearer", "expires_at": expiry, "user_id": id})
+	writeJSON(w, 200, map[string]any{"access_token": token, "token_type": "Bearer", "expires_at": expiry, "user_id": id})
+}
+
+func newSecret() (string, []byte, error) {
+	bytes := make([]byte, 32)
+	if _, err := rand.Read(bytes); err != nil {
+		return "", nil, err
+	}
+	hash := sha256.Sum256(bytes)
+	return base64.RawURLEncoding.EncodeToString(bytes), hash[:], nil
+}
+
+func secretHash(token string) ([]byte, bool) {
+	bytes, err := base64.RawURLEncoding.DecodeString(token)
+	if err != nil || len(bytes) != 32 || len(token) != 43 {
+		return nil, false
+	}
+	hash := sha256.Sum256(bytes)
+	return hash[:], true
 }
 
 func sessionHash(r *http.Request) ([]byte, bool) {
@@ -129,13 +148,16 @@ func sessionHash(r *http.Request) ([]byte, bool) {
 	if !ok || !strings.EqualFold(scheme, "Bearer") || len(token) != 43 {
 		return nil, false
 	}
-	bytes, err := base64.RawURLEncoding.DecodeString(token)
-	if err != nil || len(bytes) != 32 {
-		return nil, false
-	}
-	hash := sha256.Sum256(bytes)
-	return hash[:], true
+	return secretHash(token)
 }
+
+const sessionJoins = ` JOIN ipo_pos.users u ON u.id=s.user_id
+    LEFT JOIN ipo_pos.whatsapp_accounts wa ON wa.business_id=s.business_id AND wa.id=s.whatsapp_account_id
+    LEFT JOIN ipo_pos.business_memberships m ON m.business_id=s.business_id AND m.user_id=s.user_id
+    LEFT JOIN ipo_pos.businesses b ON b.id=s.business_id `
+const sessionEligible = ` u.disabled_at IS NULL AND (s.whatsapp_account_id IS NULL OR
+    (wa.linked_by_user_id=s.user_id AND wa.device_jid IS NOT NULL AND wa.unlinked_at IS NULL
+    AND wa.auth_generation=s.auth_generation AND m.disabled_at IS NULL AND m.user_id IS NOT NULL AND b.archived_at IS NULL)) `
 
 func (a *api) authenticate(w http.ResponseWriter, r *http.Request) (string, bool) {
 	hash, ok := sessionHash(r)
@@ -144,9 +166,8 @@ func (a *api) authenticate(w http.ResponseWriter, r *http.Request) (string, bool
 		return "", false
 	}
 	var userID string
-	err := a.db.QueryRowContext(r.Context(), `SELECT s.user_id FROM ipo_pos.login_sessions s
-        JOIN ipo_pos.users u ON u.id=s.user_id
-        WHERE s.token_hash=$1 AND s.expires_at>now() AND u.disabled_at IS NULL`, hash).Scan(&userID)
+	err := a.db.QueryRowContext(r.Context(), `SELECT s.user_id FROM ipo_pos.login_sessions s`+sessionJoins+`
+        WHERE s.token_hash=$1 AND s.expires_at>now() AND `+sessionEligible, hash).Scan(&userID)
 	if errors.Is(err, sql.ErrNoRows) {
 		fail(w, 401, "unauthorized", "Session is invalid or expired")
 		return "", false

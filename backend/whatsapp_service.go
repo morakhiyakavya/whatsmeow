@@ -1,6 +1,7 @@
 package main
 
 import (
+	"bytes"
 	"context"
 	"database/sql"
 	"database/sql/driver"
@@ -25,6 +26,7 @@ type pairingClient interface {
 	AddEventHandler(whatsmeow.EventHandler) uint32
 	GetQRChannel(context.Context) (<-chan whatsmeow.QRChannelItem, error)
 	PairPhone(context.Context, string, bool, whatsmeow.PairClientType, string) (string, error)
+	Logout(context.Context) error
 }
 
 type connectionState struct {
@@ -37,8 +39,10 @@ type connectionState struct {
 type accountConnection struct {
 	mu sync.Mutex
 	connectionState
-	phone string
-	done  chan struct{}
+	phone  string
+	done   chan struct{}
+	proof  []byte
+	logout chan chan error
 }
 
 func (c *accountConnection) state() connectionState {
@@ -110,7 +114,7 @@ func (s *whatsAppService) close() {
 	_ = s.store.Close()
 }
 
-func (s *whatsAppService) start(user actor, id, method, phone string) (*accountConnection, error) {
+func (s *whatsAppService) start(user actor, id, method, phone string, proof ...[]byte) (*accountConnection, error) {
 	user.BusinessID, id = strings.ToLower(user.BusinessID), strings.ToLower(id)
 	s.mu.Lock()
 	defer s.mu.Unlock()
@@ -118,12 +122,19 @@ func (s *whatsAppService) start(user actor, id, method, phone string) (*accountC
 		return nil, errors.New("service_stopped")
 	}
 	key := user.BusinessID + "/" + id
+	var loginProof []byte
+	if len(proof) > 0 {
+		loginProof = proof[0]
+	}
 	if c := s.accounts[key]; c != nil {
 		select {
 		case <-c.done:
 		default:
 			if method == "" && c.state().State == "connected" {
 				return c, nil
+			}
+			if !bytes.Equal(c.proof, loginProof) {
+				return nil, errors.New("connection_in_progress")
 			}
 			if c.Method != method || c.phone != phone {
 				return nil, errors.New("connection_in_progress")
@@ -146,7 +157,7 @@ func (s *whatsAppService) start(user actor, id, method, phone string) (*accountC
 	if active >= 32 {
 		return nil, errors.New("connection_capacity")
 	}
-	c := &accountConnection{connectionState: connectionState{State: "connecting", Method: method}, phone: phone, done: make(chan struct{})}
+	c := &accountConnection{connectionState: connectionState{State: "connecting", Method: method}, phone: phone, done: make(chan struct{}), proof: loginProof, logout: make(chan chan error)}
 	s.accounts[key] = c
 	s.wg.Add(1)
 	go func() {
@@ -190,6 +201,19 @@ func (s *whatsAppService) run(user actor, id string, c *accountConnection) strin
 	}
 	if !locked {
 		return "busy"
+	}
+	if err = conn.QueryRowContext(ctx, "SELECT pg_try_advisory_lock(hashtextextended($1,0))", "ipo-whatsapp-user/"+user.UserID).Scan(&locked); err != nil {
+		return "storage_unavailable"
+	}
+	if !locked {
+		return "busy"
+	}
+	var otherBinding bool
+	if err = conn.QueryRowContext(ctx, `SELECT EXISTS(SELECT 1 FROM ipo_pos.whatsapp_accounts WHERE linked_by_user_id=$1 AND (business_id,id)<>($2,$3) AND device_jid IS NOT NULL)`, user.UserID, user.BusinessID, id).Scan(&otherBinding); err != nil {
+		return "storage_unavailable"
+	}
+	if otherBinding {
+		return "already_paired"
 	}
 	var saved sql.NullString
 	if err = conn.QueryRowContext(ctx, activeWhatsAppAccount, user.BusinessID, id, user.UserID).Scan(&saved); err != nil {
@@ -256,6 +280,12 @@ func (s *whatsAppService) run(user actor, id string, c *accountConnection) strin
 	defer deliveries.Stop()
 	for {
 		select {
+		case result := <-c.logout:
+			logoutCtx, stop := context.WithTimeout(ctx, 5*time.Second)
+			logoutErr := client.Logout(logoutCtx)
+			stop()
+			result <- logoutErr
+			return "needs_relink"
 		case <-ctx.Done():
 			return "disconnected"
 		case <-expiry:
@@ -312,10 +342,24 @@ func (s *whatsAppService) run(user actor, id string, c *accountConnection) strin
 			case *events.PairSuccess, *events.Connected:
 				jid := device.GetJID()
 				if jid.Server != types.DefaultUserServer || jid.Device == 0 || !phonePattern.MatchString("+"+jid.User) || (c.Method == "phone" && "+"+jid.User != c.phone) {
+					if !saved.Valid {
+						cleanup, stop := context.WithTimeout(ctx, 5*time.Second)
+						_ = client.Logout(cleanup)
+						stop()
+					}
 					return "invalid_identity"
 				}
 				// shortcut: a crash after key persistence needs fresh pairing; add recovery if interrupted pairings become frequent.
-				if s.bind(ctx, user, id, jid.String(), "+"+jid.User) != nil {
+				var proof []byte
+				if !saved.Valid {
+					proof = c.proof
+				}
+				if s.bind(ctx, user, id, jid.String(), "+"+jid.User, proof) != nil {
+					if !saved.Valid {
+						cleanup, stop := context.WithTimeout(ctx, 5*time.Second)
+						_ = client.Logout(cleanup)
+						stop()
+					}
 					return "binding_failed"
 				}
 				saved = sql.NullString{String: jid.String(), Valid: true}
@@ -343,8 +387,21 @@ func (s *whatsAppService) run(user actor, id string, c *accountConnection) strin
 	}
 }
 
-func (s *whatsAppService) bind(ctx context.Context, user actor, id, jid, phone string) error {
-	result, err := s.db.ExecContext(ctx, `UPDATE ipo_pos.whatsapp_accounts wa
+func (s *whatsAppService) bind(ctx context.Context, user actor, id, jid, phone string, proof []byte) error {
+	tx, err := s.db.BeginTx(ctx, nil)
+	if err != nil {
+		return err
+	}
+	defer tx.Rollback()
+	if len(proof) > 0 {
+		var valid bool
+		err = tx.QueryRowContext(ctx, `SELECT true FROM ipo_pos.login_attempts WHERE token_hash=$1 AND user_id=$2
+		AND whatsapp_account_id=$3 AND phone_number=$4 AND state='pending' AND expires_at>now() AND consumed_at IS NULL FOR UPDATE`, proof, user.UserID, id, phone).Scan(&valid)
+		if err != nil {
+			return err
+		}
+	}
+	result, err := tx.ExecContext(ctx, `UPDATE ipo_pos.whatsapp_accounts wa
         SET device_jid=$4,phone_number=$5,unlinked_at=NULL
         WHERE wa.business_id=$1 AND wa.id=$2 AND wa.linked_by_user_id=$3
         AND (wa.device_jid IS NULL OR wa.device_jid=$4)
@@ -357,7 +414,17 @@ func (s *whatsAppService) bind(ctx context.Context, user actor, id, jid, phone s
 			return errors.New("account unavailable")
 		}
 	}
-	return err
+	if err != nil {
+		return err
+	}
+	if len(proof) > 0 {
+		_, err = tx.ExecContext(ctx, `UPDATE ipo_pos.login_attempts a SET state='verified',auth_generation=wa.auth_generation
+		FROM ipo_pos.whatsapp_accounts wa WHERE a.token_hash=$1 AND wa.business_id=$2 AND wa.id=$3`, proof, user.BusinessID, id)
+		if err != nil {
+			return err
+		}
+	}
+	return tx.Commit()
 }
 
 func (s *whatsAppService) clearBinding(ctx context.Context, user actor, id, jid string) error {

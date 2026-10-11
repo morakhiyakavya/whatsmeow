@@ -104,3 +104,15 @@ Application work predating this policy remains outside the count until reviewed 
 1. Deliver queued sale confirmations through the existing locked account worker, preserving recorded message IDs and conservative uncertain-send handling.
    - Verification: backend tests/vet and isolated PostgreSQL API/session checks passed, including actual worker ticks, pending restore, recorded/wire IDs, POST replay, cancelled/edited sales, changed recipients/senders, disabled staff and interrupted-send recovery. Applied migration 005 and scoped local grants; read-only API/contact smoke and saved WhatsApp auto-restore passed; no live receipts, contacts or sales were created. Temporary server stopped; module tidy reused the existing protobuf dependency. Reviewed source, examples, script syntax and documentation/diffs. Live sending, race instrumentation, production HTTPS and mobile permission UI remain unchecked/unimplemented; uncertain attempts require review and are not automatically resent.
    - Paths: `backend/confirmation_delivery.go`, `backend/confirmation_delivery_test.go`, `backend/whatsapp_service.go`, `backend/whatsapp_service_test.go`, `backend/integration_test.go`, `backend/go.mod`, `backend/README.md`, `docs/PROJECT_VISION.md`, `docs/TASK_CHECKPOINT.md`.
+
+### Batch 13 — POS, contacts and authentication guide
+
+1. Document the complete manual POS and shared-contact workflow, including upload,
+   contact changes/withdrawal, provenance, customer selection, sale retries and
+   confirmation status; distinguish implemented APIs from remaining mobile work.
+   - Verification: reviewed the guide against authentication, contacts, customer/catalogue, transaction, confirmation and delivery code plus schema constraints; resolved local file/section links and parsed all nine JSON request/response examples; reviewed documentation content/diffs and whitespace. Documentation only; no live contacts, sales or messages created, and runtime tests were not rerun.
+   - Paths: `docs/POS_AND_CONTACTS_GUIDE.md`, `backend/README.md`, `docs/TASK_CHECKPOINT.md`.
+
+2. Document the requested WhatsApp-number mobile authentication direction and distinguish it from current password login and linked-device pairing.
+   - Verification: reviewed existing session issuance/expiry/logout, owner-only pairing, verified-number binding and unlink/reconnect handling; reviewed the guide/vision updates for accurate existing versus proposed behaviour, retained users, revocation, login proof and queued receipt implications; local guide links and nine JSON examples passed checks; documentation diffs/whitespace reviewed. No authentication code changed, runtime tests rerun or real sessions revoked.
+   - Paths: `docs/POS_AND_CONTACTS_GUIDE.md`, `docs/PROJECT_VISION.md`, `docs/TASK_CHECKPOINT.md`.

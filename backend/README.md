@@ -5,6 +5,11 @@ application sign-in, business membership, customers, the shared IPO/form catalog
 transactions, complete immutable transaction history, and business-owned WhatsApp
 account registration. No frontend is required to exercise the API.
 
+For the complete staff and mobile workflow, read the
+[POS sales and shared contacts guide](../docs/POS_AND_CONTACTS_GUIDE.md). It covers
+sale entry, contact uploads, name changes, new numbers, withdrawals, provenance
+and the distinction between implemented APIs and remaining mobile work.
+
 ## Local setup and start
 
 From the repository root in PowerShell:
@@ -20,7 +25,9 @@ From the repository root in PowerShell:
 
 The current workspace already has the `ipo_platform` database and root `.env`.
 The setup script refuses to overwrite an existing `.env`, database or role.
-Read `BOOTSTRAP_ADMIN_PHONE` and `BOOTSTRAP_ADMIN_PASSWORD` from `.env` to sign in.
+For the local legacy bootstrap flow, explicitly set `ALLOW_PASSWORD_LOGIN=true`
+and use `BOOTSTRAP_ADMIN_PHONE` and `BOOTSTRAP_ADMIN_PASSWORD` from `.env`.
+Password login is disabled by default. Normal staff use the passwordless API below.
 The initial phone `+919000000001` is a development placeholder, unrelated to your
 WhatsApp number. An admin can create staff with actual phone numbers through
 `POST /staff`. Bootstrap settings seed a new account; changing them later does
@@ -67,7 +74,8 @@ needs verified TLS and credentials supplied privately to the server.
 
 For a new database, apply `database/001_initial.sql`, `002_api.sql` and
 `003_whatsapp_accounts.sql`, `004_contact_names.sql` and
-`005_transaction_confirmations.sql` once, in that order, as its migration owner. The API
+`005_transaction_confirmations.sql`, then `006_passwordless_sessions.sql` once,
+in that order, as its migration owner. The API
 does not execute migrations on startup. Apply only missing migrations to an
 existing database. For the local installation that already has migrations 001/002:
 
@@ -84,6 +92,21 @@ The local setup script and disposable test role already include these grants.
 After migration 004, apply `005_transaction_confirmations.sql` and grant
 `SELECT, INSERT ON ipo_pos.transaction_confirmations` to the API role. Delivery
 updates belong to the trusted WhatsApp worker, not the request role.
+
+After migration 005, apply `006_passwordless_sessions.sql` and grant `UPDATE ON
+ipo_pos.login_sessions`, `INSERT, UPDATE, DELETE ON ipo_pos.device_login_tokens`,
+`SELECT ON ipo_pos.login_attempts, ipo_pos.device_login_tokens`,
+`UPDATE (consumed_at) ON ipo_pos.login_attempts` and `UPDATE (id) ON
+ipo_pos.whatsapp_accounts` to the runtime role, in addition to its existing grants.
+The identity-column grant permits row locking without granting binding/generation
+updates. Existing users, sessions and account IDs are preserved; conflicting active
+user/number links make the migration fail safely. Review those conflicts explicitly.
+
+Migration 006 rollback needs a database backup and a deliberate session transition,
+not only a Git revert. Stop/revert its callers, revoke the newly linked app sessions,
+then remove the added token/attempt tables, triggers, indexes and session/account
+columns in dependency order. Preserve users, business history and WhatsApp account
+IDs; never drop the application or WhatsApp session schemas as a rollback shortcut.
 
 The runtime grants are in `scripts/Setup-LocalDatabase.ps1`; use your runtime role
 name when applying them elsewhere. The narrowly scoped identity-column UPDATE
@@ -103,11 +126,21 @@ code yourself; the old SQLite login and existing viewer configuration are preser
 
 ## Authentication and permissions
 
-`POST /api/login` accepts `phone_number` and `password`, returning a random bearer
-token with a 12-hour expiry. Send `Authorization: Bearer TOKEN`. PostgreSQL stores
-only the token's SHA-256 hash. Logout deletes the session; process restarts preserve
-active sessions. Users with disabled accounts cannot authenticate. Every business
-request checks the active membership and business state against PostgreSQL.
+Passwordless login approves WhatsApp phone-number linking for a provisioned staff
+user. The first device obtains a linked access/refresh session; further devices
+redeem a one-use token displayed on a signed-in device. There is only one active
+WhatsApp link per user/number, enforced by database indexes and worker locks.
+Send `Authorization: Bearer TOKEN`; PostgreSQL stores hashes of credentials.
+Access lasts 15 minutes; rotating renewal lasts 30 days from successful renewal.
+Logout deletes that device's session; process restarts preserve eligible sessions.
+Linked-device revocation invalidates all the user's POS sessions and cancels old
+pending receipts without deleting users or history. Temporary disconnects retain
+login. Every business request still checks active membership and business state.
+
+The old `POST /api/login` phone/password route is available only when
+`ALLOW_PASSWORD_LOGIN=true` is explicitly enabled for local bootstrap/migration.
+Its sessions last 12 hours and cannot issue device login tokens. Turn the flag off
+for WhatsApp-only authentication; it defaults to false.
 
 | Operation | Admin | Cashier |
 |---|---|---|
@@ -135,7 +168,12 @@ IDs from `/api/me`. Supplying another business ID never confers access.
 | Method | Path | Purpose |
 |---|---|---|
 | GET | `/health` | Database readiness |
-| POST | `/api/login`, `/api/logout` | Sign in/out |
+| POST | `/api/login`, `/api/logout` | Opt-in legacy password login / current-device logout |
+| POST | `/api/auth/whatsapp/start`, `/api/auth/whatsapp/status`, `/api/auth/whatsapp/exchange` | Start, inspect and consume a private first-device proof |
+| POST | `/api/auth/device-tokens`, `/api/auth/device-tokens/exchange` | Generate on a signed-in device / redeem once on another device |
+| POST | `/api/auth/refresh` | Rotate access/refresh credentials |
+| GET, DELETE | `/api/sessions`, `/api/sessions/{id}` | List own sessions / revoke one own session |
+| POST | `/api/logout-all` | Revoke all this user's POS sessions |
 | GET | `/api/me` | User and active businesses |
 | GET, POST | `/staff` | List/create staff |
 | GET, POST | `/customers` | List/create customers, including referrals |
@@ -147,6 +185,7 @@ IDs from `/api/me`. Supplying another business ID never confers access.
 | POST | `/whatsapp-accounts/{id}/connect` | Reconnect the mapped saved session (registering user) |
 | GET | `/whatsapp-accounts/{id}/connection` | Connection state and current code (registering user) |
 | GET | `/whatsapp-accounts/{id}/qr` | Current QR as an uncached PNG (registering user) |
+| POST | `/whatsapp-accounts/{id}/disconnect` | Owner-only local revocation and best-effort remote unlink |
 | GET, POST | `/transactions` | List/create transactions |
 | GET, PUT | `/transactions/{id}` | Read or fully replace editable transaction fields |
 | POST | `/transactions/{id}/cancel` | Preserve the transaction with cancelled status |

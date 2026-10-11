@@ -139,7 +139,18 @@ The platform supports businesses with multiple staff rather than only one indepe
 
 Staff records include a name and contact number. The initial roles are **admin** and **cashier**, assigned within each business. The manual API now implements a baseline permission matrix: both roles can create/view customers and create/view/edit/cancel transactions; admins also create/view staff and create IPO catalogue entries. Further permissions remain open as workflows expand.
 
-Users sign in to this application separately from connecting WhatsApp. A business can own linked WhatsApp accounts, and authorized staff can share access to those accounts' data. Each linked WhatsApp account has its own saved server session; every staff member or browser does not need another WhatsApp pairing.
+Passwordless first-device login now approves WhatsApp phone-number linking for a
+provisioned staff user. Several POS devices share that user's one backend WhatsApp
+connection, with separate renewable sessions. The original signed-in device can
+display a two-minute, one-use token for another device; no second WhatsApp pairing
+is performed. Removal from WhatsApp's Linked devices invalidates the user's POS
+sessions when detected, preserving users and history. Device-only logout, all-POS
+logout and WhatsApp disconnect are distinct actions. Temporary network loss keeps
+login. Backend integration checks passed; live passwordless login and mobile
+screens remain unchecked. The legacy 12-hour password login is an opt-in local
+bootstrap/migration feature, disabled by default. The detailed flows and
+identity, membership, logout and receipt-queue safeguards are in the
+[mobile authentication guide](POS_AND_CONTACTS_GUIDE.md#mobile-authentication-and-whatsapp-login).
 
 The web and mobile applications communicate with the Go backend. Account credentials and PostgreSQL connection settings remain on the server.
 
@@ -204,6 +215,7 @@ Implemented and tested:
 - PostgreSQL WhatsApp session support with explicit account selection.
 - Isolated PostgreSQL tests using synthetic account data, including persistence across reopen and account-specific contacts.
 - A runnable Go HTTP API with phone/password sign-in, bcrypt password hashes, PostgreSQL-backed bearer sessions, logout, expiry, and business membership checks.
+- Passwordless number-linking login for provisioned staff, linked access/renewal sessions, original-device one-use tokens, own-device session management and automatic revocation; one active WhatsApp link per user/number is enforced. Legacy password login is explicitly opt-in; mobile and live passwordless checks remain next.
 - Customer/referral entry, staff creation, shared IPO/form catalogues, and manual transaction creation/editing/cancellation/history through authenticated APIs.
 - Authenticated shared contact-name upload, number lookup and withdrawal, with staff provenance and customer-name precedence; mobile permission screens remain to be built.
 - The transaction POST accepts an owned paired WhatsApp sender and saves a composed confirmation intent atomically with the sale; retries reuse it and the mobile API can read its status. The connected worker sends it and records acknowledgements or uncertain failures; restart, cancellation, changed-data and disabled-member paths have isolated tests. Live receipt sending remains unchecked.
@@ -302,6 +314,7 @@ Inventory, payment settlement, and media processing are not part of the agreed i
 - WhatsApp account pagination migration: `database/003_whatsapp_accounts.sql`
 - Shared contact names and customer attribution migration: `database/004_contact_names.sql`
 - Durable sale confirmation migration: `database/005_transaction_confirmations.sql`
+- Passwordless session/link revocation migration: `database/006_passwordless_sessions.sql`
 - Local database creation: `scripts/Setup-LocalDatabase.ps1`
 - API startup and smoke check: `scripts/Start-Api.ps1`, `scripts/Smoke-Api.ps1`
 - Local pairing helper and offline self-check: `scripts/Pair-WhatsApp.ps1`, `scripts/Test-PairWhatsApp.ps1`

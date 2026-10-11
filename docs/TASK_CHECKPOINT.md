@@ -71,3 +71,18 @@ Application work predating this policy remains outside the count until reviewed 
 1. Verify live phone-code pairing and automatic startup restoration, and record the completed milestone.
    - Verification: paired the user's phone through the authenticated helper; confirmed the stable account ID, verified phone binding and absence of a pairing code after connection. Restarted the backend and confirmed `connected` using read-only account/status requests without a pair/connect request. Reviewed documentation content/diff; no customer messages were sent; the temporary test server was stopped. Live QR pairing, device revocation and race instrumentation remain unchecked.
    - Paths: `backend/README.md`, `docs/PROJECT_VISION.md`, `docs/TASK_CHECKPOINT.md`.
+
+### Batch 9 — Reuse policy and mobile POS delivery priority
+
+1. Record the user's explicit requirement to avoid duplicate code and reuse existing implementations and database constraints.
+   - Verification: reviewed instruction content and diff; the existing reuse rule was strengthened without adding a second rule or changing the commit policy. Documentation only; no runtime tests required.
+   - Paths: `AGENTS.md`, `docs/TASK_CHECKPOINT.md`.
+
+2. Define the next archive increment around existing schema, viewer logic and API helpers, with three implementation commits and explicit acceptance checks.
+   - Verification: reviewed the current schema constraints/index, viewer filtering and identity helpers, account-worker integration point and API routes; reviewed the plan content/diff for reuse, business isolation and capture limits. Documentation only; no implementation or live message capture performed.
+   - Paths: `docs/PROJECT_VISION.md`, `docs/TASK_CHECKPOINT.md`.
+   - Superseded by task 3 after the user clarified that mobile POS confirmation delivery takes priority over an archive/browser.
+
+3. Reprioritise the next increment to authenticated mobile POS confirmation delivery and define sale detection as the trigger plus five preceding private texts.
+   - Verification: reviewed existing login/session/business checks and the transactional, idempotent sale writer; updated and reviewed the vision/diff to reuse those implementations, distinguish sale persistence from message delivery, and defer standalone archive/viewer work. Documentation only; no API changes or customer messages sent. Production authentication hardening and delivery remain unimplemented.
+   - Paths: `docs/PROJECT_VISION.md`, `docs/TASK_CHECKPOINT.md`.

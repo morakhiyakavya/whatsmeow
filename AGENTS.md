@@ -9,7 +9,7 @@
 
 - At the start of each coding session, read and follow [START.md](START.md).
 - Use the installed **ponytail:ponytail** skill at level **full** for coding tasks; locate and read its `SKILL.md` through the available-skills catalogue. Respect later user instructions to switch levels or stop ponytail.
-- Make the smallest complete change, reuse existing code and dependencies, and finish affected callers, tests, fixtures, and configuration. Preserve validation, error handling, security, and accessibility.
+- Make the smallest complete change. Before adding logic, search existing implementations, callers and database constraints; reuse them and keep one source of truth rather than introducing duplicate code or parallel implementations. Finish affected callers, tests, fixtures, and configuration. Preserve validation, error handling, security, and accessibility.
 - Verify nontrivial changes with a meaningful test or self-check. End responses with what was skipped or unchecked and any material risk.
 
 ## Automatic Git checkpoints

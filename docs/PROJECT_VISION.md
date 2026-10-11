@@ -15,7 +15,7 @@ The current use case includes buying IPO forms from customers. We are using the 
 - A business links its WhatsApp account through Linked devices.
 - The server receives incoming and outgoing messages from that account.
 - Only readable text from private 1:1 chats is relevant. Groups, broadcasts, statuses, newsletters, media, reactions, and media captions are excluded.
-- A new message is considered together with approximately 5–10 older texts from the same conversation, when available. The current viewer retains up to 10 older texts plus the latest text.
+- A potential sale message is evaluated together with the five immediately preceding readable texts from the same private conversation, when available: up to six messages including the trigger. Use their timestamps to understand when the sale happened. The existing terminal viewer's ten-message buffer is a diagnostic implementation, not the detector's required context window.
 - AI extracts possible transaction details from the conversation.
 - Business-defined rules decide whether the transaction should be recorded automatically.
 - Accepted transactions are created automatically; mandatory manual approval is not the default workflow.
@@ -223,11 +223,49 @@ Keep each milestone in a separate local commit after its relevant checks pass:
 
 1. **Account registry (implemented):** register and inspect accounts through authenticated business routes. Session identity comes from the trusted pairing worker.
 2. **Authenticated pairing (backend implemented and phone-tested):** owner-only QR/phone codes and QR PNGs, verified bindings, saved-session recovery, stable IDs through relinking and database account locks. Live phone-code pairing and automatic restoration passed locally; live QR pairing and device revocation remain unchecked.
-3. **Persistent private-text ingestion:** reuse the viewer's filtering and PN/LID normalization, archive messages with delivery deduplication and revisions, and expose business-scoped conversation reads.
-4. **Manual confirmation delivery:** send from the creating user's verified linked account after the transaction commits; track retries and associate the outgoing message with the existing transaction.
-5. **AI extraction and reconciliation:** retain exact evidence, validate versioned business rules, and reconcile follow-up messages before automatic transaction writes.
+3. **Mobile POS API and confirmation delivery (next):** review the existing authenticated transaction API for mobile use, record a confirmation intent with the sale, and send from the creating user's verified linked account. Track delivery independently of sale persistence and associate the outgoing message with that sale.
+4. **Sale detection context:** reuse the viewer's private-text filtering and identity normalization when connecting the detector; assemble the potential sale message and five immediately preceding texts from the same account/conversation. Retain the evidence needed for POS decisions rather than prioritising a general conversation browser.
+5. **AI extraction and reconciliation:** determine whether a sale actually happened and when, retain exact evidence, validate versioned business rules, and reconcile follow-up messages before automatic transaction writes. A manual confirmation must never produce another sale for its existing transaction.
 
 The web/mobile screens can then build on these contracts. Subject analytics follow once their formulas are agreed.
+
+### Next increment: authenticated mobile POS and WhatsApp confirmations
+
+The immediate product outcome is a mobile POST that records a sale and causes a
+WhatsApp confirmation to be composed and sent. The existing
+`POST /api/businesses/{businessID}/transactions` route, authentication, validation,
+decimal handling, idempotency and immutable transaction history are the foundation.
+Extend them; do not create a parallel sale writer or authentication implementation.
+Deliver the work in three small local commits with their relevant tests:
+
+1. **Mobile API readiness.** Review login/session expiry and logout, active user and
+   business authorisation, payload validation, request limits and retry behaviour.
+   Define the request/response contract and address demonstrated gaps. Require HTTPS
+   for deployment and protected token storage in the mobile app; a shared secret
+   embedded in every app installation is not user authentication. Identify the
+   selected customer and the creating user's authorised linked account explicitly.
+2. **Sale and confirmation intent.** Save the sale and its durable pending
+   confirmation in the same database transaction. Generate the message from saved
+   sale data, including customer, IPO/form, quantity, rate, total and transaction
+   time; resolve the recipient from the selected customer. Repeated mobile requests
+   with the same idempotency key must reuse the sale and confirmation intent.
+3. **Delivery and status.** Use the existing account worker and whatsmeow sender to
+   send after database commit. Check sender ownership and eligibility, record the
+   WhatsApp message ID and delivery state, and expose that state to the mobile app.
+   Keep sale success distinct from pending/failed messaging. Bound retries and treat
+   an uncertain send acknowledgement explicitly rather than blindly sending again.
+
+Acceptance checks: invalid/expired/revoked sessions and cross-business requests are
+rejected; another user's account cannot be used as sender; totals come from saved
+data; concurrent/replayed POSTs reuse one sale and confirmation intent; pending
+delivery survives restart; WhatsApp failure preserves the sale and reports status.
+Use isolated database and fake sender tests first. Sending to a real customer needs
+an explicit test recipient and deliberate test sale; never put customer messages,
+credentials or linked-device keys in Git or test output.
+
+Sale detection follows this increment. Shared filtering is an implementation step
+when the detector needs it, not a separate POS deliverable. A full message browser,
+historical backfill, attachments and unrelated viewer refactoring are deferred.
 
 ## Decisions still open
 

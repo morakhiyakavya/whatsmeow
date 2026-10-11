@@ -39,7 +39,8 @@ func queueConfirmation(w http.ResponseWriter, r *http.Request, tx *sql.Tx, user 
         (business_id,transaction_id,transaction_version,whatsapp_account_id,created_by_user_id,
         sender_device_jid,recipient_phone_number,body)
         SELECT t.business_id,t.id,t.version,$3,$4,$5,c.phone_number,
-        format(E'Sale confirmation\nCustomer: %s\nIPO: %s\nForm: %s%s\nCategory: %s\nQuantity: %s\nRate: %s %s\nTotal: %s %s\nTransaction time: %s\nReference: %s',
+        format(E'Transaction confirmation\nType: %s\nCustomer: %s\nIPO: %s\nForm: %s%s\nCategory: %s\nQuantity: %s\nRate: %s %s\nTotal: %s %s\nTransaction time: %s\nReference: %s',
+            CASE WHEN t.quantity > 0 THEN 'Buy' ELSE 'Sell' END,
             replace(replace(c.name,E'\n',' '),E'\r',' '),replace(replace(i.name,E'\n',' '),E'\r',' '),
             t.form_type_code,CASE WHEN t.ce_pe_value IS NULL THEN '' ELSE ' ('||t.ce_pe_value::text||')' END,
             t.category,t.quantity::text,t.currency_code,t.rate::text,t.currency_code,t.total_amount::text,

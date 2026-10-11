@@ -65,9 +65,9 @@ func (f *transactionFields) validate(w http.ResponseWriter) bool {
 		fail(w, 400, "invalid_ce_pe_value", "ce_pe_value is required only for CE and PE")
 		return false
 	}
-	quantity, ok := decimal(f.Quantity, false)
+	quantity, ok := decimal(f.Quantity, true)
 	if !ok || quantity == "0" {
-		fail(w, 400, "invalid_quantity", "quantity must be a positive decimal string with at most six fractional digits")
+		fail(w, 400, "invalid_quantity", "quantity must be a nonzero decimal string with at most six fractional digits (positive for buy, negative for sell)")
 		return false
 	}
 	rate, ok := decimal(f.Rate, false)

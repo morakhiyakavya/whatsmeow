@@ -6,8 +6,8 @@ transactions, complete immutable transaction history, and business-owned WhatsAp
 account registration. No frontend is required to exercise the API.
 
 For the complete staff and mobile workflow, read the
-[POS sales and shared contacts guide](../docs/POS_AND_CONTACTS_GUIDE.md). It covers
-sale entry, contact uploads, name changes, new numbers, withdrawals, provenance
+[POS transactions and shared contacts guide](../docs/POS_AND_CONTACTS_GUIDE.md). It covers
+transaction entry, contact uploads, name changes, new numbers, withdrawals, provenance
 and the distinction between implemented APIs and remaining mobile work.
 
 ## Local setup and start
@@ -82,7 +82,7 @@ needs verified TLS and credentials supplied privately to the server.
 For a new database, apply `database/001_initial.sql`, `002_api.sql` and
 `003_whatsapp_accounts.sql`, `004_contact_names.sql` and
 `005_transaction_confirmations.sql`, `006_passwordless_sessions.sql`, then
-`007_whatsapp_number_checks.sql` once,
+`007_whatsapp_number_checks.sql` and `008_signed_transaction_quantity.sql` once,
 in that order, as its migration owner. The API
 does not execute migrations on startup. Apply only missing migrations to an
 existing database. For the local installation that already has migrations 001/002:
@@ -115,6 +115,14 @@ ipo_pos.whatsapp_number_checks` to the runtime role. Only the trusted worker nee
 `INSERT, UPDATE` on this table; the local worker uses the migration owner. Do not
 grant result writes to the ordinary API role. The local setup/test scripts already
 apply migration 007. Startup requires it, including when the worker is disabled.
+
+After migration 007, apply `008_signed_transaction_quantity.sql` as the migration
+owner before starting this API version. It permits nonzero signed quantities in
+both current transactions and immutable history: positive means the business buys,
+negative means it sells. Existing values and snapshots are preserved; no new
+runtime grants are needed. The generated total retains the quantity's sign.
+Rollback to positive-only constraints requires resolving any negative current or
+historical quantities explicitly; do not delete or rewrite immutable history.
 
 Migration 007 rollback: revert/stop its callers before removing the table. Export
 stored checks if needed; dropping the table loses those observations only.
@@ -212,8 +220,11 @@ IDs from `/api/me`. Supplying another business ID never confers access.
 
 Amounts, rates, quantities, CE/PE values and IPO prices are **JSON strings**.
 Inputs allow up to 12 integer digits and six fractional digits. Quantity must be
-positive; rate must be nonnegative. Totals are calculated only in PostgreSQL as
-`round(rate * quantity, 2)`. Category and CE/PE value never multiply the amount.
+nonzero: positive means Buy and negative means Sell from the business's perspective.
+Rate must be nonnegative. Totals are calculated only in PostgreSQL as
+`round(rate * quantity, 2)`. A Sell total is negative unless the amount rounds to
+zero; always derive direction from quantity, not total. Category and CE/PE value
+never multiply the amount.
 `ce_pe_value` is mandatory for CE/PE and must be null/omitted for other form types.
 `category` defaults to `none`; alternatives are `subject_1` and `subject_2`.
 Timestamps use RFC3339, and IPO dates use YYYY-MM-DD.
@@ -452,16 +463,16 @@ honour expiry/logout and use HTTPS in deployment. Do not embed bootstrap credent
 or a shared master token in the app. The local HTTP listener is for development.
 
 To request a WhatsApp receipt, add `whatsapp_account_id` to the existing transaction
-POST body and send the same `Idempotency-Key` on every retry of that sale. The account
+POST body and send the same `Idempotency-Key` on every retry of that transaction. The account
 must be paired, active, in the business and registered by the requesting user. A
 missing customer phone or an unavailable/unauthorised sender rejects the creation
 atomically. Omitting the new field preserves existing manual-entry behaviour.
 
-The sale, initial immutable version, retry fingerprint and confirmation intent are
+The transaction, initial immutable version, retry fingerprint and confirmation intent are
 saved in one transaction. The server composes the receipt from saved customer,
-IPO/form, category, quantity, rate, database-calculated total, time and sale reference;
+IPO/form, category, quantity, rate, database-calculated total, time and transaction reference;
 clients cannot supply an arbitrary message body. The receipt is a snapshot of the
-initial sale; later edits do not silently rewrite it. Replays reuse the sale and
+initial transaction; later edits do not silently rewrite it. Replays reuse the transaction and
 confirmation and reject changed data or a different sender under the same key.
 
 The POST response includes `whatsapp_confirmation` when requested. GET
@@ -470,19 +481,19 @@ and receipt under normal business permissions; no confirmation returns 404.
 The queued intent survives restart. The trusted worker claims one pending receipt
 per connected account every two seconds and sends with a 20-second timeout. Its
 existing account lock prevents competing workers from using the same session.
-It rechecks current ownership/membership/binding, customer phone and sale version;
-cancellation blocks the send, and changed recipients, senders or sale versions fail
-the pending receipt. New sale confirmations can queue while the account is offline.
+It rechecks current ownership/membership/binding, customer phone and transaction version;
+cancellation blocks the send, and changed recipients, senders or transaction versions fail
+the pending receipt. New transaction confirmations can queue while the account is offline.
 An active worker configuration (`WHATSAPP_DATABASE_URL`) is needed to deliver them.
 
 Statuses are `pending`, `sending`, `sent`, `uncertain`, `failed` and `cancelled`.
 `sent` means WhatsApp acknowledged the message, not that the customer read it.
 The message ID is persisted before sending. A send error, mismatched acknowledgement,
 or worker restart after an interrupted attempt produces `uncertain`; it is never
-automatically resent. The sale remains saved. An uncertain result may have reached
+automatically resent. The transaction remains saved. An uncertain result may have reached
 the customer and needs review. There is currently no manual resend endpoint; this
 conservative single-attempt policy avoids blind duplicates. Receipt IDs must also
-be used by the future detector to recognise confirmations for existing sales.
+be used by the future detector to recognise confirmations for existing transactions.
 
 Migration 005 rollback requires backing
 up pending/attempted delivery records and dropping its table after reverting callers;

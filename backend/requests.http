@@ -68,10 +68,10 @@ Authorization: Bearer {{token}}
 POST {{base}}/api/businesses/{{business}}/whatsapp-accounts/{{whatsapp_account}}/disconnect
 Authorization: Bearer {{token}}
 
-# To request a sale receipt, add "whatsapp_account_id":"{{whatsapp_account}}"
+# To request a transaction receipt, add "whatsapp_account_id":"{{whatsapp_account}}"
 # to the existing transaction POST body. Use your own paired account.
 
-### Read a requested sale confirmation and delivery status
+### Read a requested transaction confirmation and delivery status
 GET {{base}}/api/businesses/{{business}}/transactions/{{transaction}}/confirmation
 Authorization: Bearer {{token}}
 
@@ -169,6 +169,14 @@ Idempotency-Key: demo-order-1
 Content-Type: application/json
 
 {"ipo_id":"{{ipo}}","customer_id":"{{customer}}","occurred_at":"2026-10-04T10:00:00+05:30","form_type_code":"CE","category":"subject_1","ce_pe_value":"20","quantity":"2.5","rate":"250"}
+
+### Sell: negative quantity gives total = -625.00. Keep a separate retry key.
+POST {{base}}/api/businesses/{{business}}/transactions
+Authorization: Bearer {{token}}
+Idempotency-Key: manual-demo-sell-001
+Content-Type: application/json
+
+{"ipo_id":"{{ipo}}","customer_id":"{{customer}}","occurred_at":"2026-10-04T10:00:00+05:30","form_type_code":"CE","category":"subject_1","ce_pe_value":"20","quantity":"-2.5","rate":"250"}
 
 ### Correct quantity: total = 812.50. Repeating with version 1 returns 409.
 PUT {{base}}/api/businesses/{{business}}/transactions/{{transaction}}

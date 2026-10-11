@@ -32,7 +32,7 @@ func testConfirmationAPI(t *testing.T, db, runtime *sql.DB, admin, cashier, othe
 	if field(t, receipt, "status") != "pending" || field(t, receipt, "recipient_phone_number") != "+919000001010" || receipt["sender_device_jid"] != nil {
 		t.Fatal("confirmation recipient/status is incorrect or exposes a session binding")
 	}
-	if !strings.Contains(field(t, receipt, "body"), "Total: INR 625.00") || !strings.Contains(field(t, receipt, "body"), "CE (20.000000)") || !strings.Contains(field(t, receipt, "body"), id) {
+	if !strings.HasPrefix(field(t, receipt, "body"), "Transaction confirmation\nType: Buy\n") || !strings.Contains(field(t, receipt, "body"), "Total: INR 625.00") || !strings.Contains(field(t, receipt, "body"), "CE (20.000000)") || !strings.Contains(field(t, receipt, "body"), id) {
 		t.Fatal("receipt was not composed from the persisted sale")
 	}
 	var wg sync.WaitGroup

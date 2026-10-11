@@ -8,6 +8,22 @@ None.
 
 ## Checkpoints
 
+### Batch 18 — Signed Buy/Sell transactions and API reference
+
+1. Publish the reviewed application commits and deploy the Supabase-backed development API to Render's Free plan in Singapore.
+   - Verification: the user explicitly authorized pushing the 17 local commits and confirmed `kavya's Workspace`; completed owner-account Git device login after the cached wrong-account push was rejected, then verified `main` synchronized with `origin/main` at `3c5486681703aa65678adbdfca03f3a02e484e8e`. Created service `srv-db5nundckfvc73arsvkg` using private API/worker credentials, one Free instance and manual deployments. Render deployment `dep-db5nunlckfvc73art0rg` reached live with that exact commit; public HTTPS health 200, unauthenticated API 401, disabled password login 403 and no-store cache policy passed. Service metadata and startup logs confirm the selected plan/region and hosted listening address. Deployment/Supabase documentation content and diffs were reviewed.
+   - Paths: `docs/RENDER_DEPLOYMENT.md`, `docs/SUPABASE_SETUP.md`, `docs/TASK_CHECKPOINT.md`. External changes: authorized Git push, repository-local credential username and new Render service in workspace `tea-csp7ifjgbbvc73etj3cg`. No credentials or generated executables were committed.
+   - Limits: the integration cannot set `healthCheckPath`; the actual service uses the default TCP check until `/health` is configured in its dashboard. Initial business/admin provisioning, live WhatsApp pairing/restoration and customer sending remain unchecked. Render Free sleeps when idle and cannot guarantee continuous WhatsApp processing. Supabase administrator password rotation is still the user's responsibility.
+2. Implement signed transaction quantities from the business perspective, including API create/edit validation, current/history constraints, derived Buy/Sell confirmation text and migration-aware startup.
+   - Verification: backend unit tests, vet and the native deployment build passed. Disposable hosted-setup/schema/API/session checks passed, covering negative quantities/totals, zero and negative-zero rejection, precision and rate validation, equivalent retries, sign conflicts, edits, immutable history, cancellation and fake Sell receipt delivery after restart. Applied migration 008 to Supabase through verified TLS; both constraint definitions and rollback-only schema assertions passed, with zero remaining staff/business/transaction/history test records. Existing local database remains untouched.
+   - Paths: `backend/transactions.go`, `backend/main.go`, `backend/confirmations.go`, `backend/transactions_test.go`, `backend/integration_test.go`, `backend/confirmations_test.go`, `backend/confirmation_delivery_test.go`, `database/008_signed_transaction_quantity.sql`, `database/schema_test.sql`, `database/Setup-Supabase.psql`, `database/Test-Schema.ps1`, `scripts/Setup-LocalDatabase.ps1`, `backend/README.md`, `docs/SUPABASE_SETUP.md`, `docs/RENDER_DEPLOYMENT.md`, `docs/TASK_CHECKPOINT.md`.
+   - Limits: Render still serves the previous commit until the separately requested redeploy completes. No real WhatsApp sends or live authenticated hosted transaction requests were performed. Positive-only rollback requires explicit resolution of negative history; zero totals do not determine direction. A stopped temporary test directory was retained after cleanup was blocked by automatic approval review.
+
+3. Correct the mobile integration reference and project/database definitions to describe two-way transactions, with quantity as the single direction source and separate Buy/Sell request/response examples.
+   - Verification: reviewed content/diffs against API fields, SQL amount calculation and integration assertions; checked documentation file links, guide navigation, four standalone JSON examples and PowerShell syntax. Replaced sale-only prose with transaction wording while preserving existing API names such as `salesperson_user_id`.
+   - Paths: `backend/README.md`, `backend/requests.http`, `docs/POS_AND_CONTACTS_GUIDE.md`, `docs/POS_DATABASE_DESIGN.md`, `docs/PROJECT_VISION.md`, `docs/TASK_CHECKPOINT.md`.
+   - Limits: no Android application exists in this repository; mobile controls and compatibility remain unimplemented. The documentation does not add settlement, inventory or a separate direction field.
+
 ### Batch 1 — Project workflow and credential exclusions
 
 1. Add the automatic Git checkpoint policy and persistent task ledger.

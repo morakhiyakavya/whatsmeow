@@ -220,7 +220,7 @@ func TestManualLedgerIntegration(t *testing.T) {
 	request := map[string]any{"ipo_id": ipoID, "customer_id": customerID, "occurred_at": "2026-10-04T10:00:00+05:30", "form_type_code": "CE", "category": "subject_1", "ce_pe_value": "20", "quantity": "2.5", "rate": "250", "salesperson_user_id": cashierID}
 	status, object, _ = cashier.request("POST", base+"/transactions", request, "")
 	expectStatus(t, 400, status, object)
-	for _, invalid := range []map[string]any{{"quantity": "1.1234567"}, {"quantity": "0"}, {"rate": 250.0}, {"rate": "NaN"}, {"ce_pe_value": nil}, {"category": "unknown"}, {"customer_id": otherCustomer}, {"total_amount": "1"}} {
+	for _, invalid := range []map[string]any{{"quantity": "1.1234567"}, {"quantity": "-1.1234567"}, {"quantity": "0"}, {"quantity": "-0.000"}, {"rate": "-250"}, {"rate": 250.0}, {"rate": "NaN"}, {"ce_pe_value": nil}, {"category": "unknown"}, {"customer_id": otherCustomer}, {"total_amount": "1"}} {
 		copy := cloneMap(request)
 		for key, value := range invalid {
 			copy[key] = value
@@ -351,6 +351,9 @@ func TestManualLedgerIntegration(t *testing.T) {
 	status, object, _ = other.request("POST", "/api/login", map[string]string{"phone_number": second.AdminPhone, "password": second.AdminPassword}, "")
 	expectStatus(t, 200, status, object)
 	other.Token = field(t, object, "access_token")
+	t.Run("Signed transactions", func(t *testing.T) {
+		testSignedTransactionAPI(t, cashier, base, request)
+	})
 	t.Run("WhatsApp account ownership", func(t *testing.T) {
 		testWhatsAppAccounts(t, db, admin, client, cashier, other, businessID, otherBusiness, cashierID)
 	})

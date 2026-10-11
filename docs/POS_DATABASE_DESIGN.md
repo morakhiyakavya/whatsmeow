@@ -15,7 +15,11 @@ The executable schema is [database/001_initial.sql](../database/001_initial.sql)
 - Linked WhatsApp sessions belong in PostgreSQL, one per linked account. Staff may share an account's connection.
 - Only private 1:1 text messages enter the message archive/detection pipeline.
 
-This initial ledger records the form transactions you described, including purchases from customers. It uses neutral `transactions` naming. A buy/sell direction, settlement/payments, category analytics, and inventory are not assumed or implemented.
+The ledger records both purchases from customers and onward sales using neutral
+`transactions` naming. [Migration 008](../database/008_signed_transaction_quantity.sql)
+defines direction from the business's perspective through quantity: positive for
+Buy, negative for Sell, zero invalid. Settlement/payments, category analytics and
+inventory remain unimplemented.
 
 ## Relationships
 
@@ -75,9 +79,9 @@ All application tables live in `ipo_pos`. Business-owned primary keys and foreig
 | `form_type_code` | Required catalogue code. |
 | `category` | Required: none / subject_1 / subject_2. |
 | `ce_pe_value` | `numeric(18,6)`, required only for CE/PE. No multiplication role. |
-| `quantity` | `numeric(18,6)`, greater than zero. |
+| `quantity` | Nonzero `numeric(18,6)`: positive for Buy, negative for Sell. |
 | `rate` | `numeric(18,6)`, nonnegative. |
-| `total_amount` | Database-generated `numeric(30,2)`: rounded rate times quantity. Callers cannot supply a different amount. |
+| `total_amount` | Database-generated `numeric(30,2)`: rounded rate times signed quantity. Callers cannot supply a different amount. |
 | `currency_code` | Business currency snapshot. Initial business default is INR. |
 | `salesperson_user_id` | Optional responsible staff attribution, distinct from the person/automation performing an edit. |
 | `origin` | manual / automatic; never changes after creation. |
@@ -88,7 +92,9 @@ All application tables live in `ipo_pos`. Business-owned primary keys and foreig
 
 Six decimal places for quantity/rate/CE-PE values and two for amounts are initial precision choices. Inputs beyond six fractional digits are rounded by PostgreSQL. Validate precision in the API before insertion to avoid silently accepting a more precise user entry. `NaN` is rejected. Use decimal arithmetic/decimal strings in Go and client payloads. Do not send these fields through JavaScript or Go binary floats when exact amounts matter.
 
-Example: CE value 20, Subject 1, quantity 2.5, rate 250 produces 625.00. Changing CE value to 40 or category to Subject 2 leaves the amount at 625.00 if quantity/rate stay unchanged.
+Example: CE value 20, Subject 1, quantity 2.5, rate 250 produces 625.00 (Buy).
+Quantity -2.5 at the same rate produces -625.00 (Sell). Changing CE value to 40 or
+category to Subject 2 does not change the amount if quantity/rate stay unchanged.
 
 ## Version history and concurrency
 

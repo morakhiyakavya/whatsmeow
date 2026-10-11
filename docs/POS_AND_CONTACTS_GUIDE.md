@@ -1,8 +1,8 @@
-# POS sales and shared contacts: operating and mobile integration guide
+# POS transactions and shared contacts: operating and mobile integration guide
 
 Reviewed against the implemented Go API on **11 October 2026**.
 
-This guide explains how a staff member records an IPO/form sale, how a phone
+This guide explains how a staff member records an IPO/form transaction, how a phone
 shares contact names with a business, and how later changes affect colleagues.
 **Current behaviour** means the backend already supports it. **Mobile work** means
 the app must still implement the screen, device access or synchronisation described.
@@ -18,7 +18,7 @@ Quick navigation: [mobile authentication and WhatsApp login](#mobile-authenticat
 [shared name lookup](#5-how-colleagues-resolve-an-unknown-number),
 [contact changes and deletions](#6-how-changes-new-contacts-and-deletions-reflect),
 [customer creation](#7-a-shared-contact-is-not-yet-a-pos-customer),
-[sale entry](#9-record-a-sale),
+[transaction entry](#9-record-a-transaction),
 [message status](#10-whatsapp-confirmation-and-delivery-status), and
 [remaining mobile work](#13-minimum-remaining-mobile-implementation).
 
@@ -32,13 +32,13 @@ Quick navigation: [mobile authentication and WhatsApp login](#mobile-authenticat
 | App logout without deleting the user | Implemented; currently leaves WhatsApp linked |
 | Upload contact names, look up a number and withdraw your own name contribution | Implemented |
 | Preserve separate names supplied by different staff | Implemented |
-| Create a customer and record a manual sale | Implemented |
-| Calculate the total and preserve sale revisions | Implemented |
+| Create a customer and record a manual transaction | Implemented |
+| Calculate the total and preserve transaction revisions | Implemented |
 | Queue and send a WhatsApp confirmation through the creating user's paired account | Implemented and tested with simulated sends; live receipt sending remains unchecked |
 | Restore the saved WhatsApp session after a server restart | Implemented and verified with a real paired phone |
 | Phone permission screens, contact change detection and checkout screens | Mobile work |
 | Instantly push contact changes to every colleague's screen | Not implemented |
-| Infer a sale from WhatsApp text and five preceding messages | Future work |
+| Infer a transaction from WhatsApp text and five preceding messages | Future work |
 
 You can exercise the backend using an HTTP client now. A complete phone workflow
 still requires the mobile app.
@@ -50,7 +50,7 @@ Keep these separate when using or building the app:
 | Identity | Purpose |
 |---|---|
 | App login phone | Identifies the provisioned staff member approving WhatsApp sign-in |
-| Paired WhatsApp phone | Sends the sale confirmation through that staff member's linked account |
+| Paired WhatsApp phone | Sends the transaction confirmation through that staff member's linked account |
 | Customer phone | Receives the confirmation; stored on the selected POS customer |
 
 For passwordless login, the approved WhatsApp number must match the staff user's
@@ -63,12 +63,12 @@ Each business has its own customer records and contributed contact names. A staf
 member belonging to two businesses must explicitly choose which business receives
 an upload. An upload to one business does not propagate to the other.
 
-Admins and cashiers can upload/resolve contacts, create customers, record sales,
-edit/cancel sales and inspect history. Only admins can create staff or IPO entries.
-Only the registering user can pair an account or use it as the sale's sender;
+Admins and cashiers can upload/resolve contacts, create customers, record transactions,
+edit/cancel transactions and inspect history. Only admins can create staff or IPO entries.
+Only the registering user can pair an account or use it as the transaction's sender;
 being an admin does not grant the right to send through a colleague's account.
 
-## 3. Staff setup before the first sale
+## 3. Staff setup before the first transaction
 
 1. An administrator creates the staff account. There is currently no public signup
    or endpoint for adding an existing user to another business.
@@ -83,7 +83,7 @@ being an admin does not grant the right to send through a colleague's account.
 
 All HTTP examples below use placeholders such as `{businessID}` and `{customerID}`.
 Replace them with IDs returned by the API. Names and numbers in examples are
-illustrative, not approved test recipients. Sending a sale request with a paired
+illustrative, not approved test recipients. Sending a transaction request with a paired
 sender can cause an actual customer message.
 
 Use the passwordless flows below to obtain your device's session. For subsequent
@@ -239,7 +239,7 @@ replay of a previously consumed secret to recover its newly issued credentials.
 
 Closing WhatsApp, closing the POS app or a temporary connection outage does not
 revoke login. The backend does not know whether WhatsApp is open or being used.
-An offline device can hold a local draft, but cannot save a sale until the API is
+An offline device can hold a local draft, but cannot save a transaction until the API is
 reachable. Account/membership eligibility is still checked on protected requests.
 
 #### Signed-in devices and logout
@@ -271,7 +271,7 @@ Still-pending receipts from that link are retained as `cancelled` with
 Already attempted/acknowledged messages cannot be retracted. Ordinary POS logout
 leaves previously authorised queued receipts and the WhatsApp sender intact.
 
-User rows, registered numbers, memberships, customers, sales, immutable history
+User rows, registered numbers, memberships, customers, transactions, immutable history
 and contributed contact names are preserved. Logout does not withdraw contacts;
 use the separate contribution withdrawal API. A different number is not an
 automatic transfer of someone's old user/business history.
@@ -320,8 +320,8 @@ The phone app should provide this sequence:
 6. Report successful batches and errors. Keep failed batches available for retry.
 
 If permission is denied, the app must not read contacts. Staff can still enter a
-POS customer manually and record a sale. Contact permission is not a requirement
-for the authenticated sale API.
+POS customer manually and record a transaction. Contact permission is not a requirement
+for the authenticated transaction API.
 
 ### Preparing numbers and names
 
@@ -454,7 +454,7 @@ lookup uses that data. There is no contact push notification, WebSocket subscrip
 or automatic refresh of an already-open screen.
 
 A minimal app should offer **Sync selected contacts**, refresh number lookup when
-opening a customer/sale screen, and refresh after an upload or withdrawal. Automatic
+opening a customer/transaction screen, and refresh after an upload or withdrawal. Automatic
 device change observation can follow platform-specific implementation later. Do not
 promise background synchronisation until it is built and tested on the chosen mobile
 platform.
@@ -467,7 +467,7 @@ Authorization: Bearer YOUR_ACCESS_TOKEN
 ```
 
 Success is HTTP 204 with no JSON body. Repeating the DELETE is safe. It cannot remove
-a colleague's contribution, a POS customer or any sale. There is no endpoint for
+a colleague's contribution, a POS customer or any transaction. There is no endpoint for
 bulk withdrawal or for an admin to delete another contributor's name.
 
 If a phone number changes, posting the replacement does not erase the old number.
@@ -505,7 +505,7 @@ the supplier ID is the durable attribution.
 
 ## 7. A shared contact is not yet a POS customer
 
-Contact uploads provide suggestions. They do not create customer records. A sale
+Contact uploads provide suggestions. They do not create customer records. A transaction
 requires a selected customer ID, and its WhatsApp recipient comes from that
 customer's stored phone number, not directly from the shared-contact lookup.
 
@@ -514,7 +514,7 @@ For a new customer:
 1. Look up the number and review any matching customers or contributed names.
 2. Select an existing customer if appropriate. If there are several, choose explicitly.
 3. If a new record is needed, confirm its name and number and create it.
-4. Save the returned customer ID for the sale.
+4. Save the returned customer ID for the transaction.
 
 ```http
 POST /api/businesses/{businessID}/customers
@@ -543,7 +543,7 @@ there is no automatic merge.
 
 There is currently no customer edit/archive API. Phone contact renames, number
 changes or withdrawals never rewrite the saved POS customer. A future customer
-correction workflow must be explicit; do not create a replacement sale simply to
+correction workflow must be explicit; do not create a replacement transaction simply to
 change a contact name.
 
 ## 8. Prepare the WhatsApp sender
@@ -565,7 +565,7 @@ Content-Type: application/json
 ```
 
 Registration itself does not pair the phone and has no idempotency key. Do not
-register a new account on each sale or restart; use the saved ID and account list.
+register a new account on each transaction or restart; use the saved ID and account list.
 
 For phone-number pairing:
 
@@ -587,21 +587,23 @@ Saved eligible sessions reconnect when the backend starts. An owner can request
 session needs relinking using the same account ID. `paired` metadata indicates a
 saved binding; it does not prove the account is online.
 
-## 9. Record a sale
+## 9. Record a transaction
 
 ### Staff checkout flow — mobile work
 
 1. Choose the customer and verify their saved recipient number.
 2. Select an IPO and form type from the catalogue.
-3. Enter category, quantity, rate and the actual transaction time.
+3. Enter category, signed quantity, rate and the actual transaction time. Positive
+   quantity means the business buys; negative means it sells. Zero is invalid.
 4. For CE/PE, also enter the separate CE/PE value.
 5. Choose whether to send a WhatsApp confirmation and, if so, select your own paired
    account.
-6. Review the details and tap **Save sale** once.
-7. Show the saved sale and its separate message status.
+6. Review the details and tap **Save transaction** once.
+7. Show the saved transaction and its separate message status.
 
-The API currently calls these records `transactions`. The wider distinction
-between purchases and onward sales remains to be defined. A saved `confirmed`
+The API calls these records `transactions`. The quantity's sign determines Buy
+versus Sell from the business's perspective; there is no separate direction field.
+A saved `confirmed`
 transaction is a ledger entry, not proof that payment was received.
 
 Read the catalogue using `GET .../ipos` and `GET .../form-types`. Supported form
@@ -609,15 +611,15 @@ codes are `RETAIL`, `RETAIL_199`, `SHNI`, `BHNI`, `SHARES`, `CE` and `PE`.
 Customer and IPO lists default to 50 records, maximum 100 per page; follow
 `next_cursor` until the required selection is available.
 
-### Sale request — implemented
+### Transaction request — implemented
 
-Create one unique `Idempotency-Key` for this intended sale and preserve both the
+Create one unique `Idempotency-Key` for this intended transaction and preserve both the
 key and the original request until its outcome is known.
 
 ```http
 POST /api/businesses/{businessID}/transactions
 Authorization: Bearer YOUR_ACCESS_TOKEN
-Idempotency-Key: mobile-sale-20261011-example-001
+Idempotency-Key: mobile-transaction-20261011-example-001
 Content-Type: application/json
 
 {
@@ -640,7 +642,7 @@ Content-Type: application/json
 | `form_type_code` | One of the supported exact codes |
 | `category` | `none`, `subject_1` or `subject_2`; omission defaults to `none` |
 | `ce_pe_value` | Decimal string required for CE/PE; omit or use null for other forms |
-| `quantity` | Positive decimal string |
+| `quantity` | Nonzero signed decimal string: positive for Buy, negative for Sell |
 | `rate` | Nonnegative decimal string |
 | `whatsapp_account_id` | Optional; your own active paired account in this business |
 | `salesperson_user_id` | Optional responsible staff ID; does not change sender ownership |
@@ -652,26 +654,42 @@ strings such as `"2.5"`, not JSON floating-point numbers. The server calculates:
 ```text
 total = round(quantity × rate, 2)
 2.5 × 250 = INR 625.00
+-2.5 × 250 = INR -625.00
 ```
 
-The sale inherits the business's currency, which defaults to INR; the creation
+The request above is a Buy. For a separate Sell, use the same request fields with
+`"quantity":"-2.5"` and a new unique `Idempotency-Key`. Both first successes return
+HTTP 201. These are excerpts of their saved transaction responses:
+
+```json
+{"quantity":"2.500000","rate":"250.000000","total_amount":"625.00","version":1,"status":"confirmed"}
+```
+
+```json
+{"quantity":"-2.500000","rate":"250.000000","total_amount":"-625.00","version":1,"status":"confirmed"}
+```
+
+Use quantity's sign for direction: a zero rate or rounding can produce a zero total
+for either direction. The API returns no separate Buy/Sell field.
+
+The transaction inherits the business's currency, which defaults to INR; the creation
 request has no currency selector. Category and CE/PE value do not multiply the total. The app may show a
 preview, but the saved database total is authoritative. Do not send `total_amount`,
 a message body or a caller-supplied creator ID; unknown fields are rejected.
 
 ### What is saved together
 
-With a requested sender, one database transaction saves the sale, its first
+With a requested sender, one database transaction saves the transaction, its first
 immutable history version, its creation retry identity and a composed pending
 WhatsApp confirmation. If the customer has no phone, the sender is unauthorised,
-or the account is unpaired, the creation fails without saving a partial sale.
+or the account is unpaired, the creation fails without saving a partial transaction.
 
-Omit `whatsapp_account_id` to save a sale without requesting a message. There is
-currently no endpoint to attach a confirmation later to such a sale. Adding a
+Omit `whatsapp_account_id` to save a transaction without requesting a message. There is
+currently no endpoint to attach a confirmation later to such a transaction. Adding a
 sender to a retry of that original request changes its payload and returns a
-conflict; using a new key would create a second sale.
+conflict; using a new key would create a second transaction.
 
-First success returns HTTP 201 with the sale ID, version, total and other saved
+First success returns HTTP 201 with the transaction ID, version, total and other saved
 fields. When a sender was requested, it also includes `whatsapp_confirmation`.
 This confirms database persistence; it does not mean sending has completed.
 
@@ -679,22 +697,23 @@ This confirms database persistence; it does not mean sending has completed.
 
 For a timeout or uncertain response, retry with the **same key, original payload
 and staff account**. An identical retry returns HTTP 200 with
-`Idempotency-Replayed: true`, reusing the sale and confirmation. The response shows
-the sale's current state if it has since been edited or cancelled.
+`Idempotency-Replayed: true`, reusing the transaction and confirmation. The response shows
+the transaction's current state if it has since been edited or cancelled.
 
 A different payload, sender or creator under the same key returns HTTP 409
 `idempotency_conflict`. Do not generate a new key merely because the network failed.
-Generate a new key only for a genuinely separate sale. On-device offline drafts
-are mobile work: until the server accepts one, the sale is not saved in the business
+Generate a new key only for a genuinely separate transaction. On-device offline drafts
+are mobile work: until the server accepts one, the transaction is not saved in the business
 ledger and no confirmation is queued.
 
 ## 10. WhatsApp confirmation and delivery status
 
 The backend composes a fixed text from saved data. For the example above, the body
-has this shape, with the actual selected IPO name and generated sale reference:
+has this shape, with the actual selected IPO name and generated transaction reference:
 
 ```text
-Sale confirmation
+Transaction confirmation
+Type: Buy
 Customer: Mehul Shah
 IPO: Example IPO
 Form: CE (20.000000)
@@ -703,17 +722,17 @@ Quantity: 2.500000
 Rate: INR 250.000000
 Total: INR 625.00
 Transaction time: 2026-10-11T09:00:00.000000Z
-Reference: {saleID}
+Reference: {transactionID}
 ```
 
 The recipient is the selected customer's stored phone. The sender is the creating
 staff member's requested linked WhatsApp account. The receipt is a snapshot of the
-initial sale; contact uploads and later sale edits do not rewrite its body.
+initial transaction; contact uploads and later transaction edits do not rewrite its body.
 
 Read its latest status:
 
 ```http
-GET /api/businesses/{businessID}/transactions/{saleID}/confirmation
+GET /api/businesses/{businessID}/transactions/{transactionID}/confirmation
 Authorization: Bearer YOUR_ACCESS_TOKEN
 ```
 
@@ -724,16 +743,16 @@ business colleagues can inspect this receipt; pairing secrets remain owner-only.
 
 | Status | Meaning | Suggested app display/action |
 |---|---|---|
-| `pending` | Saved and waiting for a connected eligible worker | Sale saved; message pending |
-| `sending` | Message ID recorded and a send attempt underway | Sale saved; sending |
-| `sent` | WhatsApp acknowledged the message | Sale saved; message acknowledged |
-| `uncertain` | The attempt may have reached the customer; acknowledgement/recovery is inconclusive | Sale saved; check the chat before any further action |
-| `failed` | Worker blocked the unsent receipt because relevant saved data changed | Sale saved; receipt requires review |
-| `cancelled` | Worker found the sale cancelled before claiming it for sending | Sale cancelled; queued receipt blocked |
+| `pending` | Saved and waiting for a connected eligible worker | Transaction saved; message pending |
+| `sending` | Message ID recorded and a send attempt underway | Transaction saved; sending |
+| `sent` | WhatsApp acknowledged the message | Transaction saved; message acknowledged |
+| `uncertain` | The attempt may have reached the customer; acknowledgement/recovery is inconclusive | Transaction saved; check the chat before any further action |
+| `failed` | Worker blocked the unsent receipt because relevant saved data changed | Transaction saved; receipt requires review |
+| `cancelled` | Worker found the transaction cancelled before claiming it for sending | Transaction cancelled; queued receipt blocked |
 
 `sent` is not proof of delivery to the handset, reading, payment or agreement.
 There is one send attempt and no manual resend endpoint. An uncertain result is
-never automatically resent. Retrying the sale POST does not resend its receipt.
+never automatically resent. Retrying the transaction POST does not resend its receipt.
 
 The connected worker checks for pending receipts every two seconds, one receipt
 per account per tick; the send can take longer. There is no delivery-time guarantee.
@@ -742,10 +761,10 @@ worker must run to send them; the POS phone does not perform the protocol send
 itself. Pending intents persist across server restarts. An interrupted `sending`
 attempt becomes `uncertain` when its account worker recovers.
 
-The worker checks sender eligibility, sale status/version and recipient details
+The worker checks sender eligibility, transaction status/version and recipient details
 before claiming a pending receipt. An edit blocks the old pending snapshot;
 cancellation blocks it; a changed recipient or sender also blocks it. Once a send
-attempt begins, editing or cancelling the sale cannot guarantee stopping that
+attempt begins, editing or cancelling the transaction cannot guarantee stopping that
 message, and it cannot retract an already acknowledged message. No correction or
 cancellation notification is sent automatically.
 
@@ -753,19 +772,19 @@ Common recorded receipt error codes are `transaction_changed`,
 `transaction_cancelled`, `recipient_changed`, `sender_changed`, `send_unconfirmed`
 and `interrupted_send`. Link removal/replacement cancels pending receipts with
 `sender_unlinked`. These describe message processing, not failure to save the
-sale. Lack of an eligible connected worker can leave a receipt pending.
+transaction. Lack of an eligible connected worker can leave a receipt pending.
 
-## 11. Correct or cancel a saved sale
+## 11. Correct or cancel a saved transaction
 
-Fetch the current sale first with `GET .../transactions/{saleID}`. To edit it, use
-`PUT .../transactions/{saleID}` with the complete editable sale fields, the current
+Fetch the current transaction first with `GET .../transactions/{transactionID}`. To edit it, use
+`PUT .../transactions/{transactionID}` with the complete editable transaction fields, the current
 `expected_version` and a nonempty `change_reason`. This is a full replacement of
 editable fields, not a partial patch. Do not include `whatsapp_account_id` in an edit.
 
 To cancel:
 
 ```http
-POST /api/businesses/{businessID}/transactions/{saleID}/cancel
+POST /api/businesses/{businessID}/transactions/{transactionID}/cancel
 Authorization: Bearer YOUR_ACCESS_TOKEN
 Content-Type: application/json
 
@@ -773,12 +792,12 @@ Content-Type: application/json
 ```
 
 Successful edits/cancellation advance the version and preserve earlier snapshots.
-A stale version returns HTTP 409 `version_conflict`; reload the sale before acting.
+A stale version returns HTTP 409 `version_conflict`; reload the transaction before acting.
 Cancellation preserves the record and amount with `status: "cancelled"`; it does
-not delete history. Read `GET .../transactions/{saleID}/history` for versions,
+not delete history. Read `GET .../transactions/{transactionID}/history` for versions,
 newest first. List active ledger entries using `GET .../transactions?status=confirmed`.
 
-Contact changes never edit or cancel sales. Customer/contact data and transaction
+Contact changes never edit or cancel transactions. Customer/contact data and transaction
 history have separate purposes.
 
 ## 12. Errors the mobile app must handle
@@ -792,20 +811,20 @@ Errors have the form:
 | HTTP/result | App response |
 |---|---|
 | 400 validation/unsupported JSON | Correct the fields or batch; do not repeatedly submit unchanged invalid data |
-| 401 invalid/expired session | Sign in again; preserve an unresolved sale's original retry key/payload for the same staff user |
+| 401 invalid/expired session | Sign in again; preserve an unresolved transaction's original retry key/payload for the same staff user |
 | 403 business access or `invalid_sender` | Verify selected business and account ownership; do not switch to a colleague's credentials |
-| 404 missing record/confirmation | Verify selected IDs; a sale created without a receipt has no confirmation record |
-| 409 `sender_unpaired` | Pair the requested account; this rejected creation did not save a sale |
-| 409 `recipient_missing` | The selected customer needs a saved phone; the rejected creation did not save a sale; customer editing is not implemented yet |
-| 409 `idempotency_conflict` | Reconcile the original intended sale; do not silently create another |
-| 409 `version_conflict` | Fetch current sale and review the competing change |
+| 404 missing record/confirmation | Verify selected IDs; a transaction created without a receipt has no confirmation record |
+| 409 `sender_unpaired` | Pair the requested account; this rejected creation did not save a transaction |
+| 409 `recipient_missing` | The selected customer needs a saved phone; the rejected creation did not save a transaction; customer editing is not implemented yet |
+| 409 `idempotency_conflict` | Reconcile the original intended transaction; do not silently create another |
+| 409 `version_conflict` | Fetch current transaction and review the competing change |
 | 429 login rate limit | Honour `Retry-After`; current login limit is 10 attempts/minute/source IP |
-| Network timeout/500 on sale creation | Outcome may be unknown; retry the original sale under its original key |
+| Network timeout/500 on transaction creation | Outcome may be unknown; retry the original transaction under its original key |
 | Network timeout on contact upload | Retry only if this is still the latest intended name update; preserve batch order |
 | Network timeout on customer/account creation | Check existing records before another POST; these routes have no creation retry key |
 
-Use independent indicators for **sale saved** and **message status**. A messaging
-failure after persistence must not lead to another sale POST with a new key.
+Use independent indicators for **transaction saved** and **message status**. A messaging
+failure after persistence must not lead to another transaction POST with a new key.
 
 ## 13. Minimum remaining mobile implementation
 
@@ -818,16 +837,16 @@ failure after persistence must not lead to another sale POST with a new key.
    when several customers share a number. Refresh when opening the relevant screen.
 4. Customer selection/creation and IPO/form selection.
 5. WhatsApp account selection/pairing and connection feedback.
-6. Sale review and submission with a persistent key/payload; a saved-sale screen,
+6. Transaction review and submission with a persistent key/payload; a saved-transaction screen,
    receipt status polling, edit/cancel history and clear error handling.
 
 Start with manual **Sync selected contacts** and the existing API. Automatic
 background sync, full-list export, bulk withdrawal, customer correction,
 device conflict resolution and safe receipt resend need explicit further work.
 The backend already has integration coverage for contact provenance, batch/replay
-behaviour, business isolation, atomic sale/receipt creation and delivery recovery.
+behaviour, business isolation, atomic transaction/receipt creation and delivery recovery.
 
 Not checked in this documentation task: live phone contact synchronisation or a
-real sale receipt. The mobile app and production deployment remain to be built;
+real transaction receipt. The mobile app and production deployment remain to be built;
 uploaded names can become stale until the app submits changes, and an uncertain
 message may already have reached its recipient.

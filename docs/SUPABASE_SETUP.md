@@ -8,10 +8,17 @@ WhatsApp credentials are not copied by this setup.
 
 Project `tqfwoudoxundtrhogmwa` was installed and verified on 11 October 2026 using
 the Singapore session pooler on port `5432`. PostgreSQL reports version 17.11.
-All seven application migrations are installed: `ipo_pos` has 22 tables, and the
+All eight application migrations are installed: `ipo_pos` has 22 tables, and the
 backend initialized 17 WhatsApp credential tables at library schema version 16.
 No users, businesses or linked WhatsApp devices have been provisioned there yet.
 Do not rerun the fresh-install script for this project.
+
+Migration 008 was applied on 11 October 2026 and verified on both current
+transactions and immutable history. Quantity is nonzero and signed: positive for
+Buy, negative for Sell. The existing total formula is unchanged and uses the signed
+quantity. Rollback-only schema assertions passed against this database, including
+Sell amounts, direction corrections and preserved history; no test records remain.
+The separate local database has not received migration 008.
 
 Generated, separate role credentials are saved privately in the Git-ignored
 root `.env.supabase`, with file access restricted to your Windows account and
@@ -88,7 +95,7 @@ At the `postgres=>` prompt, run:
 \i 'C:/Users/Admin/Documents/programming/whatsmeow/database/Setup-Supabase.psql'
 ```
 
-The [setup file](../database/Setup-Supabase.psql) installs our seven existing
+The [setup file](../database/Setup-Supabase.psql) installs our eight existing
 migrations and the [shared runtime grants](../database/api_grants.sql). It creates:
 
 | Role | Purpose |
@@ -192,7 +199,7 @@ structure without sharing credential rows. You do not need to expose either
 schema in the Data API to inspect it in the dashboard.
 
 A migration is a versioned SQL file that changes the database structure or seed
-data. Our seven numbered files already ran on this project. The API does not apply
+data. Our eight numbered files already ran on this project. The API does not apply
 them on startup, and these files are not tracked by Supabase CLI's migration
 history. Do not run `supabase db push` expecting it to recognise this installation.
 
@@ -253,8 +260,10 @@ roles cannot use either application schema. Backend startup against the hosted
 database passed `/health` (200), unauthenticated `/api/me` rejection (401) and
 disabled password-login rejection (403). The temporary server was stopped.
 
-Render deployment, initial business/admin provisioning, live WhatsApp pairing and
-saved-session restoration remain unverified. Replacement workers now wait for the
+The [Render development API](RENDER_DEPLOYMENT.md#current-deployment) is deployed;
+its public HTTPS health and authentication boundary checks passed. Initial
+business/admin provisioning, live WhatsApp pairing and saved-session restoration
+remain unverified. Replacement workers now wait for the
 previous deployment's locks and resume through the existing account checks;
 disposable integration tests cover takeover and shutdown while waiting. A healthy
 HTTP endpoint alone does not prove WhatsApp is connected. Database changes are

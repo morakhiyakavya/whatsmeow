@@ -5,6 +5,28 @@ both POS records and WhatsApp credentials. The mobile app uses the service's HTT
 URL; it never receives database credentials. This deployment does not provision a
 business/admin or copy local WhatsApp sessions.
 
+## Current deployment
+
+Deployed and verified on 11 October 2026 in `kavya's Workspace`:
+
+- API base URL: [whatsapp-pos-dev](https://whatsapp-pos-dev.onrender.com).
+- [Live health endpoint](https://whatsapp-pos-dev.onrender.com/health).
+- [Render dashboard](https://dashboard.render.com/web/srv-db5nundckfvc73arsvkg).
+- Deployed commit: `3c5486681703aa65678adbdfca03f3a02e484e8e` on `main`.
+- Deployment: `dep-db5nunlckfvc73art0rg`; service: `srv-db5nundckfvc73arsvkg`.
+- One Free instance in Singapore; automatic deployments disabled.
+
+Render reported the deployment live. Public HTTPS checks passed: `/health` returns
+200 with `{"status":"ok"}`, unauthenticated `/api/me` returns 401, and password
+login returns 403. Responses carry `Cache-Control: no-store`. The server started
+on `0.0.0.0:10000` using the two private Supabase role connections and bundled CA.
+
+The integration could not set an HTTP health-check path, so the actual service
+uses Render's default TCP check. In its dashboard, open Settings → Health Check
+Path and set `/health` to include database availability in platform health checks.
+The Blueprint already specifies this value for a Blueprint-created service.
+Initial business/admin provisioning and live WhatsApp pairing remain separate.
+
 ## Service configuration
 
 The root [render.yaml](../render.yaml) defines the development service. It uses
@@ -87,7 +109,7 @@ always-running service plan. It is suitable for development and manual API tests
 
 ## Database changes and rollback
 
-All seven existing POS migrations are already applied in the current Supabase
+All eight existing POS migrations are already applied in the current Supabase
 project. Do not run them in the build command, the start command or every deploy.
 For subsequent changes, follow the
 [Supabase table and migration instructions](SUPABASE_SETUP.md#inspect-tables-and-apply-future-migrations).
@@ -106,4 +128,6 @@ behavior. Native Windows and Linux amd64 builds passed. The compiled backend ran
 against Supabase using environment-only configuration, hosted port binding and the
 bundled CA; health and authentication boundary checks passed, then the temporary
 server stopped. The public CA matches the official HTTPS download. Live Render
-deployment and WhatsApp restoration must be recorded after the service is created.
+deployment and public health/authentication checks also passed for the commit
+listed above. Live WhatsApp pairing, saved-session restoration and a customer
+confirmation send from Render remain unchecked.

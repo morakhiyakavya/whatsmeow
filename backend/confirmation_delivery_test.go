@@ -5,6 +5,7 @@ import (
 	"database/sql"
 	"errors"
 	"fmt"
+	"strings"
 	"sync"
 	"testing"
 	"time"
@@ -117,13 +118,18 @@ func testConfirmationDelivery(t *testing.T, dsn string, db *sql.DB, cashier test
 		expectStatus(t, 201, status, obj)
 		return field(t, obj, "id")
 	}
+	body["quantity"] = "-2.5"
 	restartID := queue("pending-after-restart")
+	body["quantity"] = request["quantity"]
 	restored := open()
 	if err = restored.resume(); err != nil {
 		t.Fatal(err)
 	}
 	awaitConfirmation(t, db, business, restartID, "sent")
 	sender.mu.Lock()
+	if !strings.HasPrefix(sender.body, "Transaction confirmation\nType: Sell\n") || !strings.Contains(sender.body, "Quantity: -2.500000\n") || !strings.Contains(sender.body, "Total: INR -625.00\n") {
+		t.Error("sell delivery lost its direction or signed values")
+	}
 	sender.fail = true
 	sender.mu.Unlock()
 	uncertainID := queue("uncertain-send")

@@ -6,7 +6,11 @@ I want to build a web and mobile application for businesses that handle IPO-rela
 
 It should bring customer information, IPO information, transaction records, WhatsApp conversation evidence, and transaction history into one system. PostgreSQL will store the business data and linked WhatsApp sessions, while a Go backend will serve the web and mobile applications.
 
-The current use case includes buying IPO forms from customers. We are using the neutral term **transaction** because the complete distinction between purchases and onward sales has not yet been defined.
+The system handles both buying IPO forms from customers and selling them onward.
+Use **transaction** throughout. Direction comes from the signed quantity, from the
+business's perspective: positive means Buy, negative means Sell, and zero is invalid.
+Rate stays nonnegative; the calculated total has the same sign as quantity unless
+the amount rounds to zero. No separate Buy/Sell field or position is required.
 
 ## Two ways to create a transaction
 
@@ -15,7 +19,7 @@ The current use case includes buying IPO forms from customers. We are using the 
 - A business links its WhatsApp account through Linked devices.
 - The server receives incoming and outgoing messages from that account.
 - Only readable text from private 1:1 chats is relevant. Groups, broadcasts, statuses, newsletters, media, reactions, and media captions are excluded.
-- A potential sale message is evaluated together with the five immediately preceding readable texts from the same private conversation, when available: up to six messages including the trigger. Use their timestamps to understand when the sale happened. The existing terminal viewer's ten-message buffer is a diagnostic implementation, not the detector's required context window.
+- A potential transaction message is evaluated together with the five immediately preceding readable texts from the same private conversation, when available: up to six messages including the trigger. Use their timestamps to understand when the transaction happened. The existing terminal viewer's ten-message buffer is a diagnostic implementation, not the detector's required context window.
 - AI extracts possible transaction details from the conversation.
 - Business-defined rules decide whether the transaction should be recorded automatically.
 - Accepted transactions are created automatically; mandatory manual approval is not the default workflow.
@@ -87,7 +91,7 @@ A transaction records:
 | Form type | Retail, CE, PE, or another supported type |
 | Category | None, Subject 1, or Subject 2 |
 | CE/PE value | The transaction-specific numeric value, where required |
-| Number of forms | The quantity; integers and fractional quantities are supported |
+| Number of forms | Signed quantity: positive for Buy, negative for Sell; integers and fractions are supported, zero is invalid |
 | Rate | The agreed rate for this transaction |
 | Total amount | Rate multiplied by number of forms |
 | Responsible staff | The user associated with the transaction, when assigned |
@@ -225,7 +229,7 @@ Implemented and tested:
 - Passwordless number-linking login for provisioned staff, linked access/renewal sessions, original-device one-use tokens, own-device session management and automatic revocation; one active WhatsApp link per user/number is enforced. Legacy password login is explicitly opt-in; mobile and live passwordless checks remain next.
 - Customer/referral entry, staff creation, shared IPO/form catalogues, and manual transaction creation/editing/cancellation/history through authenticated APIs.
 - Authenticated shared contact-name upload, number lookup and withdrawal, with staff provenance and customer-name precedence; mobile permission screens remain to be built.
-- The transaction POST accepts an owned paired WhatsApp sender and saves a composed confirmation intent atomically with the sale; retries reuse it and the mobile API can read its status. The connected worker sends it and records acknowledgements or uncertain failures; restart, cancellation, changed-data and disabled-member paths have isolated tests. Live receipt sending remains unchecked.
+- The transaction POST accepts an owned paired WhatsApp sender and saves a composed confirmation intent atomically with the transaction; retries reuse it and the mobile API can read its status. The connected worker sends it and records acknowledgements or uncertain failures; restart, cancellation, changed-data and disabled-member paths have isolated tests. Live receipt sending remains unchecked.
 - Exact decimal strings at the API boundary, creation idempotency with original request fingerprints, optimistic edits, and bounded pagination/filtering.
 - Local `ipo_platform` PostgreSQL database setup with separate owner/runtime roles and randomly generated credentials in an ignored, access-restricted root `.env`.
 - Isolated API integration tests under a restricted database role, including concurrent creation retries, business isolation, permissions, and immutable transaction history.
@@ -238,7 +242,7 @@ Still to implement or connect:
 - Password reset, public account onboarding, staff membership management, and expansion of the baseline admin/cashier permissions.
 - Web/mobile pairing screens on the implemented QR/phone API and deployment hardening of the trusted worker credentials/capacity.
 - Persistent WhatsApp ingestion into the application message archive; the manual business APIs are implemented.
-- Live validation of the implemented manual-sale WhatsApp confirmation flow and a reviewed retry workflow for uncertain/failed sends.
+- Live validation of the implemented manual-transaction WhatsApp confirmation flow and a reviewed retry workflow for uncertain/failed sends.
 - AI integration, transaction extraction, reconciliation, and business-rule execution.
 - Web and mobile interfaces for linking accounts, viewing conversations, entering transactions, and inspecting history/evidence.
 - Phone-number pairing screens in the application UI; the backend and local helper now support phone codes.
@@ -252,15 +256,15 @@ Keep each milestone in a separate local commit after its relevant checks pass:
 
 1. **Account registry (implemented):** register and inspect accounts through authenticated business routes. Session identity comes from the trusted pairing worker.
 2. **Authenticated pairing (backend implemented and phone-tested):** owner-only QR/phone codes and QR PNGs, verified bindings, saved-session recovery, stable IDs through relinking and database account locks. Live phone-code pairing and automatic restoration passed locally; live QR pairing and device revocation remain unchecked.
-3. **Mobile POS API and confirmation delivery (backend implemented):** the authenticated transaction API records a confirmation intent with the sale and the worker sends from the creating user's verified linked account. Delivery status is separate from sale persistence; live sending and mobile integration remain next checks.
-4. **Sale detection context:** reuse the viewer's private-text filtering and identity normalization when connecting the detector; assemble the potential sale message and five immediately preceding texts from the same account/conversation. Retain the evidence needed for POS decisions rather than prioritising a general conversation browser.
-5. **AI extraction and reconciliation:** determine whether a sale actually happened and when, retain exact evidence, validate versioned business rules, and reconcile follow-up messages before automatic transaction writes. A manual confirmation must never produce another sale for its existing transaction.
+3. **Mobile POS API and confirmation delivery (backend implemented):** the authenticated transaction API records a confirmation intent with the transaction and the worker sends from the creating user's verified linked account. Delivery status is separate from transaction persistence; live sending and mobile integration remain next checks.
+4. **Transaction detection context:** reuse the viewer's private-text filtering and identity normalization when connecting the detector; assemble the potential transaction message and five immediately preceding texts from the same account/conversation. Retain the evidence needed for POS decisions rather than prioritising a general conversation browser.
+5. **AI extraction and reconciliation:** determine whether a transaction actually happened and when, retain exact evidence, validate versioned business rules, and reconcile follow-up messages before automatic transaction writes. A manual confirmation must never produce another transaction for its existing transaction.
 
 The web/mobile screens can then build on these contracts. Subject analytics follow once their formulas are agreed.
 
 ### Mobile POS and WhatsApp confirmations
 
-The immediate product outcome is a mobile POST that records a sale and causes a
+The immediate product outcome is a mobile POST that records a transaction and causes a
 WhatsApp confirmation to be composed and sent. The existing
 `POST /api/businesses/{businessID}/transactions` route, authentication, validation,
 decimal handling, idempotency and immutable transaction history are the foundation.
@@ -273,34 +277,33 @@ tests. The delivered increments are:
    for deployment and protected token storage in the mobile app; a shared secret
    embedded in every app installation is not user authentication. Identify the
    selected customer and the creating user's authorised linked account explicitly.
-2. **Sale and confirmation intent.** Save the sale and its durable pending
+2. **Transaction and confirmation intent.** Save the transaction and its durable pending
    confirmation in the same database transaction. Generate the message from saved
-   sale data, including customer, IPO/form, quantity, rate, total and transaction
+   transaction data, including customer, IPO/form, quantity, rate, total and transaction
    time; resolve the recipient from the selected customer. Repeated mobile requests
-   with the same idempotency key must reuse the sale and confirmation intent.
+   with the same idempotency key must reuse the transaction and confirmation intent.
 3. **Delivery and status.** Use the existing account worker and whatsmeow sender to
    send after database commit. Check sender ownership and eligibility, record the
    WhatsApp message ID and delivery state, and expose that state to the mobile app.
-   Keep sale success distinct from pending/failed messaging. There is one send
+   Keep transaction success distinct from pending/failed messaging. There is one send
    attempt; uncertain acknowledgements/interrupted attempts are recorded for review
-   without an automatic resend. Changed/cancelled sales or changed recipient/sender
+   without an automatic resend. Changed/cancelled transactions or changed recipient/sender
    data block an unsent receipt.
 
 Acceptance checks: invalid/expired/revoked sessions and cross-business requests are
 rejected; another user's account cannot be used as sender; totals come from saved
-data; concurrent/replayed POSTs reuse one sale and confirmation intent; pending
-delivery survives restart; WhatsApp failure preserves the sale and reports status.
+data; concurrent/replayed POSTs reuse one transaction and confirmation intent; pending
+delivery survives restart; WhatsApp failure preserves the transaction and reports status.
 Use isolated database and fake sender tests first. Sending to a real customer needs
-an explicit test recipient and deliberate test sale; never put customer messages,
+an explicit test recipient and deliberate test transaction; never put customer messages,
 credentials or linked-device keys in Git or test output.
 
-Sale detection follows this increment. Shared filtering is an implementation step
+Transaction detection follows this increment. Shared filtering is an implementation step
 when the detector needs it, not a separate POS deliverable. A full message browser,
 historical backfill, attachments and unrelated viewer refactoring are deferred.
 
 ## Decisions still open
 
-- Whether to distinguish purchases from onward sales in the initial transaction workflow.
 - The exact acceptance, amendment, cancellation, and duplicate-order rules for automation.
 - What the CE/PE numeric value should be called in business-facing UI.
 - Expansion of the implemented phone/password authentication and baseline role permissions for deployment and additional workflows.
@@ -320,9 +323,10 @@ Inventory, payment settlement, and media processing are not part of the agreed i
 - API authentication/idempotency migration: `database/002_api.sql`
 - WhatsApp account pagination migration: `database/003_whatsapp_accounts.sql`
 - Shared contact names and customer attribution migration: `database/004_contact_names.sql`
-- Durable sale confirmation migration: `database/005_transaction_confirmations.sql`
+- Durable transaction confirmation migration: `database/005_transaction_confirmations.sql`
 - Passwordless session/link revocation migration: `database/006_passwordless_sessions.sql`
 - Phone-number registration result migration: `database/007_whatsapp_number_checks.sql`
+- Signed Buy/Sell quantity migration: `database/008_signed_transaction_quantity.sql`
 - Local database creation: `scripts/Setup-LocalDatabase.ps1`
 - API startup and smoke check: `scripts/Start-Api.ps1`, `scripts/Smoke-Api.ps1`
 - Local pairing helper and offline self-check: `scripts/Pair-WhatsApp.ps1`, `scripts/Test-PairWhatsApp.ps1`

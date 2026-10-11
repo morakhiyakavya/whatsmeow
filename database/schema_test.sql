@@ -1,4 +1,4 @@
--- Synthetic fixtures only. Run after 001_initial.sql; all fixtures roll back.
+-- Synthetic fixtures only. Run after all numbered migrations; all fixtures roll back.
 \set ON_ERROR_STOP on
 BEGIN;
 SET LOCAL search_path = ipo_pos, pg_catalog;
@@ -36,6 +36,7 @@ DECLARE
     run uuid;
     rejected_run uuid;
     sale uuid;
+    sell uuid;
     auto_sale uuid;
     base_insert text;
     auto_insert text;
@@ -74,6 +75,13 @@ BEGIN
     PERFORM pg_temp.assert_true((SELECT total_amount=625 AND currency_code='INR' FROM transactions WHERE business_id=shop AND id=sale), 'decimal amount and business currency');
     PERFORM pg_temp.assert_true((SELECT count(*)=1 FROM transaction_versions WHERE business_id=shop AND id=sale), 'initial version captured');
     PERFORM pg_temp.expect_failure(base_insert, '23505');
+    EXECUTE replace(replace(base_insert, 'manual-1', 'manual-sell'), '20,2.5,250', '20,-2.5,250');
+    SELECT id INTO sell FROM transactions WHERE business_id=shop AND idempotency_key='manual-sell';
+    PERFORM pg_temp.assert_true((SELECT quantity=-2.5 AND total_amount=-625 FROM transactions WHERE business_id=shop AND id=sell), 'negative quantity and total represent sell');
+    PERFORM pg_temp.assert_true((SELECT quantity=-2.5 AND total_amount=-625 FROM transaction_versions WHERE business_id=shop AND id=sell AND version=1), 'sell history keeps signed quantity and total');
+    UPDATE transactions SET quantity=2.5,version=2,change_reason='Corrected direction' WHERE business_id=shop AND id=sell;
+    PERFORM pg_temp.assert_true((SELECT quantity=2.5 AND total_amount=625 FROM transactions WHERE business_id=shop AND id=sell), 'direction correction recalculates total');
+    PERFORM pg_temp.assert_true((SELECT quantity=-2.5 AND total_amount=-625 FROM transaction_versions WHERE business_id=shop AND id=sell AND version=1), 'direction correction preserves old sell snapshot');
     PERFORM pg_temp.expect_failure(format('UPDATE transactions SET ce_pe_value=NULL,version=2 WHERE business_id=%L AND id=%L', shop,sale), '23514');
     PERFORM pg_temp.expect_failure(format('UPDATE transactions SET form_type_code=''RETAIL'',version=2 WHERE business_id=%L AND id=%L', shop,sale), '23514');
     PERFORM pg_temp.expect_failure(format('UPDATE transactions SET quantity=0,version=2 WHERE business_id=%L AND id=%L', shop,sale), '23514');

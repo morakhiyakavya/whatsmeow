@@ -165,8 +165,28 @@ func (s *whatsAppService) start(user actor, id, method, phone string, proof ...[
 	go func() {
 		defer s.wg.Done()
 		defer close(c.done)
-		state := s.run(user, id, c)
-		c.update(state, "", time.Time{})
+		for {
+			state := s.run(user, id, c)
+			if state != "busy" || c.Method != "" {
+				c.update(state, "", time.Time{})
+				return
+			}
+			// A replacement worker waits for the previous deployment to release its locks.
+			c.update("waiting_for_worker", "", time.Time{})
+			retry := time.NewTimer(time.Second)
+			select {
+			case <-s.ctx.Done():
+				retry.Stop()
+				c.update("disconnected", "", time.Time{})
+				return
+			case result := <-c.logout:
+				retry.Stop()
+				result <- errors.New("remote_unlink_unavailable")
+				c.update("needs_relink", "", time.Time{})
+				return
+			case <-retry.C:
+			}
+		}
 	}()
 	return c, nil
 }

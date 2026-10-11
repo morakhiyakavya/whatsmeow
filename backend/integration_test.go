@@ -107,26 +107,17 @@ func TestManualLedgerIntegration(t *testing.T) {
 	}
 	defer admin.Close()
 	ctx := context.Background()
-	var owner string
-	if err = admin.QueryRow("SELECT current_user").Scan(&owner); err != nil || owner != "schema_test" {
+	var owner, database string
+	if err = admin.QueryRow("SELECT current_user,current_database()").Scan(&owner, &database); err != nil || owner != "schema_test" {
 		t.Fatal("integration tests require the disposable schema_test cluster")
 	}
-	_, err = admin.Exec(`CREATE ROLE ipo_api_test NOLOGIN;
-        GRANT USAGE ON SCHEMA ipo_pos TO ipo_api_test;
-        GRANT SELECT ON ALL TABLES IN SCHEMA ipo_pos TO ipo_api_test;
-        GRANT INSERT ON ipo_pos.users,ipo_pos.businesses,ipo_pos.business_memberships,ipo_pos.user_credentials,
-            ipo_pos.ipos,ipo_pos.manual_transaction_requests,ipo_pos.transaction_versions TO ipo_api_test;
-        GRANT INSERT,UPDATE ON ipo_pos.customers,ipo_pos.transactions TO ipo_api_test;
-		GRANT INSERT,UPDATE,DELETE ON ipo_pos.contact_names TO ipo_api_test;
-		GRANT INSERT ON ipo_pos.transaction_confirmations TO ipo_api_test;
-		GRANT INSERT,DELETE ON ipo_pos.login_sessions TO ipo_api_test;
-		GRANT UPDATE ON ipo_pos.login_sessions TO ipo_api_test;
-		GRANT INSERT,UPDATE,DELETE ON ipo_pos.device_login_tokens TO ipo_api_test;
-		GRANT UPDATE(consumed_at) ON ipo_pos.login_attempts TO ipo_api_test;
-		GRANT INSERT (business_id,label,linked_by_user_id) ON ipo_pos.whatsapp_accounts TO ipo_api_test;
-		GRANT UPDATE (id) ON ipo_pos.businesses,ipo_pos.users TO ipo_api_test;
-		GRANT UPDATE (user_id) ON ipo_pos.business_memberships TO ipo_api_test;
-		GRANT UPDATE (id) ON ipo_pos.whatsapp_accounts TO ipo_api_test;`)
+	grants, err := os.ReadFile("../database/api_grants.sql")
+	if err != nil {
+		t.Fatal(err)
+	}
+	_, err = admin.Exec("CREATE ROLE ipo_api_test NOLOGIN;" + strings.NewReplacer(
+		`:"api_role"`, pgx.Identifier{"ipo_api_test"}.Sanitize(),
+		`:"database_name"`, pgx.Identifier{database}.Sanitize()).Replace(string(grants)))
 	if err != nil {
 		t.Fatal(err)
 	}

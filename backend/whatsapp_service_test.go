@@ -218,8 +218,6 @@ func testWhatsAppPairing(t *testing.T, dsn string, db *sql.DB, app *api, admin, 
 	}
 	status, object, _ = cashier.request("POST", path+"/connect", nil, "")
 	expectStatus(t, 202, status, object)
-	s.close()
-
 	restored, err := openWhatsAppService(ctx, dsn)
 	if err != nil {
 		t.Fatal(err)
@@ -229,6 +227,50 @@ func testWhatsAppPairing(t *testing.T, dsn string, db *sql.DB, app *api, admin, 
 	if err = restored.resume(); err != nil {
 		t.Fatal(err)
 	}
+	awaitConnection(t, restored, businessID, id, "waiting_for_worker")
+	if len(created) != 0 {
+		t.Fatal("replacement worker opened a client before acquiring the locks")
+	}
+	if _, err = restored.start(actor{UserID: cashierID, BusinessID: businessID}, id, "", ""); err != nil {
+		t.Fatal("waiting restore could not be reused", err)
+	}
+	cancelled, err := openWhatsAppService(ctx, dsn)
+	if err != nil {
+		t.Fatal(err)
+	}
+	cancelled.newClient = func(*store.Device) pairingClient { t.Error("waiting worker opened a client"); return nil }
+	if err = cancelled.resume(); err != nil {
+		cancelled.close()
+		t.Fatal(err)
+	}
+	awaitConnection(t, cancelled, businessID, id, "waiting_for_worker")
+	waiting, err := cancelled.start(actor{UserID: cashierID, BusinessID: businessID}, id, "", "")
+	if err != nil {
+		t.Fatal(err)
+	}
+	logoutResult := make(chan error, 1)
+	select {
+	case waiting.logout <- logoutResult:
+	case <-time.After(5 * time.Second):
+		t.Fatal("waiting worker did not accept disconnect")
+	}
+	select {
+	case err := <-logoutResult:
+		if err == nil {
+			t.Fatal("waiting worker falsely confirmed remote unlink")
+		}
+	case <-time.After(5 * time.Second):
+		t.Fatal("waiting worker did not answer disconnect")
+	}
+	awaitConnection(t, cancelled, businessID, id, "needs_relink")
+	<-waiting.done
+	if _, err = cancelled.start(actor{UserID: cashierID, BusinessID: businessID}, id, "", ""); err != nil {
+		t.Fatal(err)
+	}
+	awaitConnection(t, cancelled, businessID, id, "waiting_for_worker")
+	cancelled.close()
+	awaitConnection(t, cancelled, businessID, id, "disconnected")
+	s.close()
 	awaitConnection(t, restored, businessID, id, "connected")
 	resumed := <-created
 	if resumed.device.GetJID() != jid {

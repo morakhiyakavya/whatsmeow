@@ -1,0 +1,18 @@
+services:
+  - type: web
+    name: whatsapp-pos-dev
+    runtime: go
+    plan: free
+    region: singapore
+    numInstances: 1
+    autoDeployTrigger: off
+    buildCommand: go -C backend build -tags netgo -trimpath -ldflags "-s -w" -o ipo-api .
+    startCommand: ./backend/ipo-api
+    healthCheckPath: /health
+    envVars:
+      - key: DATABASE_URL
+        sync: false
+      - key: WHATSAPP_DATABASE_URL
+        sync: false
+      - key: ALLOW_PASSWORD_LOGIN
+        value: "false"

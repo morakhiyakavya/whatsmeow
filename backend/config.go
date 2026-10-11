@@ -7,6 +7,7 @@ import (
 	"errors"
 	"fmt"
 	"os"
+	"strconv"
 	"strings"
 
 	"golang.org/x/crypto/bcrypt"
@@ -19,29 +20,31 @@ type configuration struct {
 
 func loadConfig(path string) (configuration, error) {
 	file, err := os.Open(path)
-	if err != nil {
+	if err != nil && !(errors.Is(err, os.ErrNotExist) && os.Getenv("DATABASE_URL") != "") {
 		return configuration{}, errors.New("cannot open configuration file; create .env or run scripts/Setup-LocalDatabase.ps1")
 	}
-	defer file.Close()
 	values := map[string]string{}
-	scanner := bufio.NewScanner(file)
-	for scanner.Scan() {
-		line := strings.TrimSpace(scanner.Text())
-		if line == "" || strings.HasPrefix(line, "#") {
-			continue
+	if err == nil {
+		defer file.Close()
+		scanner := bufio.NewScanner(file)
+		for scanner.Scan() {
+			line := strings.TrimSpace(scanner.Text())
+			if line == "" || strings.HasPrefix(line, "#") {
+				continue
+			}
+			key, value, ok := strings.Cut(line, "=")
+			if !ok || strings.TrimSpace(key) == "" {
+				return configuration{}, errors.New("invalid .env line; expected KEY=value")
+			}
+			value = strings.TrimSpace(value)
+			if len(value) >= 2 && ((value[0] == '"' && value[len(value)-1] == '"') || (value[0] == '\'' && value[len(value)-1] == '\'')) {
+				value = value[1 : len(value)-1]
+			}
+			values[strings.TrimSpace(key)] = value
 		}
-		key, value, ok := strings.Cut(line, "=")
-		if !ok || strings.TrimSpace(key) == "" {
-			return configuration{}, errors.New("invalid .env line; expected KEY=value")
+		if scanner.Err() != nil {
+			return configuration{}, errors.New("could not read .env")
 		}
-		value = strings.TrimSpace(value)
-		if len(value) >= 2 && ((value[0] == '"' && value[len(value)-1] == '"') || (value[0] == '\'' && value[len(value)-1] == '\'')) {
-			value = value[1 : len(value)-1]
-		}
-		values[strings.TrimSpace(key)] = value
-	}
-	if scanner.Err() != nil {
-		return configuration{}, errors.New("could not read .env")
 	}
 	get := func(key string) string {
 		if value, ok := os.LookupEnv(key); ok {
@@ -60,6 +63,13 @@ func loadConfig(path string) (configuration, error) {
 	}
 	if c.Addr == "" {
 		c.Addr = "127.0.0.1:8180"
+		if port := get("PORT"); port != "" {
+			n, err := strconv.Atoi(port)
+			if err != nil || n < 1 || n > 65535 {
+				return c, errors.New("PORT must be between 1 and 65535")
+			}
+			c.Addr = "0.0.0.0:" + port
+		}
 	}
 	return c, nil
 }

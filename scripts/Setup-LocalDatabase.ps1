@@ -10,7 +10,7 @@ if (Test-Path -LiteralPath $taskEnvPath) { throw '.env already exists; preserved
 $taskPsql = Join-Path $PostgresBin 'psql.exe'
 if (-not (Test-Path -LiteralPath $taskPsql)) { throw "psql not found: $taskPsql" }
 function Invoke-LocalSql([string]$Database, [string]$Sql) {
-    $Sql | & $taskPsql -X -w -h $AdminHost -U $AdminUser -d $Database -v ON_ERROR_STOP=1 -q
+    $Sql | & $taskPsql -X -w -h $AdminHost -U $AdminUser -d $Database -v ON_ERROR_STOP=1 -v "database_name=$Database" -v api_role=ipo_platform_api -q
     if ($LASTEXITCODE -ne 0) { throw 'PostgreSQL setup failed. Existing databases and credentials were preserved.' }
 }
 function New-LocalSecret {
@@ -55,24 +55,6 @@ foreach ($taskMigration in @('001_initial.sql', '002_api.sql', '003_whatsapp_acc
 }
 Invoke-LocalSql 'ipo_platform' @'
 REVOKE ALL ON DATABASE ipo_platform FROM PUBLIC;
-GRANT CONNECT ON DATABASE ipo_platform TO ipo_platform_api;
-GRANT USAGE ON SCHEMA ipo_pos TO ipo_platform_api;
-GRANT SELECT ON ALL TABLES IN SCHEMA ipo_pos TO ipo_platform_api;
-GRANT INSERT ON ipo_pos.users, ipo_pos.businesses, ipo_pos.business_memberships,
-    ipo_pos.user_credentials, ipo_pos.ipos, ipo_pos.manual_transaction_requests,
-    ipo_pos.transaction_versions TO ipo_platform_api;
-GRANT INSERT, UPDATE ON ipo_pos.customers, ipo_pos.transactions TO ipo_platform_api;
-GRANT INSERT, UPDATE, DELETE ON ipo_pos.contact_names TO ipo_platform_api;
-GRANT INSERT ON ipo_pos.transaction_confirmations TO ipo_platform_api;
-GRANT INSERT, DELETE ON ipo_pos.login_sessions TO ipo_platform_api;
-GRANT UPDATE ON ipo_pos.login_sessions TO ipo_platform_api;
-GRANT INSERT, UPDATE, DELETE ON ipo_pos.device_login_tokens TO ipo_platform_api;
-GRANT UPDATE (consumed_at) ON ipo_pos.login_attempts TO ipo_platform_api;
--- Session bindings can only be supplied by the future trusted pairing worker.
-GRANT INSERT (business_id, label, linked_by_user_id) ON ipo_pos.whatsapp_accounts TO ipo_platform_api;
--- SELECT ... FOR SHARE in transaction guards needs UPDATE on at least one column.
-GRANT UPDATE (id) ON ipo_pos.businesses, ipo_pos.users TO ipo_platform_api;
-GRANT UPDATE (user_id) ON ipo_pos.business_memberships TO ipo_platform_api;
-GRANT UPDATE (id) ON ipo_pos.whatsapp_accounts TO ipo_platform_api;
 '@
+Invoke-LocalSql 'ipo_platform' (Get-Content -Raw -LiteralPath (Join-Path $taskRoot 'database/api_grants.sql'))
 Write-Output "Created ipo_platform, separate migration/API roles, and $taskEnvPath. Passwords were not printed."

@@ -44,6 +44,9 @@ go run . -env ../.env
 `API_ADDR` defaults to `127.0.0.1:8180`. The environment file supports comments,
 `KEY=value` lines and optional surrounding quotes; it does not execute shell code
 or expand variables. Process environment variables override matching API settings.
+On a host that provides `DATABASE_URL`, the environment file may be absent.
+Without `API_ADDR`, a valid `PORT` binds the service to `0.0.0.0:PORT`.
+See the [Render deployment guide](../docs/RENDER_DEPLOYMENT.md) for the hosted configuration.
 
 In another terminal:
 
@@ -56,6 +59,10 @@ reads, then logs out. It does not create demo customers or ledger entries. For a
 `backend/requests.http` or the isolated integration runner below.
 
 ## Database credentials
+
+For a fresh hosted development database, follow the
+[Supabase setup guide](../docs/SUPABASE_SETUP.md). It reuses the same migrations and
+runtime permissions as local setup and keeps database passwords out of commands.
 
 The root `.env` contains randomly generated local credentials:
 
@@ -118,8 +125,9 @@ then remove the added token/attempt tables, triggers, indexes and session/accoun
 columns in dependency order. Preserve users, business history and WhatsApp account
 IDs; never drop the application or WhatsApp session schemas as a rollback shortcut.
 
-The runtime grants are in `scripts/Setup-LocalDatabase.ps1`; use your runtime role
-name when applying them elsewhere. The narrowly scoped identity-column UPDATE
+The runtime grants are in `database/api_grants.sql`, reused by the local setup,
+Supabase setup and API integration fixture. Set its psql `api_role` and
+`database_name` variables when applying it elsewhere. The narrowly scoped identity-column UPDATE
 grants let PostgreSQL's transaction guard take `FOR SHARE` row locks. The runtime
 role does not own tables or have DDL/TRUNCATE permissions.
 

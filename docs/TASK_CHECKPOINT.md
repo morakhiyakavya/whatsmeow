@@ -86,3 +86,9 @@ Application work predating this policy remains outside the count until reviewed 
 3. Reprioritise the next increment to authenticated mobile POS confirmation delivery and define sale detection as the trigger plus five preceding private texts.
    - Verification: reviewed existing login/session/business checks and the transactional, idempotent sale writer; updated and reviewed the vision/diff to reuse those implementations, distinguish sale persistence from message delivery, and defer standalone archive/viewer work. Documentation only; no API changes or customer messages sent. Production authentication hardening and delivery remain unimplemented.
    - Paths: `docs/PROJECT_VISION.md`, `docs/TASK_CHECKPOINT.md`.
+
+### Batch 10 — Shared contact names and provenance
+
+1. Add business-shared mobile contact names with authenticated staff provenance, number lookup and withdrawal; preserve chosen customer names.
+   - Verification: backend `go test ./...`, `go vet ./...` and disposable PostgreSQL schema/API integration checks passed, including multiple contributors, replay stability, forged-source rejection, cross-business denial, own-source withdrawal and unknown-number lookup. Applied additive migration 004 and scoped grants locally without importing contacts; script syntax and documentation/diffs reviewed. Mobile permission handling is not implemented; names remain suggestions and only the current value per contributor is stored.
+   - Paths: `database/004_contact_names.sql`, `database/Test-Schema.ps1`, `scripts/Setup-LocalDatabase.ps1`, `backend/contacts.go`, `backend/contacts_test.go`, `backend/resources.go`, `backend/integration_test.go`, `backend/main.go`, `backend/README.md`, `backend/requests.http`, `docs/PROJECT_VISION.md`, `docs/TASK_CHECKPOINT.md`.

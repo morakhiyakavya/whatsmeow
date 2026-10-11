@@ -68,6 +68,21 @@ Authorization: Bearer {{token}}
 POST {{base}}/api/businesses/{{business}}/whatsapp-accounts/{{whatsapp_account}}/connect
 Authorization: Bearer {{token}}
 
+### Upload selected mobile contact names (supplier comes from your token)
+POST {{base}}/api/businesses/{{business}}/contacts
+Authorization: Bearer {{token}}
+Content-Type: application/json
+
+{"contacts":[{"phone_number":"+919000001010","name":"Demo contact"}]}
+
+### Resolve a number using shared business contacts
+GET {{base}}/api/businesses/{{business}}/contacts?phone_number=%2B919000001010
+Authorization: Bearer {{token}}
+
+### Withdraw your own contribution
+DELETE {{base}}/api/businesses/{{business}}/contacts?phone_number=%2B919000001010
+Authorization: Bearer {{token}}
+
 ### Create a customer
 POST {{base}}/api/businesses/{{business}}/customers
 Authorization: Bearer {{token}}

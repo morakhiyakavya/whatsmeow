@@ -48,7 +48,7 @@ $taskAcl.SetOwner($taskIdentity)
 $taskAcl.AddAccessRule([Security.AccessControl.FileSystemAccessRule]::new($taskIdentity, 'FullControl', 'Allow'))
 $taskAcl.AddAccessRule([Security.AccessControl.FileSystemAccessRule]::new([Security.Principal.SecurityIdentifier]::new('S-1-5-18'), 'FullControl', 'Allow'))
 Set-Acl -LiteralPath $taskEnvPath -AclObject $taskAcl
-foreach ($taskMigration in @('001_initial.sql', '002_api.sql', '003_whatsapp_accounts.sql')) {
+foreach ($taskMigration in @('001_initial.sql', '002_api.sql', '003_whatsapp_accounts.sql', '004_contact_names.sql')) {
     $taskSql = Get-Content -Raw -LiteralPath (Join-Path $taskRoot "database/$taskMigration")
     Invoke-LocalSql 'ipo_platform' ("SET ROLE ipo_platform_owner;`n" + $taskSql)
 }
@@ -61,6 +61,7 @@ GRANT INSERT ON ipo_pos.users, ipo_pos.businesses, ipo_pos.business_memberships,
     ipo_pos.user_credentials, ipo_pos.ipos, ipo_pos.manual_transaction_requests,
     ipo_pos.transaction_versions TO ipo_platform_api;
 GRANT INSERT, UPDATE ON ipo_pos.customers, ipo_pos.transactions TO ipo_platform_api;
+GRANT INSERT, UPDATE, DELETE ON ipo_pos.contact_names TO ipo_platform_api;
 GRANT INSERT, DELETE ON ipo_pos.login_sessions TO ipo_platform_api;
 -- Session bindings can only be supplied by the future trusted pairing worker.
 GRANT INSERT (business_id, label, linked_by_user_id) ON ipo_pos.whatsapp_accounts TO ipo_platform_api;

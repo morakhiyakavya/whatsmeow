@@ -154,8 +154,8 @@ func (a *api) createCustomer(w http.ResponseWriter, r *http.Request, user actor)
 		fail(w, 400, "invalid_customer", "Supply a name, optional international phone and valid referral details")
 		return
 	}
-	queryJSON(w, r, a.db, 201, `INSERT INTO ipo_pos.customers AS c(business_id,name,phone_number,referred_by_customer_id,referral_note)
-        VALUES($1,$2,$3,$4,$5) RETURNING to_jsonb(c)`, user.BusinessID, input.Name, input.Phone, input.Referrer, input.ReferralNote)
+	queryJSON(w, r, a.db, 201, `INSERT INTO ipo_pos.customers AS c(business_id,name,phone_number,referred_by_customer_id,referral_note,name_supplied_by_user_id)
+        VALUES($1,$2,$3,$4,$5,$6) RETURNING to_jsonb(c)`, user.BusinessID, input.Name, input.Phone, input.Referrer, input.ReferralNote, user.UserID)
 }
 
 const ipoJSON = `to_jsonb(i) || jsonb_build_object('price_low',i.price_low::text,'price_high',i.price_high::text)`

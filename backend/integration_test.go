@@ -117,6 +117,7 @@ func TestManualLedgerIntegration(t *testing.T) {
         GRANT INSERT ON ipo_pos.users,ipo_pos.businesses,ipo_pos.business_memberships,ipo_pos.user_credentials,
             ipo_pos.ipos,ipo_pos.manual_transaction_requests,ipo_pos.transaction_versions TO ipo_api_test;
         GRANT INSERT,UPDATE ON ipo_pos.customers,ipo_pos.transactions TO ipo_api_test;
+		GRANT INSERT,UPDATE,DELETE ON ipo_pos.contact_names TO ipo_api_test;
 		GRANT INSERT,DELETE ON ipo_pos.login_sessions TO ipo_api_test;
 		GRANT INSERT (business_id,label,linked_by_user_id) ON ipo_pos.whatsapp_accounts TO ipo_api_test;
 		GRANT UPDATE (id) ON ipo_pos.businesses,ipo_pos.users TO ipo_api_test;
@@ -218,6 +219,7 @@ func TestManualLedgerIntegration(t *testing.T) {
 	if field(t, object["items"].([]any)[0].(map[string]any), "id") == firstCustomer || object["next_cursor"] != nil {
 		t.Fatal("pagination repeated or skipped customers")
 	}
+	testContactNames(t, admin, client, cashier, base, otherBusiness, customerID, cashierID)
 	request := map[string]any{"ipo_id": ipoID, "customer_id": customerID, "occurred_at": "2026-10-04T10:00:00+05:30", "form_type_code": "CE", "category": "subject_1", "ce_pe_value": "20", "quantity": "2.5", "rate": "250", "salesperson_user_id": cashierID}
 	status, object, _ = cashier.request("POST", base+"/transactions", request, "")
 	expectStatus(t, 400, status, object)

@@ -63,8 +63,8 @@ func run(envPath string, bootstrap bool) error {
 		return bootstrapAdmin(ctx, db, config)
 	}
 	var schemaReady bool
-	if err := db.QueryRowContext(ctx, "SELECT to_regclass('ipo_pos.manual_transaction_requests') IS NOT NULL").Scan(&schemaReady); err != nil || !schemaReady {
-		return errors.New("apply database/001_initial.sql and database/002_api.sql before starting the API")
+	if err := db.QueryRowContext(ctx, "SELECT to_regclass('ipo_pos.manual_transaction_requests') IS NOT NULL AND to_regclass('ipo_pos.contact_names') IS NOT NULL").Scan(&schemaReady); err != nil || !schemaReady {
+		return errors.New("apply application migrations through database/004_contact_names.sql before starting the API")
 	}
 	app, err := newAPI(db)
 	if err != nil {
@@ -113,6 +113,9 @@ func (a *api) routes() http.Handler {
 	mux.HandleFunc("POST /api/businesses/{businessID}/staff", a.protect(true, a.createStaff))
 	mux.HandleFunc("GET /api/businesses/{businessID}/customers", a.protect(false, a.listCustomers))
 	mux.HandleFunc("POST /api/businesses/{businessID}/customers", a.protect(false, a.createCustomer))
+	mux.HandleFunc("POST /api/businesses/{businessID}/contacts", a.protect(false, a.importContacts))
+	mux.HandleFunc("GET /api/businesses/{businessID}/contacts", a.protect(false, a.lookupContact))
+	mux.HandleFunc("DELETE /api/businesses/{businessID}/contacts", a.protect(false, a.removeContactName))
 	mux.HandleFunc("GET /api/businesses/{businessID}/ipos", a.protect(false, a.listIPOs))
 	mux.HandleFunc("POST /api/businesses/{businessID}/ipos", a.protect(true, a.createIPO))
 	mux.HandleFunc("GET /api/businesses/{businessID}/form-types", a.protect(false, a.listFormTypes))

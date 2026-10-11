@@ -125,6 +125,14 @@ Customer records include:
 
 Customer names are not assumed to be unique. Customer information belongs to a business and should not be exposed to another business.
 
+Staff may share selected mobile contacts with their business after granting phone
+contacts permission. Match by international phone number within that business and
+preserve each staff member's supplied name separately, with supplier ID, source and
+server timestamps. This lets a colleague resolve a number they have not saved.
+The POS customer name takes precedence over imported suggestions; different names
+or customers sharing a number must not be silently merged. Staff may withdraw
+their own contributions. Permission collection remains the mobile app's responsibility.
+
 ## Businesses, staff, and account access
 
 The platform supports businesses with multiple staff rather than only one independent shop per user.
@@ -197,6 +205,7 @@ Implemented and tested:
 - Isolated PostgreSQL tests using synthetic account data, including persistence across reopen and account-specific contacts.
 - A runnable Go HTTP API with phone/password sign-in, bcrypt password hashes, PostgreSQL-backed bearer sessions, logout, expiry, and business membership checks.
 - Customer/referral entry, staff creation, shared IPO/form catalogues, and manual transaction creation/editing/cancellation/history through authenticated APIs.
+- Authenticated shared contact-name upload, number lookup and withdrawal, with staff provenance and customer-name precedence; mobile permission screens remain to be built.
 - Exact decimal strings at the API boundary, creation idempotency with original request fingerprints, optimistic edits, and bounded pagination/filtering.
 - Local `ipo_platform` PostgreSQL database setup with separate owner/runtime roles and randomly generated credentials in an ignored, access-restricted root `.env`.
 - Isolated API integration tests under a restricted database role, including concurrent creation retries, business isolation, permissions, and immutable transaction history.

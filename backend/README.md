@@ -66,7 +66,7 @@ The connection uses `sslmode=disable` for local development. A remote deployment
 needs verified TLS and credentials supplied privately to the server.
 
 For a new database, apply `database/001_initial.sql`, `002_api.sql` and
-`003_whatsapp_accounts.sql` once, in that order, as its migration owner. The API
+`003_whatsapp_accounts.sql` and `004_contact_names.sql` once, in that order, as its migration owner. The API
 does not execute migrations on startup. Apply only missing migrations to an
 existing database. For the local installation that already has migrations 001/002:
 
@@ -75,6 +75,10 @@ existing database. For the local installation that already has migrations 001/00
 & 'C:/Program Files/PostgreSQL/17/bin/psql.exe' -X -h localhost -U ipo_platform_owner -d ipo_platform -v ON_ERROR_STOP=1 -f database/003_whatsapp_accounts.sql
 & 'C:/Program Files/PostgreSQL/17/bin/psql.exe' -X -h localhost -U ipo_platform_owner -d ipo_platform -v ON_ERROR_STOP=1 -c 'GRANT INSERT (business_id, label, linked_by_user_id) ON ipo_pos.whatsapp_accounts TO ipo_platform_api;'
 ```
+
+For an existing installation through migration 003, apply `004_contact_names.sql`
+and grant `SELECT, INSERT, UPDATE, DELETE ON ipo_pos.contact_names` to the API role.
+The local setup script and disposable test role already include these grants.
 
 The runtime grants are in `scripts/Setup-LocalDatabase.ps1`; use your runtime role
 name when applying them elsewhere. The narrowly scoped identity-column UPDATE
@@ -103,6 +107,8 @@ request checks the active membership and business state against PostgreSQL.
 | Operation | Admin | Cashier |
 |---|---|---|
 | View/create customers | Yes | Yes |
+| Upload/lookup shared contact names | Yes | Yes |
+| Withdraw a mobile contact name | Own contribution | Own contribution |
 | Register/view WhatsApp accounts in their business | Yes | Yes |
 | Pair/connect an account or read its pairing code | Registering user only | Registering user only |
 | View IPOs and form types | Yes | Yes |
@@ -304,3 +310,35 @@ have not been checked; those paths have isolated protocol tests.
 Message ingestion, manual confirmation sending, web/mobile UI, AI extraction and
 reconciliation, and analytics remain subsequent milestones. This worker does not
 send customer messages or archive conversations yet.
+
+## Shared business contact names
+
+After the mobile app obtains contacts permission and the user chooses which contacts
+to share with a business, POST `/api/businesses/{businessID}/contacts` with:
+
+```json
+{"contacts":[{"phone_number":"+919000001010","name":"Customer name on this phone"}]}
+```
+
+Send 1–100 distinct numbers per request in international format. The existing 64 KiB
+JSON limit applies. The batch is atomic. Uploads update only the authenticated user's
+name for a number; unchanged replays preserve its timestamp. Source (`mobile_contacts`),
+supplier ID, receipt time and last name-change time are recorded on the server.
+One user's upload cannot forge another supplier or overwrite their name.
+
+GET the same route with `?phone_number=%2B919000001010` to resolve a number across
+the business. It returns matching customer records, up to 100 name sources with
+staff attribution, total counts, and a suggested name. A single active customer's
+chosen name takes precedence; otherwise the latest contributed name is suggested
+with its source. Multiple customers sharing a number remain distinct; names are
+not identity verification and no customer is automatically created or merged.
+New customer records record their name's author; older records have an unknown author.
+
+DELETE the same route with that number withdraws only the caller's contribution.
+An empty lookup returns no suggestion. Reads and writes require active business
+membership; another business's contacts are inaccessible. The server cannot verify
+that a phone permission prompt was accepted: the mobile app must obtain consent and
+handle permission withdrawal. This API stores the current name per staff/number,
+not a history of all previous spellings. Removing migration 004 requires backing up
+and dropping `contact_names` and the new customer attribution column after reverting
+its callers; reverting Git alone does not remove database records.

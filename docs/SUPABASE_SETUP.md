@@ -8,7 +8,7 @@ WhatsApp credentials are not copied by this setup.
 
 Project `tqfwoudoxundtrhogmwa` was installed and verified on 11 October 2026 using
 the Singapore session pooler on port `5432`. PostgreSQL reports version 17.11.
-All eight application migrations are installed: `ipo_pos` has 22 tables, and the
+All nine application migrations are installed: `ipo_pos` has 22 tables, and the
 backend initialized 17 WhatsApp credential tables at library schema version 16.
 No users, businesses or linked WhatsApp devices have been provisioned there yet.
 Do not rerun the fresh-install script for this project.
@@ -18,7 +18,13 @@ transactions and immutable history. Quantity is nonzero and signed: positive for
 Buy, negative for Sell. The existing total formula is unchanged and uses the signed
 quantity. Rollback-only schema assertions passed against this database, including
 Sell amounts, direction corrections and preserved history; no test records remain.
-The separate local database has not received migration 008.
+Migration 009 was also applied on 11 October 2026. Both current and historical
+rates accept positive, negative and zero values, while NaN remains rejected.
+Hosted rollback-only checks passed for all quantity/rate sign combinations,
+rate edits, zero rates and immutable history. Buy/Sell still comes only from
+quantity, so a Sell can have a positive total and a Buy can have a negative total.
+No test records remain. The separate local database has not received migrations
+008 or 009.
 
 Generated, separate role credentials are saved privately in the Git-ignored
 root `.env.supabase`, with file access restricted to your Windows account and
@@ -95,7 +101,7 @@ At the `postgres=>` prompt, run:
 \i 'C:/Users/Admin/Documents/programming/whatsmeow/database/Setup-Supabase.psql'
 ```
 
-The [setup file](../database/Setup-Supabase.psql) installs our eight existing
+The [setup file](../database/Setup-Supabase.psql) installs our nine existing
 migrations and the [shared runtime grants](../database/api_grants.sql). It creates:
 
 | Role | Purpose |
@@ -199,7 +205,7 @@ structure without sharing credential rows. You do not need to expose either
 schema in the Data API to inspect it in the dashboard.
 
 A migration is a versioned SQL file that changes the database structure or seed
-data. Our eight numbered files already ran on this project. The API does not apply
+data. Our nine numbered files already ran on this project. The API does not apply
 them on startup, and these files are not tracked by Supabase CLI's migration
 history. Do not run `supabase db push` expecting it to recognise this installation.
 

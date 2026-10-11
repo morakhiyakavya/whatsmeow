@@ -70,9 +70,9 @@ func (f *transactionFields) validate(w http.ResponseWriter) bool {
 		fail(w, 400, "invalid_quantity", "quantity must be a nonzero decimal string with at most six fractional digits (positive for buy, negative for sell)")
 		return false
 	}
-	rate, ok := decimal(f.Rate, false)
+	rate, ok := decimal(f.Rate, true)
 	if !ok {
-		fail(w, 400, "invalid_rate", "rate must be a nonnegative decimal string with at most six fractional digits")
+		fail(w, 400, "invalid_rate", "rate must be a decimal string with at most six fractional digits")
 		return false
 	}
 	f.Quantity = quantity

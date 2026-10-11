@@ -12,14 +12,23 @@ Deployed and verified on 11 October 2026 in `kavya's Workspace`:
 - API base URL: [whatsapp-pos-dev](https://whatsapp-pos-dev.onrender.com).
 - [Live health endpoint](https://whatsapp-pos-dev.onrender.com/health).
 - [Render dashboard](https://dashboard.render.com/web/srv-db5nundckfvc73arsvkg).
-- Deployed commit: `3c5486681703aa65678adbdfca03f3a02e484e8e` on `main`.
-- Deployment: `dep-db5nunlckfvc73art0rg`; service: `srv-db5nundckfvc73arsvkg`.
+- Deployed commit: `b6d5f2c6aa98a8ad826f06876aaec8ada68d283d` on `main`.
+- Deployment: `dep-db5og7navr4c739h4t90`; service: `srv-db5nundckfvc73arsvkg`.
 - One Free instance in Singapore; automatic deployments disabled.
 
 Render reported the deployment live. Public HTTPS checks passed: `/health` returns
 200 with `{"status":"ok"}`, unauthenticated `/api/me` returns 401, and password
 login returns 403. Responses carry `Cache-Control: no-store`. The server started
 on `0.0.0.0:10000` using the two private Supabase role connections and bundled CA.
+
+This deployment supports two-way transactions through signed quantity: positive
+means Buy, negative means Sell, and zero is rejected. Rate remains nonnegative;
+the generated total uses signed quantity. Confirmations use Transaction wording
+and derive Buy/Sell from quantity. Supabase migration 008 was installed and its
+rollback-only schema assertions passed before this deploy. Render built the exact
+pushed commit and reported it live; startup succeeded with the migration guard.
+Post-deploy health/authentication/no-store checks passed and no error-level logs
+were returned for the deployment window. No test staff or real messages were created.
 
 The integration could not set an HTTP health-check path, so the actual service
 uses Render's default TCP check. In its dashboard, open Settings → Health Check
@@ -109,7 +118,7 @@ always-running service plan. It is suitable for development and manual API tests
 
 ## Database changes and rollback
 
-All eight existing POS migrations are already applied in the current Supabase
+All nine existing POS migrations are already applied in the current Supabase
 project. Do not run them in the build command, the start command or every deploy.
 For subsequent changes, follow the
 [Supabase table and migration instructions](SUPABASE_SETUP.md#inspect-tables-and-apply-future-migrations).

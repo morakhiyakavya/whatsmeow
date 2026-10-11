@@ -82,7 +82,8 @@ needs verified TLS and credentials supplied privately to the server.
 For a new database, apply `database/001_initial.sql`, `002_api.sql` and
 `003_whatsapp_accounts.sql`, `004_contact_names.sql` and
 `005_transaction_confirmations.sql`, `006_passwordless_sessions.sql`, then
-`007_whatsapp_number_checks.sql` and `008_signed_transaction_quantity.sql` once,
+`007_whatsapp_number_checks.sql`, `008_signed_transaction_quantity.sql` and
+`009_signed_transaction_rate.sql` once,
 in that order, as its migration owner. The API
 does not execute migrations on startup. Apply only missing migrations to an
 existing database. For the local installation that already has migrations 001/002:
@@ -120,9 +121,16 @@ After migration 007, apply `008_signed_transaction_quantity.sql` as the migratio
 owner before starting this API version. It permits nonzero signed quantities in
 both current transactions and immutable history: positive means the business buys,
 negative means it sells. Existing values and snapshots are preserved; no new
-runtime grants are needed. The generated total retains the quantity's sign.
+runtime grants are needed. The generated total is the rounded product of quantity
+and rate; direction comes only from quantity.
 Rollback to positive-only constraints requires resolving any negative current or
 historical quantities explicitly; do not delete or rewrite immutable history.
+
+After migration 008, apply `009_signed_transaction_rate.sql` as the migration owner
+before starting this API version. Rate accepts positive, negative and zero values
+in current transactions and immutable history; existing values are preserved and
+no new grants are required. Returning to nonnegative-only rates requires explicit
+resolution of negative current or historical rates; never rewrite immutable history.
 
 Migration 007 rollback: revert/stop its callers before removing the table. Export
 stored checks if needed; dropping the table loses those observations only.
@@ -221,9 +229,9 @@ IDs from `/api/me`. Supplying another business ID never confers access.
 Amounts, rates, quantities, CE/PE values and IPO prices are **JSON strings**.
 Inputs allow up to 12 integer digits and six fractional digits. Quantity must be
 nonzero: positive means Buy and negative means Sell from the business's perspective.
-Rate must be nonnegative. Totals are calculated only in PostgreSQL as
-`round(rate * quantity, 2)`. A Sell total is negative unless the amount rounds to
-zero; always derive direction from quantity, not total. Category and CE/PE value
+Rate may be positive, negative or zero. Totals are calculated only in PostgreSQL as
+`round(rate * quantity, 2)`. Either direction can have a positive, negative or zero
+total; always derive direction from quantity, not rate or total. Category and CE/PE value
 never multiply the amount.
 `ce_pe_value` is mandatory for CE/PE and must be null/omitted for other form types.
 `category` defaults to `none`; alternatives are `subject_1` and `subject_2`.

@@ -170,13 +170,21 @@ Content-Type: application/json
 
 {"ipo_id":"{{ipo}}","customer_id":"{{customer}}","occurred_at":"2026-10-04T10:00:00+05:30","form_type_code":"CE","category":"subject_1","ce_pe_value":"20","quantity":"2.5","rate":"250"}
 
-### Sell: negative quantity gives total = -625.00. Keep a separate retry key.
+### Sell with positive rate: total = -625.00. Keep a separate retry key.
 POST {{base}}/api/businesses/{{business}}/transactions
 Authorization: Bearer {{token}}
 Idempotency-Key: manual-demo-sell-001
 Content-Type: application/json
 
 {"ipo_id":"{{ipo}}","customer_id":"{{customer}}","occurred_at":"2026-10-04T10:00:00+05:30","form_type_code":"CE","category":"subject_1","ce_pe_value":"20","quantity":"-2.5","rate":"250"}
+
+### Sell with negative rate: total = 625.00; quantity still determines Sell.
+POST {{base}}/api/businesses/{{business}}/transactions
+Authorization: Bearer {{token}}
+Idempotency-Key: manual-demo-sell-negative-rate-001
+Content-Type: application/json
+
+{"ipo_id":"{{ipo}}","customer_id":"{{customer}}","occurred_at":"2026-10-04T10:00:00+05:30","form_type_code":"CE","category":"subject_1","ce_pe_value":"20","quantity":"-2.5","rate":"-250"}
 
 ### Correct quantity: total = 812.50. Repeating with version 1 returns 409.
 PUT {{base}}/api/businesses/{{business}}/transactions/{{transaction}}

@@ -2,11 +2,12 @@ package main
 
 import (
 	"net/http/httptest"
+	"strconv"
 	"testing"
 	"time"
 )
 
-func TestSignedQuantityValidation(t *testing.T) {
+func TestSignedTransactionValidation(t *testing.T) {
 	for _, test := range []struct {
 		quantity, rate, want string
 		valid                bool
@@ -19,7 +20,14 @@ func TestSignedQuantityValidation(t *testing.T) {
 		{"-1.1234567", "250", "", false},
 		{"-1000000000000", "250", "", false},
 		{"NaN", "250", "", false},
-		{"-2.5", "-250", "", false},
+		{"2.5", "-250", "2.5", true},
+		{"-2.5", "-250", "-2.5", true},
+		{"2.5", "-0.000000", "2.5", true},
+		{"2.5", "-0.000001", "2.5", true},
+		{"2.5", "-1.1234567", "", false},
+		{"2.5", "-1000000000000", "", false},
+		{"2.5", "NaN", "", false},
+		{"2.5", "-Infinity", "", false},
 	} {
 		t.Run(test.quantity+"/"+test.rate, func(t *testing.T) {
 			input := transactionFields{
@@ -68,5 +76,46 @@ func testSignedTransactionAPI(t *testing.T, client testClient, base string, requ
 	expectStatus(t, 200, status, obj)
 	if field(t, obj, "status") != "cancelled" || field(t, obj, "total_amount") != "-812.50" {
 		t.Fatal("sell cancellation lost the signed amount")
+	}
+	for i, test := range []struct{ quantity, rate, total string }{
+		{"2.5", "-250", "-625.00"},
+		{"-2.5", "-250", "625.00"},
+		{"-2.5", "0", "0.00"},
+	} {
+		body := cloneMap(request)
+		body["quantity"], body["rate"] = test.quantity, test.rate
+		key := "signed-rate-" + strconv.Itoa(i)
+		status, obj, _ := client.request("POST", base+"/transactions", body, key)
+		expectStatus(t, 201, status, obj)
+		id := field(t, obj, "id")
+		if field(t, obj, "total_amount") != test.total {
+			t.Fatal("signed rate creation calculated the wrong total")
+		}
+		body["rate"] = test.rate + ".000000"
+		status, obj, headers := client.request("POST", base+"/transactions", body, key)
+		expectStatus(t, 200, status, obj)
+		if field(t, obj, "id") != id || headers.Get("Idempotency-Replayed") != "true" {
+			t.Fatal("equivalent signed rate retry created another transaction")
+		}
+		body["rate"] = "250"
+		status, obj, _ = client.request("POST", base+"/transactions", body, key)
+		expectStatus(t, 409, status, obj)
+		body["rate"] = "-125"
+		body["expected_version"], body["change_reason"] = 1, "Corrected rate sign"
+		status, obj, _ = client.request("PUT", base+"/transactions/"+id, body, "")
+		expectStatus(t, 200, status, obj)
+		want := "-312.50"
+		if test.quantity == "-2.5" {
+			want = "312.50"
+		}
+		if field(t, obj, "total_amount") != want || obj["version"] != float64(2) {
+			t.Fatal("rate correction did not recalculate the signed total")
+		}
+		status, obj, _ = client.request("GET", base+"/transactions/"+id+"/history", nil, "")
+		expectStatus(t, 200, status, obj)
+		history := obj["items"].([]any)
+		if len(history) != 2 || field(t, history[1].(map[string]any), "total_amount") != test.total {
+			t.Fatal("rate correction rewrote its original history")
+		}
 	}
 }

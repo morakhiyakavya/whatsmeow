@@ -20,6 +20,8 @@ The ledger records both purchases from customers and onward sales using neutral
 defines direction from the business's perspective through quantity: positive for
 Buy, negative for Sell, zero invalid. Settlement/payments, category analytics and
 inventory remain unimplemented.
+[Migration 009](../database/009_signed_transaction_rate.sql) permits positive,
+negative and zero rates. Direction remains determined only by quantity.
 
 ## Relationships
 
@@ -80,7 +82,7 @@ All application tables live in `ipo_pos`. Business-owned primary keys and foreig
 | `category` | Required: none / subject_1 / subject_2. |
 | `ce_pe_value` | `numeric(18,6)`, required only for CE/PE. No multiplication role. |
 | `quantity` | Nonzero `numeric(18,6)`: positive for Buy, negative for Sell. |
-| `rate` | `numeric(18,6)`, nonnegative. |
+| `rate` | Signed `numeric(18,6)`; positive, negative and zero are valid. |
 | `total_amount` | Database-generated `numeric(30,2)`: rounded rate times signed quantity. Callers cannot supply a different amount. |
 | `currency_code` | Business currency snapshot. Initial business default is INR. |
 | `salesperson_user_id` | Optional responsible staff attribution, distinct from the person/automation performing an edit. |
@@ -95,6 +97,8 @@ Six decimal places for quantity/rate/CE-PE values and two for amounts are initia
 Example: CE value 20, Subject 1, quantity 2.5, rate 250 produces 625.00 (Buy).
 Quantity -2.5 at the same rate produces -625.00 (Sell). Changing CE value to 40 or
 category to Subject 2 does not change the amount if quantity/rate stay unchanged.
+At rate -250, quantity 2.5 produces -625.00 (Buy), and quantity -2.5 produces
+625.00 (Sell). Do not derive direction from the rate or total.
 
 ## Version history and concurrency
 

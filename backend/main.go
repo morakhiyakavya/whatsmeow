@@ -67,8 +67,10 @@ func run(envPath string, bootstrap bool) error {
 	if err := db.QueryRowContext(ctx, `SELECT to_regclass('ipo_pos.login_attempts') IS NOT NULL
         AND to_regclass('ipo_pos.device_login_tokens') IS NOT NULL AND to_regclass('ipo_pos.whatsapp_number_checks') IS NOT NULL
         AND EXISTS (SELECT 1 FROM pg_constraint WHERE conrelid=to_regclass('ipo_pos.transactions') AND conname='transactions_nonzero_quantity_check')
-        AND EXISTS (SELECT 1 FROM pg_constraint WHERE conrelid=to_regclass('ipo_pos.transaction_versions') AND conname='transaction_versions_nonzero_quantity_check')`).Scan(&schemaReady); err != nil || !schemaReady {
-		return errors.New("apply application migrations through database/008_signed_transaction_quantity.sql before starting the API")
+        AND EXISTS (SELECT 1 FROM pg_constraint WHERE conrelid=to_regclass('ipo_pos.transaction_versions') AND conname='transaction_versions_nonzero_quantity_check')
+        AND EXISTS (SELECT 1 FROM pg_constraint WHERE conrelid=to_regclass('ipo_pos.transactions') AND conname='transactions_signed_rate_check')
+        AND EXISTS (SELECT 1 FROM pg_constraint WHERE conrelid=to_regclass('ipo_pos.transaction_versions') AND conname='transaction_versions_signed_rate_check')`).Scan(&schemaReady); err != nil || !schemaReady {
+		return errors.New("apply application migrations through database/009_signed_transaction_rate.sql before starting the API")
 	}
 	app, err := newAPI(db)
 	if err != nil {

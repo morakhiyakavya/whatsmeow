@@ -643,7 +643,7 @@ Content-Type: application/json
 | `category` | `none`, `subject_1` or `subject_2`; omission defaults to `none` |
 | `ce_pe_value` | Decimal string required for CE/PE; omit or use null for other forms |
 | `quantity` | Nonzero signed decimal string: positive for Buy, negative for Sell |
-| `rate` | Nonnegative decimal string |
+| `rate` | Signed decimal string; positive, negative and zero are valid |
 | `whatsapp_account_id` | Optional; your own active paired account in this business |
 | `salesperson_user_id` | Optional responsible staff ID; does not change sender ownership |
 | `change_reason` | Optional creation explanation; defaults to `Manual entry` |
@@ -669,8 +669,19 @@ HTTP 201. These are excerpts of their saved transaction responses:
 {"quantity":"-2.500000","rate":"250.000000","total_amount":"-625.00","version":1,"status":"confirmed"}
 ```
 
-Use quantity's sign for direction: a zero rate or rounding can produce a zero total
-for either direction. The API returns no separate Buy/Sell field.
+Rate may also be negative. With the same request fields and `"rate":"-250"`,
+quantity `"2.5"` is a Buy totaling `"-625.00"`; quantity `"-2.5"` is a Sell totaling
+`"625.00"`. Each separate transaction needs its own unique retry key.
+
+| Quantity | Rate | Direction | Saved total |
+|---|---|---|---|
+| `"2.5"` | `"250"` | Buy | `"625.00"` |
+| `"-2.5"` | `"250"` | Sell | `"-625.00"` |
+| `"2.5"` | `"-250"` | Buy | `"-625.00"` |
+| `"-2.5"` | `"-250"` | Sell | `"625.00"` |
+
+Use quantity's sign for direction, never rate or total. A zero rate or rounding can
+produce a zero total for either direction. The API returns no separate Buy/Sell field.
 
 The transaction inherits the business's currency, which defaults to INR; the creation
 request has no currency selector. Category and CE/PE value do not multiply the total. The app may show a

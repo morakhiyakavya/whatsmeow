@@ -8,6 +8,22 @@ None.
 
 ## Checkpoints
 
+### Batch 19 — Signed transaction rates and contract correction
+
+1. Publish the signed transaction build and redeploy the existing Render development API against Supabase migration 008.
+   - Verification: the user explicitly requested updating Supabase and Render. Pushed reviewed checkpoint `b6d5f2c6aa98a8ad826f06876aaec8ada68d283d` to `origin/main` and verified the remote SHA; Render deployment `dep-db5og7navr4c739h4t90` built that exact commit and reached live on the existing Free Singapore service. Startup logs confirm successful migration-aware initialization and `0.0.0.0:10000` listening. Public health 200, unauthenticated `/api/me` 401, disabled password login 403 and all no-store headers passed; deployment-window error logs were empty. Reviewed deployment-document and ledger content/diffs.
+   - Paths: `docs/RENDER_DEPLOYMENT.md`, `docs/TASK_CHECKPOINT.md`. External changes: authorized Git push and redeploy of `srv-db5nundckfvc73arsvkg` in workspace `tea-csp7ifjgbbvc73etj3cg`; migration 008 application is recorded in Batch 18. No credentials or generated executable were committed.
+   - Limits: no hosted staff/business is provisioned, so live authenticated Buy/Sell HTTP creation and real WhatsApp sends remain unchecked; disposable API tests and hosted rollback-only schema checks cover signed behaviour. Render Free can sleep and interrupt WhatsApp processing. Local migration 008 remains unapplied. One stopped disposable test directory remains after automatic approval review rejected its deletion; no server is running for it.
+2. Permit signed transaction rates in API create/edit requests and current/history database rows without changing quantity-derived direction or the amount formula.
+   - Verification: backend vet and the native deployment build passed. Disposable hosted-setup/schema/API/session checks passed; reran schema/API checks after extending negative-rate edit assertions. Coverage includes all quantity/rate sign combinations, zero rates, signed normalization/retries, rate-sign conflicts, edits, preserved history, nonfinite/precision rejection and a fake Sell confirmation with negative rate and positive total after restart. Applied migration 009 to Supabase using verified TLS; checked both rate constraints and passed rollback-only schema assertions with zero remaining transaction/history/staff/business test rows. No runtime grants changed.
+   - Paths: `backend/transactions.go`, `backend/main.go`, `backend/transactions_test.go`, `backend/integration_test.go`, `backend/confirmation_delivery_test.go`, `database/009_signed_transaction_rate.sql`, `database/schema_test.sql`, `database/Setup-Supabase.psql`, `database/Test-Schema.ps1`, `scripts/Setup-LocalDatabase.ps1`, `docs/SUPABASE_SETUP.md`, `docs/RENDER_DEPLOYMENT.md`, `docs/TASK_CHECKPOINT.md`.
+   - Limits: Render still serves the quantity-only build until the follow-up deployment completes; local migrations 008/009 remain unapplied. No live authenticated hosted transaction requests or real WhatsApp sends were performed. A database/code rollback alone cannot safely restore nonnegative-only rates once negative historical rates exist.
+
+3. Correct the mobile/API reference to allow signed rates and make quantity the sole source of transaction direction, including all four sign combinations and a negative-rate Sell request.
+   - Verification: reviewed content/diffs against the shared validator, generated SQL total and API/confirmation integration assertions; documentation file links, standalone JSON examples, PowerShell syntax and whitespace checks passed. Quantity still rejects zero; zero rates remain supported; catalogue prices and CE/PE fields are unchanged.
+   - Paths: `backend/README.md`, `backend/requests.http`, `docs/POS_AND_CONTACTS_GUIDE.md`, `docs/POS_DATABASE_DESIGN.md`, `docs/PROJECT_VISION.md`, `docs/TASK_CHECKPOINT.md`.
+   - Limits: the reference does not infer settlement or payment direction from either rate or total, and no Android UI has been implemented.
+
 ### Batch 18 — Signed Buy/Sell transactions and API reference
 
 1. Publish the reviewed application commits and deploy the Supabase-backed development API to Render's Free plan in Singapore.

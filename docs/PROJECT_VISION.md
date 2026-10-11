@@ -9,8 +9,9 @@ It should bring customer information, IPO information, transaction records, What
 The system handles both buying IPO forms from customers and selling them onward.
 Use **transaction** throughout. Direction comes from the signed quantity, from the
 business's perspective: positive means Buy, negative means Sell, and zero is invalid.
-Rate stays nonnegative; the calculated total has the same sign as quantity unless
-the amount rounds to zero. No separate Buy/Sell field or position is required.
+Rate may be positive, negative or zero. The calculated total is the rounded product
+of quantity and rate; neither rate nor total determines direction. No separate
+Buy/Sell field or position is required.
 
 ## Two ways to create a transaction
 
@@ -327,6 +328,7 @@ Inventory, payment settlement, and media processing are not part of the agreed i
 - Passwordless session/link revocation migration: `database/006_passwordless_sessions.sql`
 - Phone-number registration result migration: `database/007_whatsapp_number_checks.sql`
 - Signed Buy/Sell quantity migration: `database/008_signed_transaction_quantity.sql`
+- Signed transaction rate migration: `database/009_signed_transaction_rate.sql`
 - Local database creation: `scripts/Setup-LocalDatabase.ps1`
 - API startup and smoke check: `scripts/Start-Api.ps1`, `scripts/Smoke-Api.ps1`
 - Local pairing helper and offline self-check: `scripts/Pair-WhatsApp.ps1`, `scripts/Test-PairWhatsApp.ps1`

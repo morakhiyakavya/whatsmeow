@@ -118,6 +118,7 @@ func TestManualLedgerIntegration(t *testing.T) {
             ipo_pos.ipos,ipo_pos.manual_transaction_requests,ipo_pos.transaction_versions TO ipo_api_test;
         GRANT INSERT,UPDATE ON ipo_pos.customers,ipo_pos.transactions TO ipo_api_test;
 		GRANT INSERT,UPDATE,DELETE ON ipo_pos.contact_names TO ipo_api_test;
+		GRANT INSERT ON ipo_pos.transaction_confirmations TO ipo_api_test;
 		GRANT INSERT,DELETE ON ipo_pos.login_sessions TO ipo_api_test;
 		GRANT INSERT (business_id,label,linked_by_user_id) ON ipo_pos.whatsapp_accounts TO ipo_api_test;
 		GRANT UPDATE (id) ON ipo_pos.businesses,ipo_pos.users TO ipo_api_test;
@@ -359,6 +360,9 @@ func TestManualLedgerIntegration(t *testing.T) {
 	})
 	t.Run("WhatsApp pairing lifecycle", func(t *testing.T) {
 		testWhatsAppPairing(t, dsn, db, app, client, cashier, other, businessID, cashierID)
+	})
+	t.Run("POS confirmation API", func(t *testing.T) {
+		testConfirmationAPI(t, admin, db, client, cashier, other, businessID, otherBusiness, request)
 	})
 	status, object, _ = other.request("GET", "/api/businesses/"+otherBusiness+"/transactions/"+transactionID, nil, "")
 	expectStatus(t, 404, status, object)

@@ -89,7 +89,7 @@ BEGIN
     PERFORM pg_temp.expect_failure(format('DELETE FROM transaction_versions WHERE business_id=%L AND id=%L', shop,sale), 'P0001');
     PERFORM pg_temp.expect_failure(format('INSERT INTO transaction_versions SELECT * FROM transactions WHERE business_id=%L AND id=%L', shop,sale), 'P0001');
     PERFORM pg_temp.expect_failure(format('DELETE FROM transactions WHERE business_id=%L AND id=%L', shop,sale), 'P0001');
-    PERFORM pg_temp.expect_failure('TRUNCATE transaction_versions', 'P0001');
+    PERFORM pg_temp.expect_failure('TRUNCATE transaction_versions CASCADE', 'P0001');
 
     INSERT INTO automation_rule_versions(business_id,version,configuration,created_by_user_id) VALUES (shop,1,'{"allow_automatic":true}',staff) RETURNING id INTO rules;
     UPDATE businesses SET active_rule_version_id=rules WHERE id=shop;

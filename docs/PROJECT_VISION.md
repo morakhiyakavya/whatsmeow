@@ -206,6 +206,7 @@ Implemented and tested:
 - A runnable Go HTTP API with phone/password sign-in, bcrypt password hashes, PostgreSQL-backed bearer sessions, logout, expiry, and business membership checks.
 - Customer/referral entry, staff creation, shared IPO/form catalogues, and manual transaction creation/editing/cancellation/history through authenticated APIs.
 - Authenticated shared contact-name upload, number lookup and withdrawal, with staff provenance and customer-name precedence; mobile permission screens remain to be built.
+- The transaction POST accepts an owned paired WhatsApp sender and saves a composed confirmation intent atomically with the sale; retries reuse it and the mobile API can read its status. Delivery is the next worker increment.
 - Exact decimal strings at the API boundary, creation idempotency with original request fingerprints, optimistic edits, and bounded pagination/filtering.
 - Local `ipo_platform` PostgreSQL database setup with separate owner/runtime roles and randomly generated credentials in an ignored, access-restricted root `.env`.
 - Isolated API integration tests under a restricted database role, including concurrent creation retries, business isolation, permissions, and immutable transaction history.
@@ -297,6 +298,8 @@ Inventory, payment settlement, and media processing are not part of the agreed i
 - Manual API, permissions, setup and usage: `backend/README.md`
 - API authentication/idempotency migration: `database/002_api.sql`
 - WhatsApp account pagination migration: `database/003_whatsapp_accounts.sql`
+- Shared contact names and customer attribution migration: `database/004_contact_names.sql`
+- Durable sale confirmation migration: `database/005_transaction_confirmations.sql`
 - Local database creation: `scripts/Setup-LocalDatabase.ps1`
 - API startup and smoke check: `scripts/Start-Api.ps1`, `scripts/Smoke-Api.ps1`
 - Local pairing helper and offline self-check: `scripts/Pair-WhatsApp.ps1`, `scripts/Test-PairWhatsApp.ps1`

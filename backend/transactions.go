@@ -26,7 +26,8 @@ type transactionFields struct {
 }
 type transactionCreate struct {
 	transactionFields
-	Reason string `json:"change_reason"`
+	Reason            string  `json:"change_reason"`
+	WhatsAppAccountID *string `json:"whatsapp_account_id,omitempty"`
 }
 type transactionEdit struct {
 	transactionFields
@@ -100,6 +101,13 @@ func (a *api) createTransaction(w http.ResponseWriter, r *http.Request, user act
 	if !decode(w, r, &input) || !input.validate(w) {
 		return
 	}
+	if !optionalUUID(input.WhatsAppAccountID) {
+		fail(w, 400, "invalid_sender", "Supply a valid whatsapp_account_id")
+		return
+	}
+	if input.WhatsAppAccountID != nil {
+		*input.WhatsAppAccountID = strings.ToLower(*input.WhatsAppAccountID)
+	}
 	input.Reason = strings.TrimSpace(input.Reason)
 	if input.Reason == "" {
 		input.Reason = "Manual entry"
@@ -117,19 +125,20 @@ func (a *api) createTransaction(w http.ResponseWriter, r *http.Request, user act
 	}
 	defer tx.Rollback()
 	var data json.RawMessage
+	var createdID string
 	err = tx.QueryRowContext(r.Context(), `INSERT INTO ipo_pos.transactions AS t
         (business_id,idempotency_key,origin,created_by_user_id,ipo_id,customer_id,occurred_at,form_type_code,
         category,ce_pe_value,quantity,rate,salesperson_user_id,conversation_id,changed_by_user_id,change_reason)
         VALUES($1,$2,'manual',$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$3,$14)
-        ON CONFLICT (business_id,idempotency_key) DO NOTHING RETURNING `+transactionJSON,
-		user.BusinessID, key, user.UserID, input.IPOID, input.CustomerID, input.OccurredAt, input.FormType, input.Category, input.CEPE, input.Quantity, input.Rate, input.StaffID, input.ConversationID, input.Reason).Scan(&data)
+        ON CONFLICT (business_id,idempotency_key) DO NOTHING RETURNING `+transactionJSON+`,t.id`,
+		user.BusinessID, key, user.UserID, input.IPOID, input.CustomerID, input.OccurredAt, input.FormType, input.Category, input.CEPE, input.Quantity, input.Rate, input.StaffID, input.ConversationID, input.Reason).Scan(&data, &createdID)
 	status := 201
 	if errors.Is(err, sql.ErrNoRows) {
 		var existingHash []byte
 		var creator string
-		err = tx.QueryRowContext(r.Context(), `SELECT `+transactionJSON+`,m.payload_hash,m.user_id FROM ipo_pos.manual_transaction_requests m
+		err = tx.QueryRowContext(r.Context(), `SELECT `+transactionJSON+`,m.payload_hash,m.user_id,t.id FROM ipo_pos.manual_transaction_requests m
             JOIN ipo_pos.transactions t ON t.business_id=m.business_id AND t.id=m.transaction_id
-            WHERE m.business_id=$1 AND m.idempotency_key=$2`, user.BusinessID, key).Scan(&data, &existingHash, &creator)
+            WHERE m.business_id=$1 AND m.idempotency_key=$2`, user.BusinessID, key).Scan(&data, &existingHash, &creator, &createdID)
 		if errors.Is(err, sql.ErrNoRows) || (err == nil && (!bytes.Equal(existingHash, fingerprint[:]) || creator != user.UserID)) {
 			fail(w, 409, "idempotency_conflict", "This key already identifies a different creation request")
 			return
@@ -144,16 +153,20 @@ func (a *api) createTransaction(w http.ResponseWriter, r *http.Request, user act
 		dbFailure(w, err)
 		return
 	} else {
-		var identity struct {
-			ID string `json:"id"`
-		}
-		if err = json.Unmarshal(data, &identity); err != nil {
+		_, err = tx.ExecContext(r.Context(), `INSERT INTO ipo_pos.manual_transaction_requests
+            (business_id,idempotency_key,transaction_id,user_id,payload_hash) VALUES($1,$2,$3,$4,$5)`, user.BusinessID, key, createdID, user.UserID, fingerprint[:])
+		if err != nil {
 			dbFailure(w, err)
 			return
 		}
-		_, err = tx.ExecContext(r.Context(), `INSERT INTO ipo_pos.manual_transaction_requests
-            (business_id,idempotency_key,transaction_id,user_id,payload_hash) VALUES($1,$2,$3,$4,$5)`, user.BusinessID, key, identity.ID, user.UserID, fingerprint[:])
-		if err != nil {
+	}
+	if input.WhatsAppAccountID != nil {
+		if status == 201 {
+			if !queueConfirmation(w, r, tx, user, createdID, *input.WhatsAppAccountID) {
+				return
+			}
+		}
+		if err = confirmationResponse(r, tx, user, createdID, &data); err != nil {
 			dbFailure(w, err)
 			return
 		}

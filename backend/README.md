@@ -66,7 +66,8 @@ The connection uses `sslmode=disable` for local development. A remote deployment
 needs verified TLS and credentials supplied privately to the server.
 
 For a new database, apply `database/001_initial.sql`, `002_api.sql` and
-`003_whatsapp_accounts.sql` and `004_contact_names.sql` once, in that order, as its migration owner. The API
+`003_whatsapp_accounts.sql`, `004_contact_names.sql` and
+`005_transaction_confirmations.sql` once, in that order, as its migration owner. The API
 does not execute migrations on startup. Apply only missing migrations to an
 existing database. For the local installation that already has migrations 001/002:
 
@@ -79,6 +80,10 @@ existing database. For the local installation that already has migrations 001/00
 For an existing installation through migration 003, apply `004_contact_names.sql`
 and grant `SELECT, INSERT, UPDATE, DELETE ON ipo_pos.contact_names` to the API role.
 The local setup script and disposable test role already include these grants.
+
+After migration 004, apply `005_transaction_confirmations.sql` and grant
+`SELECT, INSERT ON ipo_pos.transaction_confirmations` to the API role. Delivery
+updates belong to the trusted WhatsApp worker, not the request role.
 
 The runtime grants are in `scripts/Setup-LocalDatabase.ps1`; use your runtime role
 name when applying them elsewhere. The narrowly scoped identity-column UPDATE
@@ -342,3 +347,32 @@ handle permission withdrawal. This API stores the current name per staff/number,
 not a history of all previous spellings. Removing migration 004 requires backing up
 and dropping `contact_names` and the new customer attribution column after reverting
 its callers; reverting Git alone does not remove database records.
+
+## Mobile POS confirmations
+
+Use the existing login and `Authorization: Bearer TOKEN` for each request; obtain
+business IDs from `/api/me`. The server determines the actor and checks active user,
+business and role. The mobile app must store tokens in protected platform storage,
+honour expiry/logout and use HTTPS in deployment. Do not embed bootstrap credentials
+or a shared master token in the app. The local HTTP listener is for development.
+
+To request a WhatsApp receipt, add `whatsapp_account_id` to the existing transaction
+POST body and send the same `Idempotency-Key` on every retry of that sale. The account
+must be paired, active, in the business and registered by the requesting user. A
+missing customer phone or an unavailable/unauthorised sender rejects the creation
+atomically. Omitting the new field preserves existing manual-entry behaviour.
+
+The sale, initial immutable version, retry fingerprint and confirmation intent are
+saved in one transaction. The server composes the receipt from saved customer,
+IPO/form, category, quantity, rate, database-calculated total, time and sale reference;
+clients cannot supply an arbitrary message body. The receipt is a snapshot of the
+initial sale; later edits do not silently rewrite it. Replays reuse the sale and
+confirmation and reject changed data or a different sender under the same key.
+
+The POST response includes `whatsapp_confirmation` when requested. GET
+`/api/businesses/{businessID}/transactions/{id}/confirmation` reads the latest status
+and receipt under normal business permissions; no confirmation returns 404.
+The queued intent survives restart. In this increment, intents remain `pending`;
+the sending worker is the next checkpoint. Migration 005 rollback requires backing
+up pending/attempted delivery records and dropping its table after reverting callers;
+Git rollback alone does not undo the database migration.

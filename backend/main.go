@@ -63,8 +63,8 @@ func run(envPath string, bootstrap bool) error {
 		return bootstrapAdmin(ctx, db, config)
 	}
 	var schemaReady bool
-	if err := db.QueryRowContext(ctx, "SELECT to_regclass('ipo_pos.manual_transaction_requests') IS NOT NULL AND to_regclass('ipo_pos.contact_names') IS NOT NULL").Scan(&schemaReady); err != nil || !schemaReady {
-		return errors.New("apply application migrations through database/004_contact_names.sql before starting the API")
+	if err := db.QueryRowContext(ctx, "SELECT to_regclass('ipo_pos.manual_transaction_requests') IS NOT NULL AND to_regclass('ipo_pos.contact_names') IS NOT NULL AND to_regclass('ipo_pos.transaction_confirmations') IS NOT NULL").Scan(&schemaReady); err != nil || !schemaReady {
+		return errors.New("apply application migrations through database/005_transaction_confirmations.sql before starting the API")
 	}
 	app, err := newAPI(db)
 	if err != nil {
@@ -132,6 +132,7 @@ func (a *api) routes() http.Handler {
 	mux.HandleFunc("PUT /api/businesses/{businessID}/transactions/{id}", a.protect(false, a.editTransaction))
 	mux.HandleFunc("POST /api/businesses/{businessID}/transactions/{id}/cancel", a.protect(false, a.cancelTransaction))
 	mux.HandleFunc("GET /api/businesses/{businessID}/transactions/{id}/history", a.protect(false, a.transactionHistory))
+	mux.HandleFunc("GET /api/businesses/{businessID}/transactions/{id}/confirmation", a.protect(false, a.getConfirmation))
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		w.Header().Set("Cache-Control", "no-store")
 		w.Header().Set("X-Content-Type-Options", "nosniff")

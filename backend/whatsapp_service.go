@@ -19,6 +19,7 @@ import (
 )
 
 type pairingClient interface {
+	confirmationSender
 	ConnectContext(context.Context) error
 	Disconnect()
 	AddEventHandler(whatsmeow.EventHandler) uint32
@@ -171,7 +172,8 @@ const activeWhatsAppAccount = `SELECT wa.device_jid FROM ipo_pos.whatsapp_accoun
     JOIN ipo_pos.business_memberships m ON m.business_id=wa.business_id AND m.user_id=wa.linked_by_user_id
     JOIN ipo_pos.users u ON u.id=m.user_id JOIN ipo_pos.businesses b ON b.id=m.business_id
     WHERE wa.business_id=$1 AND wa.id=$2 AND wa.linked_by_user_id=$3
-    AND m.disabled_at IS NULL AND u.disabled_at IS NULL AND b.archived_at IS NULL`
+    AND m.disabled_at IS NULL AND u.disabled_at IS NULL AND b.archived_at IS NULL
+    AND (wa.device_jid IS NULL OR wa.unlinked_at IS NULL)`
 
 func (s *whatsAppService) run(user actor, id string, c *accountConnection) string {
 	ctx, cancel := context.WithCancel(s.ctx)
@@ -192,6 +194,9 @@ func (s *whatsAppService) run(user actor, id string, c *accountConnection) strin
 	var saved sql.NullString
 	if err = conn.QueryRowContext(ctx, activeWhatsAppAccount, user.BusinessID, id, user.UserID).Scan(&saved); err != nil {
 		return "account_unavailable"
+	}
+	if err = recoverConfirmations(ctx, conn, user.BusinessID, id); err != nil {
+		return "storage_unavailable"
 	}
 	device := s.store.NewDevice()
 	if saved.Valid {
@@ -247,12 +252,23 @@ func (s *whatsAppService) run(user actor, id string, c *accountConnection) strin
 		expiry = timer.C
 	}
 	phoneRequested := false
+	deliveries := time.NewTicker(2 * time.Second)
+	defer deliveries.Stop()
 	for {
 		select {
 		case <-ctx.Done():
 			return "disconnected"
 		case <-expiry:
 			return "expired"
+		case <-deliveries.C:
+			if c.state().State == "connected" {
+				if err = deliverConfirmation(ctx, conn, user, id, saved.String, client); err != nil {
+					if errors.Is(err, sql.ErrNoRows) {
+						return "account_unavailable"
+					}
+					return "storage_unavailable"
+				}
+			}
 		case <-checks.C:
 			checkCtx, stop := context.WithTimeout(ctx, 5*time.Second)
 			var current sql.NullString

@@ -312,9 +312,9 @@ restored the connection without another pairing or connect request. The connecte
 response no longer exposed a pairing code. Live QR pairing and device revocation
 have not been checked; those paths have isolated protocol tests.
 
-Message ingestion, manual confirmation sending, web/mobile UI, AI extraction and
-reconciliation, and analytics remain subsequent milestones. This worker does not
-send customer messages or archive conversations yet.
+Message ingestion, web/mobile UI, AI extraction/reconciliation and analytics remain
+subsequent milestones. The worker can send requested POS confirmations; it does not
+archive conversations yet.
 
 ## Shared business contact names
 
@@ -372,7 +372,23 @@ confirmation and reject changed data or a different sender under the same key.
 The POST response includes `whatsapp_confirmation` when requested. GET
 `/api/businesses/{businessID}/transactions/{id}/confirmation` reads the latest status
 and receipt under normal business permissions; no confirmation returns 404.
-The queued intent survives restart. In this increment, intents remain `pending`;
-the sending worker is the next checkpoint. Migration 005 rollback requires backing
+The queued intent survives restart. The trusted worker claims one pending receipt
+per connected account every two seconds and sends with a 20-second timeout. Its
+existing account lock prevents competing workers from using the same session.
+It rechecks current ownership/membership/binding, customer phone and sale version;
+cancellation blocks the send, and changed recipients, senders or sale versions fail
+the pending receipt. New sale confirmations can queue while the account is offline.
+An active worker configuration (`WHATSAPP_DATABASE_URL`) is needed to deliver them.
+
+Statuses are `pending`, `sending`, `sent`, `uncertain`, `failed` and `cancelled`.
+`sent` means WhatsApp acknowledged the message, not that the customer read it.
+The message ID is persisted before sending. A send error, mismatched acknowledgement,
+or worker restart after an interrupted attempt produces `uncertain`; it is never
+automatically resent. The sale remains saved. An uncertain result may have reached
+the customer and needs review. There is currently no manual resend endpoint; this
+conservative single-attempt policy avoids blind duplicates. Receipt IDs must also
+be used by the future detector to recognise confirmations for existing sales.
+
+Migration 005 rollback requires backing
 up pending/attempted delivery records and dropping its table after reverting callers;
 Git rollback alone does not undo the database migration.

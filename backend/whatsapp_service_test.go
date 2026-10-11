@@ -4,6 +4,7 @@ import (
 	"context"
 	"database/sql"
 	"encoding/json"
+	"errors"
 	"image/png"
 	"net/http"
 	"strings"
@@ -12,6 +13,7 @@ import (
 
 	"go.mau.fi/whatsmeow"
 	"go.mau.fi/whatsmeow/proto/waAdv"
+	"go.mau.fi/whatsmeow/proto/waE2E"
 	"go.mau.fi/whatsmeow/store"
 	"go.mau.fi/whatsmeow/types"
 	"go.mau.fi/whatsmeow/types/events"
@@ -22,10 +24,23 @@ type fakePairingClient struct {
 	handler whatsmeow.EventHandler
 	qr      chan whatsmeow.QRChannelItem
 	phone   chan string
+	sender  confirmationSender
 }
 
 func (f *fakePairingClient) AddEventHandler(h whatsmeow.EventHandler) uint32 { f.handler = h; return 1 }
 func (f *fakePairingClient) Disconnect()                                     {}
+func (f *fakePairingClient) GenerateMessageID() types.MessageID {
+	if f.sender != nil {
+		return f.sender.GenerateMessageID()
+	}
+	return whatsmeow.NewClient(f.device, nil).GenerateMessageID()
+}
+func (f *fakePairingClient) SendMessage(ctx context.Context, jid types.JID, msg *waE2E.Message, extra ...whatsmeow.SendRequestExtra) (whatsmeow.SendResponse, error) {
+	if f.sender != nil {
+		return f.sender.SendMessage(ctx, jid, msg, extra...)
+	}
+	return whatsmeow.SendResponse{}, errors.New("unexpected send in pairing-only fixture")
+}
 func (f *fakePairingClient) GetQRChannel(context.Context) (<-chan whatsmeow.QRChannelItem, error) {
 	return f.qr, nil
 }

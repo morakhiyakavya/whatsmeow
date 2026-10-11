@@ -206,7 +206,7 @@ Implemented and tested:
 - A runnable Go HTTP API with phone/password sign-in, bcrypt password hashes, PostgreSQL-backed bearer sessions, logout, expiry, and business membership checks.
 - Customer/referral entry, staff creation, shared IPO/form catalogues, and manual transaction creation/editing/cancellation/history through authenticated APIs.
 - Authenticated shared contact-name upload, number lookup and withdrawal, with staff provenance and customer-name precedence; mobile permission screens remain to be built.
-- The transaction POST accepts an owned paired WhatsApp sender and saves a composed confirmation intent atomically with the sale; retries reuse it and the mobile API can read its status. Delivery is the next worker increment.
+- The transaction POST accepts an owned paired WhatsApp sender and saves a composed confirmation intent atomically with the sale; retries reuse it and the mobile API can read its status. The connected worker sends it and records acknowledgements or uncertain failures; restart, cancellation, changed-data and disabled-member paths have isolated tests. Live receipt sending remains unchecked.
 - Exact decimal strings at the API boundary, creation idempotency with original request fingerprints, optimistic edits, and bounded pagination/filtering.
 - Local `ipo_platform` PostgreSQL database setup with separate owner/runtime roles and randomly generated credentials in an ignored, access-restricted root `.env`.
 - Isolated API integration tests under a restricted database role, including concurrent creation retries, business isolation, permissions, and immutable transaction history.
@@ -219,7 +219,7 @@ Still to implement or connect:
 - Password reset, public account onboarding, staff membership management, and expansion of the baseline admin/cashier permissions.
 - Web/mobile pairing screens on the implemented QR/phone API and deployment hardening of the trusted worker credentials/capacity.
 - Persistent WhatsApp ingestion into the application message archive; the manual business APIs are implemented.
-- Sending a WhatsApp message to the selected customer after a manual transaction is saved, using the creating user's linked WhatsApp account.
+- Live validation of the implemented manual-sale WhatsApp confirmation flow and a reviewed retry workflow for uncertain/failed sends.
 - AI integration, transaction extraction, reconciliation, and business-rule execution.
 - Web and mobile interfaces for linking accounts, viewing conversations, entering transactions, and inspecting history/evidence.
 - Phone-number pairing screens in the application UI; the backend and local helper now support phone codes.
@@ -233,24 +233,24 @@ Keep each milestone in a separate local commit after its relevant checks pass:
 
 1. **Account registry (implemented):** register and inspect accounts through authenticated business routes. Session identity comes from the trusted pairing worker.
 2. **Authenticated pairing (backend implemented and phone-tested):** owner-only QR/phone codes and QR PNGs, verified bindings, saved-session recovery, stable IDs through relinking and database account locks. Live phone-code pairing and automatic restoration passed locally; live QR pairing and device revocation remain unchecked.
-3. **Mobile POS API and confirmation delivery (next):** review the existing authenticated transaction API for mobile use, record a confirmation intent with the sale, and send from the creating user's verified linked account. Track delivery independently of sale persistence and associate the outgoing message with that sale.
+3. **Mobile POS API and confirmation delivery (backend implemented):** the authenticated transaction API records a confirmation intent with the sale and the worker sends from the creating user's verified linked account. Delivery status is separate from sale persistence; live sending and mobile integration remain next checks.
 4. **Sale detection context:** reuse the viewer's private-text filtering and identity normalization when connecting the detector; assemble the potential sale message and five immediately preceding texts from the same account/conversation. Retain the evidence needed for POS decisions rather than prioritising a general conversation browser.
 5. **AI extraction and reconciliation:** determine whether a sale actually happened and when, retain exact evidence, validate versioned business rules, and reconcile follow-up messages before automatic transaction writes. A manual confirmation must never produce another sale for its existing transaction.
 
 The web/mobile screens can then build on these contracts. Subject analytics follow once their formulas are agreed.
 
-### Next increment: authenticated mobile POS and WhatsApp confirmations
+### Mobile POS and WhatsApp confirmations
 
 The immediate product outcome is a mobile POST that records a sale and causes a
 WhatsApp confirmation to be composed and sent. The existing
 `POST /api/businesses/{businessID}/transactions` route, authentication, validation,
 decimal handling, idempotency and immutable transaction history are the foundation.
-Extend them; do not create a parallel sale writer or authentication implementation.
-Deliver the work in three small local commits with their relevant tests:
+The backend extends these existing implementations and has isolated database/sender
+tests. The delivered increments are:
 
-1. **Mobile API readiness.** Review login/session expiry and logout, active user and
-   business authorisation, payload validation, request limits and retry behaviour.
-   Define the request/response contract and address demonstrated gaps. Require HTTPS
+1. **Mobile API readiness.** Reuse the reviewed login/session expiry and logout,
+   active user/business authorisation, payload validation, request limits and
+   idempotent transaction writer. The request/response contract is documented. Require HTTPS
    for deployment and protected token storage in the mobile app; a shared secret
    embedded in every app installation is not user authentication. Identify the
    selected customer and the creating user's authorised linked account explicitly.
@@ -262,8 +262,10 @@ Deliver the work in three small local commits with their relevant tests:
 3. **Delivery and status.** Use the existing account worker and whatsmeow sender to
    send after database commit. Check sender ownership and eligibility, record the
    WhatsApp message ID and delivery state, and expose that state to the mobile app.
-   Keep sale success distinct from pending/failed messaging. Bound retries and treat
-   an uncertain send acknowledgement explicitly rather than blindly sending again.
+   Keep sale success distinct from pending/failed messaging. There is one send
+   attempt; uncertain acknowledgements/interrupted attempts are recorded for review
+   without an automatic resend. Changed/cancelled sales or changed recipient/sender
+   data block an unsent receipt.
 
 Acceptance checks: invalid/expired/revoked sessions and cross-business requests are
 rejected; another user's account cannot be used as sender; totals come from saved

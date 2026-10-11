@@ -364,6 +364,9 @@ func TestManualLedgerIntegration(t *testing.T) {
 	t.Run("POS confirmation API", func(t *testing.T) {
 		testConfirmationAPI(t, admin, db, client, cashier, other, businessID, otherBusiness, request)
 	})
+	t.Run("POS confirmation delivery", func(t *testing.T) {
+		testConfirmationDelivery(t, dsn, admin, cashier, businessID, cashierID, request)
+	})
 	status, object, _ = other.request("GET", "/api/businesses/"+otherBusiness+"/transactions/"+transactionID, nil, "")
 	expectStatus(t, 404, status, object)
 	status, object, _ = other.request("GET", "/api/businesses/"+otherBusiness+"/transactions/"+transactionID+"/history", nil, "")

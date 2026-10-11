@@ -376,6 +376,7 @@ func TestManualLedgerIntegration(t *testing.T) {
 	})
 	loginCashier()
 	t.Run("Passwordless and multi-device sessions", func(t *testing.T) { testPasswordless(t, dsn, admin, db, app, client, other, businessID) })
+	t.Run("Development signup through login", func(t *testing.T) { testDevelopmentSignup(t, dsn, admin, db, app, client, businessID) })
 	status, object, _ = other.request("GET", "/api/businesses/"+otherBusiness+"/transactions/"+transactionID, nil, "")
 	expectStatus(t, 404, status, object)
 	status, object, _ = other.request("GET", "/api/businesses/"+otherBusiness+"/transactions/"+transactionID+"/history", nil, "")

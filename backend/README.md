@@ -71,6 +71,7 @@ The root `.env` contains randomly generated local credentials:
 | `DATABASE_URL` | `ipo_platform_api` runtime role; no schema ownership, transaction deletion or truncation |
 | `MIGRATION_DATABASE_URL` | `ipo_platform_owner`, which owns the application schemas |
 | `WHATSAPP_DATABASE_URL` | Trusted pairing worker/viewer connection for WhatsApp migrations, sessions and verified account bindings |
+| `APP_ENV` | `development` enables signup through the existing WhatsApp login flow; absent/`production` requires provisioned staff |
 | `BOOTSTRAP_ADMIN_PASSWORD` | Initial app password, hashed with bcrypt when bootstrapped |
 
 PostgreSQL listens on localhost:5432; the application database is `ipo_platform`.
@@ -82,8 +83,8 @@ needs verified TLS and credentials supplied privately to the server.
 For a new database, apply `database/001_initial.sql`, `002_api.sql` and
 `003_whatsapp_accounts.sql`, `004_contact_names.sql` and
 `005_transaction_confirmations.sql`, `006_passwordless_sessions.sql`, then
-`007_whatsapp_number_checks.sql`, `008_signed_transaction_quantity.sql` and
-`009_signed_transaction_rate.sql` once,
+`007_whatsapp_number_checks.sql`, `008_signed_transaction_quantity.sql`,
+`009_signed_transaction_rate.sql` and `010_development_signup.sql` once,
 in that order, as its migration owner. The API
 does not execute migrations on startup. Apply only missing migrations to an
 existing database. For the local installation that already has migrations 001/002:
@@ -135,6 +136,12 @@ resolution of negative current or historical rates; never rewrite immutable hist
 Migration 007 rollback: revert/stop its callers before removing the table. Export
 stored checks if needed; dropping the table loses those observations only.
 
+After migration 009, apply `010_development_signup.sql` as the migration owner.
+It reserves temporary signup identities on login attempts without creating staff
+or business records. Existing runtime grants remain unchanged. Rollback requires
+stopping/reverting this API before removing its three signup columns; preserve
+users and businesses already created by approved development signups.
+
 Migration 006 rollback needs a database backup and a deliberate session transition,
 not only a Git revert. Stop/revert its callers, revoke the newly linked app sessions,
 then remove the added token/attempt tables, triggers, indexes and session/account
@@ -161,7 +168,18 @@ code yourself; the old SQLite login and existing viewer configuration are preser
 ## Authentication and permissions
 
 Passwordless login approves WhatsApp phone-number linking for a provisioned staff
-user. The first device obtains a linked access/refresh session; further devices
+user. With `APP_ENV=development`, the same start/status/exchange endpoints also
+sign up an unknown number after WhatsApp approval, with the same request/response
+bodies. Approval creates one user, one isolated INR development business and an
+admin membership atomically with the verified WhatsApp binding. The initial user
+name is their phone; the business name is `Development business PHONE`. No app
+password is created. Abandoned, expired or wrong-number attempts create neither
+staff nor businesses. Existing users retain their identities and memberships;
+disabled users/memberships and archived businesses cannot bypass restrictions
+through signup. Production/absent `APP_ENV` keeps
+provisioned-staff login only. See [the onboarding TODO](../docs/TODO.md).
+
+The first device obtains a linked access/refresh session; further devices
 redeem a one-use token displayed on a signed-in device. There is only one active
 WhatsApp link per user/number, enforced by database indexes and worker locks.
 Send `Authorization: Bearer TOKEN`; PostgreSQL stores hashes of credentials.
@@ -188,11 +206,11 @@ for WhatsApp-only authentication; it defaults to false.
 | View/create staff in their business | Yes | No |
 | View/create/edit/cancel transactions and view history | Yes | Yes |
 
-There is no public signup or client-supplied actor identity. Login attempts are
+There is no separate signup endpoint or client-supplied actor identity. Login attempts are
 limited to 10 per minute per source IP, with bounded process memory. The server
 does not trust forwarded-IP headers. Multi-instance deployment will need shared
 rate limits. Password reset, membership management/disable endpoints, MFA and
-public onboarding are subsequent work.
+production onboarding are subsequent work.
 
 ## API contract
 

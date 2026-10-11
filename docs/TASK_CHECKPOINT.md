@@ -8,6 +8,23 @@ None.
 
 ## Checkpoints
 
+### Batch 20 — Development signup and business-onboarding plan
+
+1. Deploy the signed-rate correction to the existing Render development API after Supabase migration 009.
+   - Verification: continued the user's authorized Supabase/Render update for the corrected rate contract. Pushed reviewed checkpoint `96a8ee2d5dae8c926cde0af91113fda5756447e9` and verified `origin/main`; Render deployment `dep-db5opgflk1mc73anttr0` built the exact commit and reached live. Startup passed the migration-009 guard and listened on `0.0.0.0:10000`. Public `/health` 200, unauthenticated `/api/me` 401, disabled password login 403 and all no-store headers passed; deployment-window error logs were empty. Reviewed deployment-document and ledger content/diffs.
+   - Paths: `docs/RENDER_DEPLOYMENT.md`, `docs/TASK_CHECKPOINT.md`. External changes: authorized Git push and redeploy of `srv-db5nundckfvc73arsvkg` in workspace `tea-csp7ifjgbbvc73etj3cg`; Supabase migration 009 is recorded in Batch 19. Credentials and generated executables remain excluded.
+   - Limits: no hosted staff/business is provisioned, so live authenticated negative-rate transaction requests and real WhatsApp sends remain unchecked; isolated API tests and hosted rollback-only schema checks passed. Local migrations 008/009 remain unapplied. Render Free can sleep and interrupt WhatsApp processing.
+
+2. Support signup through the existing WhatsApp login endpoints only in development mode.
+   - Verification: backend tests/vet and native deployment build passed; disposable hosted-setup/schema/API/session tests passed. Coverage includes explicit development/default-production configuration and overrides, approval-only account/business creation, private pairing proof, wrong-number/expired/production-worker rejection, concurrent single-use exchange, returning identity reuse, restricted-account/business isolation, forged field rejection, runtime grant restrictions, provisioning races and per-number limits. New schema assertions passed locally in disposable clusters and against Supabase in a rollback-only transaction. Applied migration 010 to Supabase and missing migrations 008/009/010 to the local database; preserved local records and verified zero hosted users/businesses. Both ignored configuration files now set APP_ENV=development. The compiled API started against Supabase with the restricted runtime role; health 200, unauthenticated me 401 and disabled password-login 403/no-store passed; stopped the temporary server. Reviewed source, configuration, documentation links/diffs, PowerShell syntax and whitespace.
+   - Paths: `.env.example`, `backend/README.md`, `backend/config.go`, `backend/config_test.go`, `backend/development_signup_test.go`, `backend/integration_test.go`, `backend/main.go`, `backend/passwordless.go`, `backend/requests.http`, `backend/whatsapp_service.go`, `database/010_development_signup.sql`, `database/schema_test.sql`, `database/Setup-Supabase.psql`, `database/Test-Schema.ps1`, `docs/POS_AND_CONTACTS_GUIDE.md`, `docs/SUPABASE_SETUP.md`, `docs/RENDER_DEPLOYMENT.md`, `render.yaml`, `scripts/Setup-LocalDatabase.ps1`, `docs/TASK_CHECKPOINT.md`. External changes: additive hosted/local migrations and ignored APP_ENV settings; no credentials or generated executables included.
+   - Limits: Render signup deployment and real WhatsApp approval remain pending; no Android/web frontend exists here. New approved numbers receive isolated INR development businesses and phone-based placeholder names, not master-admin privileges. Production/unset mode remains provisioned-only. Race instrumentation was not run; SQL changes require deliberate rollback rather than Git revert alone.
+
+3. Record the project owner's future master-admin business creation/authorisation workflow.
+   - Verification: reviewed TODO and project-vision content/diffs against the requested future ownership model and current development signup behavior; local Markdown links and whitespace checks passed. The TODO keeps the same WhatsApp start/status/exchange flow and preserves existing identities/history when replacing temporary development provisioning.
+   - Paths: `docs/TODO.md`, `docs/PROJECT_VISION.md`, `docs/TASK_CHECKPOINT.md`.
+   - Limits: platform master-admin privileges, authorised business provisioning and staff invitations remain future work; no such permissions were granted.
+
 ### Batch 19 — Signed transaction rates and contract correction
 
 1. Publish the signed transaction build and redeploy the existing Render development API against Supabase migration 008.

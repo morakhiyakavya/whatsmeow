@@ -9,13 +9,13 @@
 @customer = COPY_CUSTOMER_ID
 @transaction = COPY_TRANSACTION_ID
 @whatsapp_account = COPY_WHATSAPP_ACCOUNT_ID
-@whatsapp_login_phone = COPY_PROVISIONED_REAL_PHONE
+@whatsapp_login_phone = COPY_REAL_WHATSAPP_PHONE
 @attempt = COPY_PRIVATE_ATTEMPT_TOKEN
 @device_token = COPY_TOKEN_DISPLAYED_ON_ORIGINAL_DEVICE
 @refresh = COPY_CURRENT_REFRESH_TOKEN
 @session = COPY_OWN_SESSION_ID
 
-### Passwordless first-device login: use a provisioned actual WhatsApp phone
+### First-device login/signup: APP_ENV=development permits new numbers after approval
 POST {{base}}/api/auth/whatsapp/start
 Content-Type: application/json
 

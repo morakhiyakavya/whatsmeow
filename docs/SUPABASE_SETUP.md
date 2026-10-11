@@ -8,7 +8,7 @@ WhatsApp credentials are not copied by this setup.
 
 Project `tqfwoudoxundtrhogmwa` was installed and verified on 11 October 2026 using
 the Singapore session pooler on port `5432`. PostgreSQL reports version 17.11.
-All nine application migrations are installed: `ipo_pos` has 22 tables, and the
+All ten application migrations are installed: `ipo_pos` has 22 tables, and the
 backend initialized 17 WhatsApp credential tables at library schema version 16.
 No users, businesses or linked WhatsApp devices have been provisioned there yet.
 Do not rerun the fresh-install script for this project.
@@ -23,13 +23,17 @@ rates accept positive, negative and zero values, while NaN remains rejected.
 Hosted rollback-only checks passed for all quantity/rate sign combinations,
 rate edits, zero rates and immutable history. Buy/Sell still comes only from
 quantity, so a Sell can have a positive total and a Buy can have a negative total.
-No test records remain. The separate local database has not received migrations
-008 or 009.
+No test records remain. Migration 010 was applied on 11 October 2026 and its
+signup columns, identity constraints and restricted runtime permissions were
+verified with rollback-only schema assertions. No hosted users/businesses were
+created. The separate local database now has migrations 008, 009 and 010 too;
+its existing user and business were preserved. Both private configuration files
+use `APP_ENV=development`; this setting also needs to be applied in Render.
 
 Generated, separate role credentials are saved privately in the Git-ignored
 root `.env.supabase`, with file access restricted to your Windows account and
 SYSTEM. The verified root certificate is in `.env.supabase-ca.crt`. Your existing
-local `.env` and local database were preserved.
+local credentials and data were preserved.
 
 To run against this database locally, from the repository root:
 
@@ -101,7 +105,7 @@ At the `postgres=>` prompt, run:
 \i 'C:/Users/Admin/Documents/programming/whatsmeow/database/Setup-Supabase.psql'
 ```
 
-The [setup file](../database/Setup-Supabase.psql) installs our nine existing
+The [setup file](../database/Setup-Supabase.psql) installs our ten existing
 migrations and the [shared runtime grants](../database/api_grants.sql). It creates:
 
 | Role | Purpose |
@@ -172,8 +176,12 @@ Use each new role's password, not the project's admin password. Session-pooler
 custom-role usernames follow `ROLE.PROJECT_REF`:
 [Supabase connection strings](https://supabase.com/docs/guides/database/connecting-to-postgres).
 Keep `ALLOW_PASSWORD_LOGIN=false` for the passwordless application.
+Use `APP_ENV=development` only for the development service to let new numbers
+sign up through WhatsApp approval. Apply `010_development_signup.sql` after 009;
+no new runtime grants are required. Production/unset `APP_ENV` disables signup.
 
-After startup, verify `/health` and the account connection state. Bootstrap the
+After startup, verify `/health` and the account connection state. Development
+signup creates an isolated business/admin only after WhatsApp approval. Otherwise bootstrap the
 initial business/admin separately using the actual registered WhatsApp number;
 see [the API guide](../backend/README.md) and [mobile authentication](POS_AND_CONTACTS_GUIDE.md).
 The free database can pause after low activity; see
@@ -205,7 +213,7 @@ structure without sharing credential rows. You do not need to expose either
 schema in the Data API to inspect it in the dashboard.
 
 A migration is a versioned SQL file that changes the database structure or seed
-data. Our nine numbered files already ran on this project. The API does not apply
+data. Our ten numbered files already ran on this project. The API does not apply
 them on startup, and these files are not tracked by Supabase CLI's migration
 history. Do not run `supabase db push` expecting it to recognise this installation.
 

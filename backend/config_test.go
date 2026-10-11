@@ -25,6 +25,7 @@ func TestHostedConfiguration(t *testing.T) {
 			t.Setenv("PORT", test.port)
 			t.Setenv("API_ADDR", test.addr)
 			t.Setenv("ALLOW_PASSWORD_LOGIN", test.passwordLogin)
+			t.Setenv("APP_ENV", "production")
 			c, err := loadConfig(filepath.Join(t.TempDir(), "missing.env"))
 			if test.wantError != "" {
 				if err == nil || !strings.Contains(err.Error(), test.wantError) || strings.Contains(err.Error(), "private-test-secret") {
@@ -51,6 +52,56 @@ func TestHostedConfiguration(t *testing.T) {
 		}
 		if _, err := loadConfig(path); err == nil {
 			t.Fatal("environment settings bypassed file validation")
+		}
+	})
+}
+
+func TestDevelopmentSignupConfiguration(t *testing.T) {
+	for _, environment := range []string{"", "production", "development", "developing", "Development"} {
+		t.Run(environment, func(t *testing.T) {
+			t.Setenv("DATABASE_URL", "postgres://api:private-test-secret@localhost/postgres")
+			t.Setenv("APP_ENV", environment)
+			t.Setenv("ALLOW_PASSWORD_LOGIN", "false")
+			t.Setenv("API_ADDR", "127.0.0.1:8180")
+			c, err := loadConfig(filepath.Join(t.TempDir(), "missing.env"))
+			if environment == "developing" || environment == "Development" {
+				if err == nil || !strings.Contains(err.Error(), "APP_ENV") {
+					t.Fatal("invalid environment did not fail closed")
+				}
+				return
+			}
+			if err != nil || c.DevelopmentSignup != (environment == "development") || c.PasswordLogin {
+				t.Fatalf("incorrect signup/password gate: signup=%v password=%v err=%v", c.DevelopmentSignup, c.PasswordLogin, err)
+			}
+		})
+	}
+	t.Run("file setting and environment override", func(t *testing.T) {
+		t.Setenv("DATABASE_URL", "postgres://api:private-test-secret@localhost/postgres")
+		t.Setenv("ALLOW_PASSWORD_LOGIN", "false")
+		t.Setenv("API_ADDR", "127.0.0.1:8180")
+		previous, set := os.LookupEnv("APP_ENV")
+		if err := os.Unsetenv("APP_ENV"); err != nil {
+			t.Fatal(err)
+		}
+		t.Cleanup(func() {
+			if set {
+				_ = os.Setenv("APP_ENV", previous)
+			} else {
+				_ = os.Unsetenv("APP_ENV")
+			}
+		})
+		path := filepath.Join(t.TempDir(), ".env")
+		if err := os.WriteFile(path, []byte("APP_ENV=development\n"), 0600); err != nil {
+			t.Fatal(err)
+		}
+		c, err := loadConfig(path)
+		if err != nil || !c.DevelopmentSignup {
+			t.Fatal("file did not enable development signup")
+		}
+		t.Setenv("APP_ENV", "production")
+		c, err = loadConfig(path)
+		if err != nil || c.DevelopmentSignup {
+			t.Fatal("production environment did not override development file")
 		}
 	})
 }

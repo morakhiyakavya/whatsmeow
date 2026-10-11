@@ -168,13 +168,33 @@ func (a *api) startWhatsAppLogin(w http.ResponseWriter, r *http.Request) {
 			known = false
 		}
 	}
+	var signupUser, signupBusiness, signupAccount any
+	if !known && a.developmentSignup {
+		var available bool
+		err = tx.QueryRowContext(r.Context(), `SELECT NOT EXISTS(SELECT 1 FROM ipo_pos.users WHERE phone_number=$1)
+            AND NOT EXISTS(SELECT 1 FROM ipo_pos.login_attempts WHERE phone_number=$1 AND signup_account_id IS NOT NULL
+                AND expires_at>now() AND consumed_at IS NULL)`, input.Phone).Scan(&available)
+		if err != nil {
+			dbFailure(w, err)
+			return
+		}
+		if available {
+			if err = tx.QueryRowContext(r.Context(), `SELECT gen_random_uuid(),gen_random_uuid(),gen_random_uuid()`).Scan(&user.UserID, &user.BusinessID, &account); err != nil {
+				dbFailure(w, err)
+				return
+			}
+			signupUser, signupBusiness, signupAccount = user.UserID, user.BusinessID, account
+			known = true
+		}
+	}
 	var userArg, businessArg, accountArg any
-	if known {
+	if known && signupUser == nil {
 		userArg, businessArg, accountArg = user.UserID, user.BusinessID, account
 	}
 	var expiry time.Time
-	if err = tx.QueryRowContext(r.Context(), `INSERT INTO ipo_pos.login_attempts(token_hash,phone_number,user_id,business_id,whatsapp_account_id,device_name)
-        VALUES($1,$2,$3,$4,$5,$6) RETURNING expires_at`, hash, input.Phone, userArg, businessArg, accountArg, input.Name).Scan(&expiry); err != nil {
+	if err = tx.QueryRowContext(r.Context(), `INSERT INTO ipo_pos.login_attempts(token_hash,phone_number,user_id,business_id,whatsapp_account_id,device_name,
+        signup_user_id,signup_business_id,signup_account_id)
+        VALUES($1,$2,$3,$4,$5,$6,$7,$8,$9) RETURNING expires_at`, hash, input.Phone, userArg, businessArg, accountArg, input.Name, signupUser, signupBusiness, signupAccount).Scan(&expiry); err != nil {
 		dbFailure(w, err)
 		return
 	}
@@ -217,7 +237,7 @@ func (a *api) whatsAppLoginStatus(w http.ResponseWriter, r *http.Request) {
 	}
 	var business, account sql.NullString
 	var state string
-	err := a.db.QueryRowContext(r.Context(), `SELECT business_id,whatsapp_account_id,state FROM ipo_pos.login_attempts
+	err := a.db.QueryRowContext(r.Context(), `SELECT COALESCE(business_id,signup_business_id),COALESCE(whatsapp_account_id,signup_account_id),state FROM ipo_pos.login_attempts
         WHERE token_hash=$1 AND expires_at>now() AND consumed_at IS NULL`, hash).Scan(&business, &account, &state)
 	if errors.Is(err, sql.ErrNoRows) {
 		fail(w, 401, "invalid_token", "Token is invalid or expired")

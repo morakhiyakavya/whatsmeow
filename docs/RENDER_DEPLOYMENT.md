@@ -12,8 +12,8 @@ Deployed and verified on 11 October 2026 in `kavya's Workspace`:
 - API base URL: [whatsapp-pos-dev](https://whatsapp-pos-dev.onrender.com).
 - [Live health endpoint](https://whatsapp-pos-dev.onrender.com/health).
 - [Render dashboard](https://dashboard.render.com/web/srv-db5nundckfvc73arsvkg).
-- Deployed commit: `b6d5f2c6aa98a8ad826f06876aaec8ada68d283d` on `main`.
-- Deployment: `dep-db5og7navr4c739h4t90`; service: `srv-db5nundckfvc73arsvkg`.
+- Deployed commit: `96a8ee2d5dae8c926cde0af91113fda5756447e9` on `main`.
+- Deployment: `dep-db5opgflk1mc73anttr0`; service: `srv-db5nundckfvc73arsvkg`.
 - One Free instance in Singapore; automatic deployments disabled.
 
 Render reported the deployment live. Public HTTPS checks passed: `/health` returns
@@ -22,10 +22,11 @@ login returns 403. Responses carry `Cache-Control: no-store`. The server started
 on `0.0.0.0:10000` using the two private Supabase role connections and bundled CA.
 
 This deployment supports two-way transactions through signed quantity: positive
-means Buy, negative means Sell, and zero is rejected. Rate remains nonnegative;
-the generated total uses signed quantity. Confirmations use Transaction wording
-and derive Buy/Sell from quantity. Supabase migration 008 was installed and its
-rollback-only schema assertions passed before this deploy. Render built the exact
+means Buy, negative means Sell, and zero is rejected. Rate may be positive, negative
+or zero. The generated total is the rounded product of signed quantity and rate;
+its sign does not determine direction. Confirmations use Transaction wording
+and derive Buy/Sell only from quantity. Supabase migrations 008 and 009 were
+installed and rollback-only schema assertions passed before this deploy. Render built the exact
 pushed commit and reported it live; startup succeeded with the migration guard.
 Post-deploy health/authentication/no-store checks passed and no error-level logs
 were returned for the deployment window. No test staff or real messages were created.
@@ -35,6 +36,12 @@ uses Render's default TCP check. In its dashboard, open Settings → Health Chec
 Path and set `/health` to include database availability in platform health checks.
 The Blueprint already specifies this value for a Blueprint-created service.
 Initial business/admin provisioning and live WhatsApp pairing remain separate.
+
+Development signup rollout: Supabase migration 010 is installed and verified;
+the source and Blueprint now support `APP_ENV=development` through the same
+WhatsApp login endpoints. The live service above still runs the earlier build
+until the reviewed signup checkpoint is deployed and the environment setting is
+saved. Signup is not yet live on the deployed commit above.
 
 ## Service configuration
 
@@ -70,6 +77,7 @@ In Render's private Environment settings, set only:
 | `DATABASE_URL` | Restricted API URL from `.env.supabase`, with `sslrootcert=database/supabase-ca.crt` |
 | `WHATSAPP_DATABASE_URL` | Worker URL from `.env.supabase`, with the same certificate path |
 | `ALLOW_PASSWORD_LOGIN` | `false` |
+| `APP_ENV` | `development` for this dev service; production/unset disables automatic signup |
 
 Preserve `sslmode=verify-full`, the session-pooler host, port `5432` and each
 role's separate password. The bundled [certificate](../database/supabase-ca.crt)
@@ -97,7 +105,14 @@ An unauthenticated `GET /api/me` must return 401. With password login disabled,
 `POST /api/login` must return 403. These checks prove API/database connectivity and
 the authentication boundary, not a connected WhatsApp session.
 
-Provision the initial business and admin with the actual staff phone separately
+After applying migration 010 and deploying its API, new numbers can sign up through
+the existing `/api/auth/whatsapp/start`, `/status` and `/exchange` flow when
+`APP_ENV=development`. Request/response bodies are unchanged. Approved new numbers
+receive an isolated development business/admin; abandoned attempts create no staff
+or business records. Existing accounts retain their memberships and restrictions.
+The [master-admin business provisioning TODO](TODO.md) remains future work.
+
+For production/provisioned-only access, provision the initial business and admin with the actual staff phone separately
 using `-bootstrap` against `.env.supabase`; provide explicit business/admin names
 and a private bootstrap password as described in the [API guide](../backend/README.md).
 Do this locally because Render Free services have no interactive shell. Keep
@@ -118,7 +133,7 @@ always-running service plan. It is suitable for development and manual API tests
 
 ## Database changes and rollback
 
-All nine existing POS migrations are already applied in the current Supabase
+All ten existing POS migrations are already applied in the current Supabase
 project. Do not run them in the build command, the start command or every deploy.
 For subsequent changes, follow the
 [Supabase table and migration instructions](SUPABASE_SETUP.md#inspect-tables-and-apply-future-migrations).

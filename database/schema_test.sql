@@ -29,6 +29,7 @@ DECLARE
     other_customer uuid;
     offering uuid;
     account uuid;
+    signup_account uuid := gen_random_uuid();
     chat uuid;
     other_chat uuid;
     message uuid;
@@ -52,6 +53,16 @@ BEGIN
     PERFORM pg_temp.expect_failure(format('UPDATE customers SET referred_by_customer_id=id WHERE business_id=%L AND id=%L', shop, customer), '23514');
     INSERT INTO ipos(code,name) VALUES ('TEST-IPO','Synthetic IPO') RETURNING id INTO offering;
     INSERT INTO whatsapp_accounts(business_id,label,linked_by_user_id) VALUES (shop,'Test account',staff) RETURNING id INTO account;
+    INSERT INTO login_attempts(token_hash,phone_number,device_name,signup_user_id,signup_business_id,signup_account_id)
+        VALUES(decode(repeat('01',32),'hex'),'+919000000004','Signup fixture',gen_random_uuid(),gen_random_uuid(),signup_account);
+    PERFORM pg_temp.assert_true((SELECT state='pending' AND user_id IS NULL AND business_id IS NULL AND whatsapp_account_id IS NULL
+        FROM login_attempts WHERE signup_account_id=signup_account), 'pending signup reserves identities without provisioned records');
+    PERFORM pg_temp.expect_failure('INSERT INTO login_attempts(token_hash,phone_number,device_name,signup_user_id)
+        VALUES(decode(repeat(''02'',32),''hex''),''+919000000005'',''Incomplete signup'',gen_random_uuid())', '23514');
+    PERFORM pg_temp.expect_failure(format('UPDATE login_attempts SET state=''verified'',auth_generation=1,user_id=%L,business_id=%L,whatsapp_account_id=%L
+        WHERE signup_account_id=%L', staff,shop,account,signup_account), '23514');
+    PERFORM pg_temp.expect_failure(format('INSERT INTO login_attempts(token_hash,phone_number,device_name,signup_user_id,signup_business_id,signup_account_id)
+        VALUES(decode(repeat(''03'',32),''hex''),''+919000000005'',''Duplicate signup'',gen_random_uuid(),gen_random_uuid(),%L)',signup_account), '23505');
     INSERT INTO whatsapp_number_checks(business_id,phone_number,registered,whatsapp_account_id)
         VALUES (shop,'+919000000002',false,account);
     PERFORM pg_temp.assert_true((SELECT registered=false AND checked_at IS NOT NULL FROM whatsapp_number_checks

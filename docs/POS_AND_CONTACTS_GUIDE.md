@@ -70,8 +70,10 @@ being an admin does not grant the right to send through a colleague's account.
 
 ## 3. Staff setup before the first transaction
 
-1. An administrator creates the staff account. There is currently no public signup
-   or endpoint for adding an existing user to another business.
+1. In production, an administrator creates the staff account. With
+   `APP_ENV=development`, a new number can use the same WhatsApp login flow to
+   create its own isolated development business after approval. There is no
+   endpoint for adding an existing user to another business.
 2. Staff sign in by approving linking for their registered WhatsApp number, or
    receive a device token from an already signed-in POS device.
 3. The app reads their active businesses and asks them to select one if necessary.
@@ -120,10 +122,19 @@ coverage; a live passwordless login and mobile screens still need verification.
 
 #### First device: WhatsApp phone-number sign-in
 
-An administrator must first provision the staff user and active business membership.
-The staff creation API now accepts a name and phone without an app password. There
-is no public signup or automatic grant of business/admin access. The supplied login
-number must match the staff user's registered phone exactly. Existing placeholder
+In production (also the default when `APP_ENV` is absent), an administrator must
+first provision the staff user and active business membership. The staff creation
+API accepts a name and phone without an app password. With `APP_ENV=development`,
+the same endpoints and bodies below also sign up a new number: only after approved
+WhatsApp identity verification, the worker atomically creates the user, an isolated
+INR development business, its admin membership and the WhatsApp binding. Initial
+names are the phone number and `Development business PHONE`; no password is created.
+Unapproved or expired attempts create no user/business. Signup cannot join an
+existing business, reactivate a disabled user/membership or bypass an archived
+business. The future master-admin provisioning model is in [TODO.md](TODO.md).
+
+For existing users, the supplied login number must match their registered phone
+exactly. Existing placeholder
 login numbers need an explicit correction/migration before this login can be used;
 a previously paired different number does not silently change the app identity.
 
@@ -139,7 +150,7 @@ Content-Type: application/json
 HTTP 202 returns `attempt_token`, `state: "pending"` and `expires_at`. Keep this
 private credential on the requesting device. The attempt lasts three minutes and
 cannot be shared between callers. Only one active proof attempt owns a given account;
-unknown, already-linked and overlapping attempts return a generic pending shape
+unknown numbers in production, already-linked and overlapping attempts return a generic pending shape
 without account/user IDs or another caller's code. If no code becomes available,
 check staff provisioning or use the additional-device token flow below. This is
 not a promise that every accepted request starts a new WhatsApp pairing.

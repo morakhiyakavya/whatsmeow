@@ -16,6 +16,7 @@ import (
 type configuration struct {
 	DatabaseURL, Addr, BusinessName, AdminName, AdminPhone, AdminPassword, WhatsAppDatabaseURL string
 	PasswordLogin                                                                              bool
+	DevelopmentSignup                                                                          bool
 }
 
 func loadConfig(path string) (configuration, error) {
@@ -58,6 +59,11 @@ func loadConfig(path string) (configuration, error) {
 		return c, errors.New("ALLOW_PASSWORD_LOGIN must be true or false")
 	}
 	c.PasswordLogin = setting == "true"
+	environment := get("APP_ENV")
+	if environment != "" && environment != "production" && environment != "development" {
+		return c, errors.New("APP_ENV must be development or production")
+	}
+	c.DevelopmentSignup = environment == "development"
 	if c.DatabaseURL == "" {
 		return c, errors.New("DATABASE_URL is required")
 	}

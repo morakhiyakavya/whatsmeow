@@ -34,6 +34,7 @@ DATABASE_URL=postgresql://ipo_platform_api:$taskApiPassword@localhost:5432/ipo_p
 MIGRATION_DATABASE_URL=postgresql://ipo_platform_owner:$taskOwnerPassword@localhost:5432/ipo_platform?sslmode=disable
 WHATSAPP_DATABASE_URL=postgresql://ipo_platform_owner:$taskOwnerPassword@localhost:5432/ipo_platform?sslmode=disable
 API_ADDR=127.0.0.1:8180
+APP_ENV=development
 ALLOW_PASSWORD_LOGIN=true
 BOOTSTRAP_BUSINESS_NAME=Local IPO Business
 BOOTSTRAP_ADMIN_NAME=Local Administrator
@@ -49,7 +50,7 @@ $taskAcl.SetOwner($taskIdentity)
 $taskAcl.AddAccessRule([Security.AccessControl.FileSystemAccessRule]::new($taskIdentity, 'FullControl', 'Allow'))
 $taskAcl.AddAccessRule([Security.AccessControl.FileSystemAccessRule]::new([Security.Principal.SecurityIdentifier]::new('S-1-5-18'), 'FullControl', 'Allow'))
 Set-Acl -LiteralPath $taskEnvPath -AclObject $taskAcl
-foreach ($taskMigration in @('001_initial.sql', '002_api.sql', '003_whatsapp_accounts.sql', '004_contact_names.sql', '005_transaction_confirmations.sql', '006_passwordless_sessions.sql', '007_whatsapp_number_checks.sql', '008_signed_transaction_quantity.sql', '009_signed_transaction_rate.sql')) {
+foreach ($taskMigration in @('001_initial.sql', '002_api.sql', '003_whatsapp_accounts.sql', '004_contact_names.sql', '005_transaction_confirmations.sql', '006_passwordless_sessions.sql', '007_whatsapp_number_checks.sql', '008_signed_transaction_quantity.sql', '009_signed_transaction_rate.sql', '010_development_signup.sql')) {
     $taskSql = Get-Content -Raw -LiteralPath (Join-Path $taskRoot "database/$taskMigration")
     Invoke-LocalSql 'ipo_platform' ("SET ROLE ipo_platform_owner;`n" + $taskSql)
 }

@@ -64,14 +64,15 @@ func (c *accountConnection) update(state, code string, expires time.Time) {
 }
 
 type whatsAppService struct {
-	mu        sync.Mutex
-	ctx       context.Context
-	cancel    context.CancelFunc
-	wg        sync.WaitGroup
-	db        *sql.DB
-	store     *sqlstore.Container
-	accounts  map[string]*accountConnection
-	newClient func(*store.Device) pairingClient
+	mu                sync.Mutex
+	ctx               context.Context
+	cancel            context.CancelFunc
+	wg                sync.WaitGroup
+	db                *sql.DB
+	store             *sqlstore.Container
+	accounts          map[string]*accountConnection
+	newClient         func(*store.Device) pairingClient
+	developmentSignup bool
 }
 
 func openWhatsAppService(ctx context.Context, dsn string) (*whatsAppService, error) {
@@ -208,6 +209,11 @@ const activeWhatsAppAccount = `SELECT wa.device_jid FROM ipo_pos.whatsapp_accoun
     AND m.disabled_at IS NULL AND u.disabled_at IS NULL AND b.archived_at IS NULL
     AND (wa.device_jid IS NULL OR wa.unlinked_at IS NULL)`
 
+const pendingSignupAccount = `SELECT NULL::text FROM ipo_pos.login_attempts a
+    WHERE a.signup_business_id=$1 AND a.signup_account_id=$2 AND a.signup_user_id=$3 AND a.token_hash=$4
+    AND a.state='pending' AND a.expires_at>now() AND a.consumed_at IS NULL
+    AND NOT EXISTS (SELECT 1 FROM ipo_pos.users WHERE phone_number=a.phone_number)`
+
 func (s *whatsAppService) run(user actor, id string, c *accountConnection) string {
 	ctx, cancel := context.WithCancel(s.ctx)
 	defer cancel()
@@ -238,7 +244,13 @@ func (s *whatsAppService) run(user actor, id string, c *accountConnection) strin
 		return "already_paired"
 	}
 	var saved sql.NullString
-	if err = conn.QueryRowContext(ctx, activeWhatsAppAccount, user.BusinessID, id, user.UserID).Scan(&saved); err != nil {
+	accountQuery := activeWhatsAppAccount
+	accountArgs := []any{user.BusinessID, id, user.UserID}
+	if s.developmentSignup && len(c.proof) > 0 {
+		accountQuery += " UNION ALL " + pendingSignupAccount
+		accountArgs = append(accountArgs, c.proof)
+	}
+	if err = conn.QueryRowContext(ctx, accountQuery, accountArgs...).Scan(&saved); err != nil {
 		return "account_unavailable"
 	}
 	if err = recoverConfirmations(ctx, conn, user.BusinessID, id); err != nil {
@@ -350,7 +362,7 @@ func (s *whatsAppService) run(user actor, id string, c *accountConnection) strin
 		case <-checks.C:
 			checkCtx, stop := context.WithTimeout(ctx, 5*time.Second)
 			var current sql.NullString
-			err = conn.QueryRowContext(checkCtx, activeWhatsAppAccount, user.BusinessID, id, user.UserID).Scan(&current)
+			err = conn.QueryRowContext(checkCtx, accountQuery, accountArgs...).Scan(&current)
 			stop()
 			if err != nil || current != saved {
 				return "account_unavailable"
@@ -442,11 +454,31 @@ func (s *whatsAppService) bind(ctx context.Context, user actor, id, jid, phone s
 	}
 	defer tx.Rollback()
 	if len(proof) > 0 {
-		var valid bool
-		err = tx.QueryRowContext(ctx, `SELECT true FROM ipo_pos.login_attempts WHERE token_hash=$1 AND user_id=$2
-		AND whatsapp_account_id=$3 AND phone_number=$4 AND state='pending' AND expires_at>now() AND consumed_at IS NULL FOR UPDATE`, proof, user.UserID, id, phone).Scan(&valid)
+		if _, err = tx.ExecContext(ctx, `SELECT pg_advisory_xact_lock(hashtextextended($1,0))`, "ipo-login/"+phone); err != nil {
+			return err
+		}
+		var signup bool
+		err = tx.QueryRowContext(ctx, `SELECT signup_account_id IS NOT NULL FROM ipo_pos.login_attempts WHERE token_hash=$1
+		AND ((user_id=$2 AND whatsapp_account_id=$3 AND business_id=$6)
+            OR ($5 AND signup_user_id=$2 AND signup_account_id=$3 AND signup_business_id=$6))
+		AND phone_number=$4 AND state='pending' AND expires_at>now() AND consumed_at IS NULL FOR UPDATE`, proof, user.UserID, id, phone, s.developmentSignup, user.BusinessID).Scan(&signup)
 		if err != nil {
 			return err
+		}
+		if signup {
+			// shortcut: phone-based names and an isolated dev business; replace with master-admin provisioning before production onboarding.
+			if _, err = tx.ExecContext(ctx, `INSERT INTO ipo_pos.users(id,name,phone_number) VALUES($1,$2,$2)`, user.UserID, phone); err != nil {
+				return err
+			}
+			if _, err = tx.ExecContext(ctx, `INSERT INTO ipo_pos.businesses(id,name) VALUES($1,$2)`, user.BusinessID, "Development business "+phone); err != nil {
+				return err
+			}
+			if _, err = tx.ExecContext(ctx, `INSERT INTO ipo_pos.business_memberships(business_id,user_id,role) VALUES($1,$2,'admin')`, user.BusinessID, user.UserID); err != nil {
+				return err
+			}
+			if _, err = tx.ExecContext(ctx, `INSERT INTO ipo_pos.whatsapp_accounts(business_id,id,label,linked_by_user_id) VALUES($1,$2,'POS login',$3)`, user.BusinessID, id, user.UserID); err != nil {
+				return err
+			}
 		}
 	}
 	result, err := tx.ExecContext(ctx, `UPDATE ipo_pos.whatsapp_accounts wa
@@ -466,7 +498,8 @@ func (s *whatsAppService) bind(ctx context.Context, user actor, id, jid, phone s
 		return err
 	}
 	if len(proof) > 0 {
-		_, err = tx.ExecContext(ctx, `UPDATE ipo_pos.login_attempts a SET state='verified',auth_generation=wa.auth_generation
+		_, err = tx.ExecContext(ctx, `UPDATE ipo_pos.login_attempts a SET state='verified',auth_generation=wa.auth_generation,
+            user_id=wa.linked_by_user_id,business_id=wa.business_id,whatsapp_account_id=wa.id
 		FROM ipo_pos.whatsapp_accounts wa WHERE a.token_hash=$1 AND wa.business_id=$2 AND wa.id=$3`, proof, user.BusinessID, id)
 		if err != nil {
 			return err

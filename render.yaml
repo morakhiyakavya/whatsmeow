@@ -10,6 +10,8 @@ services:
     startCommand: ./backend/ipo-api
     healthCheckPath: /health
     envVars:
+      - key: APP_ENV
+        value: development
       - key: DATABASE_URL
         sync: false
       - key: WHATSAPP_DATABASE_URL

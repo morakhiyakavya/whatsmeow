@@ -145,8 +145,13 @@ The platform supports businesses with multiple staff rather than only one indepe
 Staff records include a name and contact number. The initial roles are **admin** and **cashier**, assigned within each business. The manual API now implements a baseline permission matrix: both roles can create/view customers and create/view/edit/cancel transactions; admins also create/view staff and create IPO catalogue entries. Further permissions remain open as workflows expand.
 
 Passwordless first-device login now approves WhatsApp phone-number linking for a
-provisioned staff user. Several POS devices share that user's one backend WhatsApp
-connection, with separate renewable sessions. The original signed-in device can
+provisioned staff user. In `APP_ENV=development`, new numbers can sign up through
+those same login endpoints after WhatsApp approval, receiving an isolated development
+business and its admin membership. Production requires provisioned staff. The
+project owner will become master admin and create/authorise businesses as the
+platform scales; this is tracked in [TODO.md](TODO.md). Several POS devices share
+that user's one backend WhatsApp connection, with separate renewable sessions.
+The original signed-in device can
 display a two-minute, one-use token for another device; no second WhatsApp pairing
 is performed. Removal from WhatsApp's Linked devices invalidates the user's POS
 sessions when detected, preserving users and history. Device-only logout, all-POS
@@ -240,7 +245,7 @@ Implemented and tested:
 Still to implement or connect:
 
 - Remote deployment configuration. Local PostgreSQL-backed WhatsApp pairing and saved-session restoration are configured and verified.
-- Password reset, public account onboarding, staff membership management, and expansion of the baseline admin/cashier permissions.
+- Password reset, master-admin-controlled production business onboarding, staff membership management, and expansion of the baseline admin/cashier permissions; see [TODO.md](TODO.md).
 - Web/mobile pairing screens on the implemented QR/phone API and deployment hardening of the trusted worker credentials/capacity.
 - Persistent WhatsApp ingestion into the application message archive; the manual business APIs are implemented.
 - Live validation of the implemented manual-transaction WhatsApp confirmation flow and a reviewed retry workflow for uncertain/failed sends.
@@ -329,6 +334,7 @@ Inventory, payment settlement, and media processing are not part of the agreed i
 - Phone-number registration result migration: `database/007_whatsapp_number_checks.sql`
 - Signed Buy/Sell quantity migration: `database/008_signed_transaction_quantity.sql`
 - Signed transaction rate migration: `database/009_signed_transaction_rate.sql`
+- Development signup migration: `database/010_development_signup.sql`
 - Local database creation: `scripts/Setup-LocalDatabase.ps1`
 - API startup and smoke check: `scripts/Start-Api.ps1`, `scripts/Smoke-Api.ps1`
 - Local pairing helper and offline self-check: `scripts/Pair-WhatsApp.ps1`, `scripts/Test-PairWhatsApp.ps1`

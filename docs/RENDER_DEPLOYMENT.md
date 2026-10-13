@@ -7,19 +7,28 @@ business/admin or copy local WhatsApp sessions.
 
 ## Current deployment
 
-Deployed and verified on 11 October 2026 in `kavya's Workspace`:
+Deployed and verified on 14 October 2026 in `kavya's Workspace`:
 
 - API base URL: [whatsapp-pos-dev](https://whatsapp-pos-dev.onrender.com).
 - [Live health endpoint](https://whatsapp-pos-dev.onrender.com/health).
 - [Render dashboard](https://dashboard.render.com/web/srv-db5nundckfvc73arsvkg).
-- Deployed commit: `2c87f0a23acffd2ad6f8acb46545a6a3c483c895` on `main`.
-- Deployment: `dep-db5qem5ckfvc73b3kqp0`; service: `srv-db5nundckfvc73arsvkg`.
+- Deployed commit: `7005f559c229d750afc642c7d1ed3e4d9362f67c` on `main`.
+- Deployment: `dep-db78botg1s2s739gfe90`; service: `srv-db5nundckfvc73arsvkg`.
 - One Free instance in Singapore; automatic deployments disabled.
 
 Render reported the deployment live. Public HTTPS checks passed: `/health` returns
 200 with `{"status":"ok"}`, unauthenticated `/api/me` returns 401, and password
 login returns 403. Responses carry `Cache-Control: no-store`. The server started
 on `0.0.0.0:10000` using the two private Supabase role connections and bundled CA.
+
+The approved Sentry deployment also publishes the existing contact search/profile
+commits and the read-only database health query. Only `SENTRY_DSN` and
+`SENTRY_ENVIRONMENT=development` were merged into Render's environment; the update
+triggered the exact pushed commit, so no duplicate deployment was requested.
+Sentry confirmed the hosted `IPO API started` log and HTTP traces tagged with that
+release. The active uptime monitor subsequently returned HTTP 200. The temporary
+verification route is absent (404/no-store), and deployment-window error logs were
+empty. Real WhatsApp profile retrieval, signup and customer delivery remain unchecked.
 
 This deployment supports two-way transactions through signed quantity: positive
 means Buy, negative means Sell, and zero is rejected. Rate may be positive, negative
@@ -84,8 +93,8 @@ In Render's private Environment settings, set only:
 | `SENTRY_DSN` | DSN for `vanitilabs/whatsapp-pos-api`, supplied privately |
 | `SENTRY_ENVIRONMENT` | `development` for this service |
 
-Sentry instrumentation is prepared locally and must be deployed before Render
-sends application errors, traces and logs. The runtime uses `RENDER_GIT_COMMIT` as
+Sentry instrumentation is deployed and hosted logs/traces are verified in
+`vanitilabs/whatsapp-pos-api`. The runtime uses `RENDER_GIT_COMMIT` as
 the Sentry release unless `SENTRY_RELEASE` is explicitly set. Development captures
 100% of HTTP traces; production captures 10%. Request data and error values are
 excluded from telemetry while stack traces remain available. See the
@@ -112,8 +121,8 @@ when the tool cannot specify that field.
 
 ## Verify the deployed service
 
-The local health handler executes a read-only `SELECT 1` with a one-second timeout
-through the API's database connection. Once deployed, external `/health` requests
+The deployed health handler executes a read-only `SELECT 1` with a one-second timeout
+through the API's database connection. External `/health` requests
 generate database queries without reading customer data or changing records.
 A monitor can request it every five minutes to prevent Render's idle shutdown;
 this also generates activity for Supabase, but neither provider guarantees

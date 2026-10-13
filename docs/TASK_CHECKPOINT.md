@@ -8,6 +8,15 @@ None.
 
 ## Checkpoints
 
+### Batch 24 — Deploy Sentry monitoring to Render
+
+Checkpointed below the three-task threshold under the user's standing instruction to commit each completed request.
+
+1. Publish the approved backend commits and deploy Sentry instrumentation on the existing Render development service.
+   - Verification: the user explicitly approved pushing/deploying through `7005f559c229d750afc642c7d1ed3e4d9362f67c`, including the existing health/contact commits. Verified the clean checkout, remote ancestry and exact remote main SHA after pushing. Confirmed the existing Free Singapore service/workspace/repository and merged only SENTRY_DSN and SENTRY_ENVIRONMENT=development; the environment update triggered deployment `dep-db78botg1s2s739gfe90` of the approved commit, without a duplicate deploy. Render built successfully and reached live, listening on 0.0.0.0:10000. Hosted health 200, unauthenticated me 401, disabled password-login 403 and removed verification-route 404 all passed with no-store headers; deployment-window error logs were empty. Authenticated Sentry MCP confirmed the hosted startup log and API/login HTTP traces tagged with the exact deployed release. Uptime monitor `10630540` reported a successful scheduled HTTP 200 after deployment. Completed Sentry onboarding progress and reviewed deployment-guide/ledger content, local links and diffs.
+   - Paths: `docs/RENDER_DEPLOYMENT.md`, `docs/TASK_CHECKPOINT.md`. External changes: authorised Git push and merged environment update/deployment on `srv-db5nundckfvc73arsvkg` in `tea-csp7ifjgbbvc73etj3cg`. Application changes are in Batches 21–23. Existing private database/WhatsApp settings were preserved; no migration, account provisioning or real WhatsApp send performed.
+   - Limits: no deliberate hosted panic or database outage was induced; deployed error capture retains the tested SDK/middleware and local end-to-end verification from Batch 23. Hosted authenticated contact/profile/signup requests, live WhatsApp delivery, frontend replay and full log forwarding remain unchecked/unimplemented. Free-plan availability remains subject to provider limits. This local documentation checkpoint is newer than the deployed application commit.
+
 ### Batch 23 — Sentry monitoring setup
 
 Checkpointed below the three-task threshold under the user's standing instruction to commit each completed request.

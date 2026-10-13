@@ -26,6 +26,22 @@ type fakePairingClient struct {
 	phone       chan string
 	sender      confirmationSender
 	numberCheck func(context.Context, []string) ([]types.IsOnWhatsAppResponse, error)
+	userInfo    func(context.Context, []types.JID) (map[types.JID]types.UserInfo, error)
+	pictureInfo func(context.Context, types.JID, *whatsmeow.GetProfilePictureParams) (*types.ProfilePictureInfo, error)
+}
+
+func (f *fakePairingClient) GetUserInfo(ctx context.Context, jids []types.JID) (map[types.JID]types.UserInfo, error) {
+	if f.userInfo != nil {
+		return f.userInfo(ctx, jids)
+	}
+	return nil, errors.New("unexpected profile lookup in pairing-only fixture")
+}
+
+func (f *fakePairingClient) GetProfilePictureInfo(ctx context.Context, jid types.JID, params *whatsmeow.GetProfilePictureParams) (*types.ProfilePictureInfo, error) {
+	if f.pictureInfo != nil {
+		return f.pictureInfo(ctx, jid, params)
+	}
+	return nil, errors.New("unexpected picture lookup in pairing-only fixture")
 }
 
 func (f *fakePairingClient) IsOnWhatsApp(ctx context.Context, phones []string) ([]types.IsOnWhatsAppResponse, error) {
@@ -129,9 +145,11 @@ func testWhatsAppPairing(t *testing.T, dsn string, db *sql.DB, app *api, admin, 
 	path := base + "/" + id
 	status, object, _ = cashier.request("POST", path+"/check-number", map[string]string{"phone_number": "+919000001010"}, "")
 	expectStatus(t, 409, status, object)
-	for _, suffix := range []string{"/connection", "/qr", "/pair", "/connect", "/check-number"} {
+	status, object, _ = cashier.request("POST", path+"/contact-profile", map[string]string{"phone_number": "+919000001010"}, "")
+	expectStatus(t, 409, status, object)
+	for _, suffix := range []string{"/connection", "/qr", "/pair", "/connect", "/check-number", "/contact-profile"} {
 		method := "GET"
-		if suffix == "/pair" || suffix == "/connect" || suffix == "/check-number" {
+		if suffix == "/pair" || suffix == "/connect" || suffix == "/check-number" || suffix == "/contact-profile" {
 			method = "POST"
 		}
 		status, object, _ = admin.request(method, path+suffix, map[string]string{}, "")
@@ -206,6 +224,7 @@ func testWhatsAppPairing(t *testing.T, dsn string, db *sql.DB, app *api, admin, 
 	fake.handler(&events.ManualLoginReconnect{})
 	awaitConnection(t, s, businessID, id, "connected")
 	testWhatsAppNumbers(t, db, cashier, other, s, fake, upperPath)
+	testWhatsAppProfiles(t, cashier, other, s, fake, upperPath)
 	status, object, _ = cashier.request("GET", path, nil, "")
 	expectStatus(t, 200, status, object)
 	if field(t, object, "pairing_state") != "paired" || field(t, object, "phone_number") != "+999000000011" || field(t, object, "id") != id {

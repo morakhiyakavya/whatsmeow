@@ -8,6 +8,15 @@ None.
 
 ## Checkpoints
 
+### Batch 22 — Contact WhatsApp profiles
+
+Checkpointed below the three-task threshold under the user's standing instruction to commit each completed request.
+
+1. Expose an owner-only contact WhatsApp profile lookup through the existing connected account worker.
+   - Verification: backend `go test ./...` and `go vet ./...` passed; disposable `database/Test-Schema.ps1 -WithApiTests` passed, including the final uncached-response assertion. Checks cover phone/unknown-field validation, unauthenticated/admin/other-business rejection, unpaired/disconnected accounts, UUID case, worker-side disabled-membership revalidation, phone/LID synced-name priority and business fallback, nullable About/name, available/hidden/unset pictures, incomplete/upstream/storage failures, error redaction, deadlines while queued/in flight, stopped-worker release and recovery after cancellation. Reviewed source, HTTP examples, documentation content/diffs and whitespace; parsed the documented JSON response. No migration, dependency, customer message or live account query added.
+   - Paths: `backend/whatsapp_profiles.go`, `backend/whatsapp_profiles_test.go`, `backend/whatsapp_service.go`, `backend/whatsapp_service_test.go`, `backend/main.go`, `backend/README.md`, `backend/requests.http`, `docs/PROJECT_VISION.md`, `docs/TASK_CHECKPOINT.md`.
+   - Limits: local implementation only; live WhatsApp retrieval, frontend profile screen, deployment, load testing and race instrumentation remain unchecked/unimplemented. Names rely on this account's synced data and may be stale; photo URLs can expire and privacy can restrict fields. One number per request, serialized in the account worker with an eight-second budget; no bulk lookup, dedicated limiter or photo archive. Concurrent Sentry/configuration/module changes remain outside this task.
+
 ### Batch 21 — Hosted signup status, contact search and database health queries
 
 1. Publish and deploy development signup through the existing WhatsApp login flow on Render.

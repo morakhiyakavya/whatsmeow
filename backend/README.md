@@ -236,6 +236,7 @@ IDs from `/api/me`. Supplying another business ID never confers access.
 | POST | `/whatsapp-accounts/{id}/pair` | Start QR or phone-code pairing (registering user) |
 | POST | `/whatsapp-accounts/{id}/connect` | Reconnect the mapped saved session (registering user) |
 | POST | `/whatsapp-accounts/{id}/check-number` | Check one number through the registering user's connected account |
+| POST | `/whatsapp-accounts/{id}/contact-profile` | Read one contact's available WhatsApp profile through the registering user's connected account |
 | GET | `/whatsapp-accounts/{id}/connection` | Connection state and current code (registering user) |
 | GET | `/whatsapp-accounts/{id}/qr` | Current QR as an uncached PNG (registering user) |
 | POST | `/whatsapp-accounts/{id}/disconnect` | Owner-only local revocation and best-effort remote unlink |
@@ -366,6 +367,48 @@ including time waiting for that worker. Request cancellation and service shutdow
 cancel the lookup. Use this endpoint for individual checks; bulk contact scanning
 and a dedicated lookup rate limiter are not implemented. Apply migration 007 and
 its SELECT grant before starting this version of the API.
+
+## WhatsApp contact profiles
+
+POST `/api/businesses/{businessID}/whatsapp-accounts/{id}/contact-profile` with
+the account owner's bearer token and `{"phone_number":"+919876543210"}`.
+The account must be paired and connected. The same owner-only and active-business
+checks as number lookup apply, including to admins. Numbers use the existing
+international-format validation; unknown JSON fields are rejected.
+
+```json
+{
+  "phone_number": "+919876543210",
+  "name": "Contact's WhatsApp name",
+  "about": "Available",
+  "picture_url": "https://example.com/photo.jpg",
+  "picture_state": "available"
+}
+```
+
+`name` comes from this account's synced WhatsApp push name (phone or privacy LID),
+falling back to a synced business name; it is `null` when unavailable. It may be
+stale and is not the caller's uploaded address-book alias or identity verification.
+`about` is the available WhatsApp About text, or `null` when empty/hidden/unavailable;
+the library cannot distinguish those cases. Photo privacy is respected:
+`picture_state` is `available`, `hidden`, or `not_set`, with a `null` URL in the
+last two cases. A hidden photo still returns 200 with other available details.
+Photo URLs can expire; fetch the profile again when needed. The frontend should
+display returned text as text, not HTML, and use a placeholder for missing photos.
+
+Invalid requests return 400; unpaired/disconnected accounts return 409; disabled
+WhatsApp configuration returns 503; upstream/storage errors or incomplete responses
+return 502; cancellation/deadline expiry returns 504. Failed requests return no
+partial profile or upstream error details. Missing user info does not establish
+whether the number is registered; use `/check-number` for registration checks.
+
+Lookups run serially in the existing account worker with an eight-second budget,
+including waiting; service shutdown cancels them. Responses are `no-store`.
+No message is sent, business contact/customer records and registration checks are
+not updated, and photos are not downloaded or archived on the server. The library
+may update its existing synced business names/LID mappings. No schema migration or
+dependency is needed. Bulk lookup, a dedicated rate limiter and a profile screen
+remain unimplemented; fetch a selected contact's profile on demand.
 
 ## Authenticated pairing and reconnecting
 

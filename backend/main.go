@@ -146,6 +146,7 @@ func (a *api) routes() http.Handler {
 	mux.HandleFunc("POST /api/businesses/{businessID}/whatsapp-accounts/{id}/pair", a.protect(false, a.pairWhatsAppAccount))
 	mux.HandleFunc("POST /api/businesses/{businessID}/whatsapp-accounts/{id}/connect", a.protect(false, a.connectWhatsAppAccount))
 	mux.HandleFunc("POST /api/businesses/{businessID}/whatsapp-accounts/{id}/check-number", a.protect(false, a.checkWhatsAppNumber))
+	mux.HandleFunc("POST /api/businesses/{businessID}/whatsapp-accounts/{id}/contact-profile", a.protect(false, a.whatsAppContactProfile))
 	mux.HandleFunc("GET /api/businesses/{businessID}/whatsapp-accounts/{id}/connection", a.protect(false, a.whatsAppConnection))
 	mux.HandleFunc("GET /api/businesses/{businessID}/whatsapp-accounts/{id}/qr", a.protect(false, a.whatsAppQR))
 	mux.HandleFunc("GET /api/businesses/{businessID}/transactions", a.protect(false, a.listTransactions))

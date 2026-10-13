@@ -28,6 +28,8 @@ type pairingClient interface {
 	PairPhone(context.Context, string, bool, whatsmeow.PairClientType, string) (string, error)
 	Logout(context.Context) error
 	IsOnWhatsApp(context.Context, []string) ([]types.IsOnWhatsAppResponse, error)
+	GetUserInfo(context.Context, []types.JID) (map[types.JID]types.UserInfo, error)
+	GetProfilePictureInfo(context.Context, types.JID, *whatsmeow.GetProfilePictureParams) (*types.ProfilePictureInfo, error)
 }
 
 type connectionState struct {
@@ -45,6 +47,7 @@ type accountConnection struct {
 	proof        []byte
 	logout       chan chan error
 	numberChecks chan numberCheck
+	profiles     chan profileRequest
 }
 
 func (c *accountConnection) state() connectionState {
@@ -160,7 +163,7 @@ func (s *whatsAppService) start(user actor, id, method, phone string, proof ...[
 	if active >= 32 {
 		return nil, errors.New("connection_capacity")
 	}
-	c := &accountConnection{connectionState: connectionState{State: "connecting", Method: method}, phone: phone, done: make(chan struct{}), proof: loginProof, logout: make(chan chan error), numberChecks: make(chan numberCheck)}
+	c := &accountConnection{connectionState: connectionState{State: "connecting", Method: method}, phone: phone, done: make(chan struct{}), proof: loginProof, logout: make(chan chan error), numberChecks: make(chan numberCheck), profiles: make(chan profileRequest)}
 	s.accounts[key] = c
 	s.wg.Add(1)
 	go func() {
@@ -314,6 +317,20 @@ func (s *whatsAppService) run(user actor, id string, c *accountConnection) strin
 	defer deliveries.Stop()
 	for {
 		select {
+		case request := <-c.profiles:
+			profileCtx, stop := context.WithCancel(request.ctx)
+			stopOnShutdown := context.AfterFunc(ctx, stop)
+			var current sql.NullString
+			err = conn.QueryRowContext(profileCtx, activeWhatsAppAccount, user.BusinessID, id, user.UserID).Scan(&current)
+			result := profileResult{err: err}
+			if errors.Is(err, sql.ErrNoRows) || (err == nil && (current != saved || !saved.Valid || c.state().State != "connected")) {
+				result.err = errProfileUnavailable
+			} else if err == nil {
+				result.profile, result.err = lookupContactProfile(profileCtx, client, device.Contacts, request.phone)
+			}
+			stopOnShutdown()
+			stop()
+			request.result <- result
 		case request := <-c.numberChecks:
 			checkCtx, stop := context.WithCancel(request.ctx)
 			stopOnShutdown := context.AfterFunc(ctx, stop)

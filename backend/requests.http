@@ -140,6 +140,13 @@ Content-Type: application/json
 
 {"phone_number":"+919000001010"}
 
+### Read a contact's available name, About and photo through my connected account
+POST {{base}}/api/businesses/{{business}}/whatsapp-accounts/{{whatsapp_account}}/contact-profile
+Authorization: Bearer {{token}}
+Content-Type: application/json
+
+{"phone_number":"+919000001010"}
+
 ### Upload selected mobile contact names (supplier comes from your token)
 POST {{base}}/api/businesses/{{business}}/contacts
 Authorization: Bearer {{token}}

@@ -28,7 +28,8 @@ signup columns, identity constraints and restricted runtime permissions were
 verified with rollback-only schema assertions. No hosted users/businesses were
 created. The separate local database now has migrations 008, 009 and 010 too;
 its existing user and business were preserved. Both private configuration files
-use `APP_ENV=development`; this setting also needs to be applied in Render.
+use `APP_ENV=development`; Render now uses the same setting on its deployed
+signup build. Real WhatsApp signup approval remains unchecked.
 
 Generated, separate role credentials are saved privately in the Git-ignored
 root `.env.supabase`, with file access restricted to your Windows account and

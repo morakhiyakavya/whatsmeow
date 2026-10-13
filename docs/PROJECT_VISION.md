@@ -134,8 +134,11 @@ Staff may share selected mobile contacts with their business after granting phon
 contacts permission. Match by international phone number within that business and
 preserve each staff member's supplied name separately, with supplier ID, source and
 server timestamps. This lets a colleague resolve a number they have not saved.
-The POS customer name takes precedence over imported suggestions; different names
-or customers sharing a number must not be silently merged. Staff may withdraw
+Contact dropdowns display the requesting staff member's uploaded name first, or
+the latest colleague contribution when they have none. They search displayed names
+and numbers as staff type. The POS customer name takes precedence over imported
+customer suggestions; different names or customers sharing a number must not be
+silently merged. Staff may withdraw
 their own contributions. Permission collection remains the mobile app's responsibility.
 
 ## Businesses, staff, and account access

@@ -3,7 +3,15 @@ package main
 import (
 	"net/http"
 	"strings"
+	"unicode/utf8"
 )
+
+const contactDisplayNames = `SELECT DISTINCT ON (n.phone_number)
+    n.phone_number,n.name,n.source,n.supplied_by_user_id,u.name AS supplied_by_name,
+    (n.supplied_by_user_id=$3::uuid) AS is_own
+    FROM ipo_pos.contact_names n JOIN ipo_pos.users u ON u.id=n.supplied_by_user_id
+    WHERE n.business_id=$1 AND ($2::text IS NULL OR n.phone_number=$2)
+    ORDER BY n.phone_number,(n.supplied_by_user_id=$3::uuid) DESC,n.updated_at DESC,n.supplied_by_user_id`
 
 func (a *api) importContacts(w http.ResponseWriter, r *http.Request, user actor) {
 	var input struct {
@@ -54,6 +62,10 @@ func (a *api) importContacts(w http.ResponseWriter, r *http.Request, user actor)
 }
 
 func (a *api) lookupContact(w http.ResponseWriter, r *http.Request, user actor) {
+	if !r.URL.Query().Has("phone_number") {
+		a.listContacts(w, r, user)
+		return
+	}
 	phone := r.URL.Query().Get("phone_number")
 	if !phonePattern.MatchString(phone) {
 		fail(w, 400, "invalid_phone", "Supply phone_number in international format (URL-encode + as %2B)")
@@ -67,10 +79,11 @@ func (a *api) lookupContact(w http.ResponseWriter, r *http.Request, user actor) 
         SELECT n.*,u.name AS supplied_by_name FROM ipo_pos.contact_names n
         JOIN ipo_pos.users u ON u.id=n.supplied_by_user_id
         WHERE n.business_id=$1 AND n.phone_number=$2
-    ), registration AS (
+    ), display_names AS (`+contactDisplayNames+`), registration AS (
         SELECT registered,checked_at FROM ipo_pos.whatsapp_number_checks
         WHERE business_id=$1 AND phone_number=$2
     ) SELECT jsonb_build_object('phone_number',$2::text,
+		'display_name',(SELECT to_jsonb(d)-'phone_number' FROM display_names d),
         'whatsapp_registered',(SELECT registered FROM registration),
         'whatsapp_checked_at',(SELECT checked_at FROM registration),
         'customer_count',(SELECT count(*) FROM customers),
@@ -83,7 +96,34 @@ func (a *api) lookupContact(w http.ResponseWriter, r *http.Request, user actor) 
             (SELECT jsonb_build_object('name',name,'source','customer_record','customer_id',id,
                 'supplied_by_user_id',name_supplied_by_user_id) FROM customers)
             ELSE (SELECT jsonb_build_object('name',name,'source',source,'supplied_by_user_id',supplied_by_user_id)
-                FROM names ORDER BY updated_at DESC,supplied_by_user_id LIMIT 1) END)`, user.BusinessID, phone)
+                FROM names ORDER BY updated_at DESC,supplied_by_user_id LIMIT 1) END)`, user.BusinessID, phone, user.UserID)
+}
+
+func (a *api) listContacts(w http.ResponseWriter, r *http.Request, user actor) {
+	p, ok := readPage(w, r)
+	if !ok {
+		return
+	}
+	q := r.URL.Query().Get("q")
+	if len(q) > 256 || !utf8.ValidString(q) || strings.ContainsRune(q, 0) {
+		fail(w, 400, "invalid_search", "q must be valid text of at most 256 UTF-8 bytes")
+		return
+	}
+	after := r.URL.Query().Get("after_phone")
+	if p.After != nil || (after != "" && !phonePattern.MatchString(after)) {
+		fail(w, 400, "invalid_page", "Use an international after_phone, not cursor")
+		return
+	}
+	// shortcut: substring search scans the business directory; add search indexes when profiling shows latency.
+	queryJSON(w, r, a.db, 200, `WITH display_names AS (`+contactDisplayNames+`), matches AS (
+        SELECT * FROM display_names WHERE phone_number>$5
+        AND (strpos(lower(name),lower($4))>0 OR strpos(phone_number,$4)>0)
+        ORDER BY phone_number LIMIT ($6+1)
+    ), visible AS (SELECT * FROM matches ORDER BY phone_number LIMIT $6)
+    SELECT jsonb_build_object('items',COALESCE((SELECT jsonb_agg(to_jsonb(v) ORDER BY phone_number)
+        FROM visible v),'[]'::jsonb),'next_after_phone',CASE WHEN (SELECT count(*) FROM matches)>$6
+        THEN (SELECT max(phone_number) FROM visible) END)`,
+		user.BusinessID, nil, user.UserID, strings.TrimSpace(q), after, p.Limit)
 }
 
 func (a *api) removeContactName(w http.ResponseWriter, r *http.Request, user actor) {

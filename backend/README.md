@@ -219,7 +219,7 @@ IDs from `/api/me`. Supplying another business ID never confers access.
 
 | Method | Path | Purpose |
 |---|---|---|
-| GET | `/health` | Database readiness |
+| GET | `/health` | Database readiness via a read-only `SELECT 1` |
 | POST | `/api/login`, `/api/logout` | Opt-in legacy password login / current-device logout |
 | POST | `/api/auth/whatsapp/start`, `/api/auth/whatsapp/status`, `/api/auth/whatsapp/exchange` | Start, inspect and consume a private first-device proof |
 | POST | `/api/auth/device-tokens`, `/api/auth/device-tokens/exchange` | Generate on a signed-in device / redeem once on another device |
@@ -465,7 +465,11 @@ One user's upload cannot forge another supplier or overwrite their name.
 
 GET the same route with `?phone_number=%2B919000001010` to resolve a number across
 the business. It returns matching customer records, up to 100 name sources with
-staff attribution, total counts, and a suggested name. A single active customer's
+staff attribution, total counts, a personal `display_name`, and a suggested name.
+`display_name` uses the requesting staff member's uploaded name first, otherwise
+the latest colleague contribution (ties use supplier ID); it is `null` without
+an uploaded name. It includes `name`, `source`, `supplied_by_user_id`,
+`supplied_by_name` and `is_own`. A single active customer's
 chosen name takes precedence; otherwise the latest contributed name is suggested
 with its source. Multiple customers sharing a number remain distinct; names are
 not identity verification and no customer is automatically created or merged.
@@ -479,6 +483,28 @@ handle permission withdrawal. This API stores the current name per staff/number,
 not a history of all previous spellings. Removing migration 004 requires backing up
 and dropping `contact_names` and the new customer attribution column after reverting
 its callers; reverting Git alone does not remove database records.
+
+For a contact dropdown, GET `/api/businesses/{businessID}/contacts?q=Mehul&limit=20`
+without `phone_number`. This lists uploaded business contacts, one item per number,
+using the same personal-name preference as `display_name`. Each item has
+`phone_number` plus those five display-name fields. Search is a case-insensitive
+literal substring of the displayed name or number; another colleague's hidden alias
+does not match when your own name is displayed. `%` and `_` are literal characters.
+`q` is trimmed, accepts at most 256 UTF-8 bytes, and may be empty to browse the directory.
+Limits are 1–100 (default 50). Results are ordered by number, with `items: []` for no
+matches and `next_after_phone: null` on the last page. For another page, URL-encode
+`next_after_phone` as `after_phone`, retaining the same query/limit. Reset pagination
+when the query or business changes. This route uses `after_phone`, not the UUID
+`cursor` used by other lists. Customer-only records are available through `/customers`,
+not this uploaded-contact directory; resolve a selected number to choose its customer.
+
+The Android UI remains to be built. Debounce text edits by about 250 ms, cancel
+the previous request, and apply only the latest request's response, checking its
+request ID, business/session and current input. Fetch the first page with `limit=20` for each edit; do not poll
+every second while idle. Editing the text invalidates any previous selected number.
+Saved uploads/withdrawals are visible on the next request; there is no server push.
+Substring search scans the business directory; production-sized load testing and
+search indexes remain future work if measured latency requires them.
 
 ## Mobile POS confirmations
 

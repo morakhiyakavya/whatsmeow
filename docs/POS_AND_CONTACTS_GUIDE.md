@@ -415,15 +415,73 @@ URL-encode the leading `+` as `%2B`. The response contains:
 | `phone_number` | Number being resolved |
 | `customer_count` and `customers` | Matching active POS customer records |
 | `source_count` and `name_sources` | Staff contributions and their provenance |
+| `display_name` | Requesting staff member's uploaded name, otherwise the latest colleague name; includes supplier attribution and `is_own` |
 | `suggested_name` | Preferred suggestion, or `null` when none is available |
 
 Each mobile name source includes its name, supplier ID, the supplier's current
 staff display name (`supplied_by_name`), source and timestamps. Each customer match
 includes its ID, name and `name_supplied_by_user_id`. Up to 100 customers and 100
-sources are returned per lookup; counts can be larger. There is currently no
-pagination for additional lookup matches and no endpoint to download all contacts.
+sources are returned per lookup; counts can be larger. Individual lookup has no
+pagination for additional sources/customers; the directory below pages across numbers.
 
-### Name-selection rules
+### Updating contact dropdown — API implemented, mobile UI remaining
+
+```http
+GET /api/businesses/{businessID}/contacts?q=Mehul&limit=20
+Authorization: Bearer YOUR_ACCESS_TOKEN
+```
+
+Omit `phone_number` to search all uploaded contacts in this business. Return one
+item per number, preferring the requesting staff member's name over newer names
+from colleagues. Without their own contribution, use the latest colleague name;
+equal timestamps are resolved by supplier ID. Single-number `display_name` uses
+this same rule. Customer-record names remain separate in `suggested_name`.
+
+Example response:
+
+```json
+{
+  "items": [
+    {
+      "phone_number": "+919000001010",
+      "name": "Mehul IPO",
+      "source": "mobile_contacts",
+      "supplied_by_user_id": "11111111-1111-4111-8111-111111111111",
+      "supplied_by_name": "Priya",
+      "is_own": true
+    }
+  ],
+  "next_after_phone": null
+}
+```
+
+Search matches a case-insensitive literal substring of the displayed name or
+phone number. A colleague's alternative name is not searched when your own name
+is displayed. `%` and `_` have no wildcard meaning. `q` is trimmed and accepts at
+most 256 UTF-8 bytes. An empty/omitted `q` browses the directory. Limits are 1–100,
+default 50; the dropdown should request 20. No matches return an empty `items` array.
+
+Results are ordered by phone number. To retrieve another page, send the returned
+`next_after_phone` as URL-encoded `after_phone` with the same query/limit. A null
+continuation means the last page. Reset it when the query/business changes; do not
+use the UUID `cursor` from other resource lists. Pages reflect current data, rather
+than a fixed export snapshot. Customer-only records are available through the
+customer API; use single-number lookup to select an existing customer explicitly.
+
+Android should refresh after each text edit, with about 250 ms of debounce. Cancel
+the previous request and apply only the latest request's response, checking its
+request ID, business/session and current input. Comparing text alone is insufficient
+when the user types, deletes, and then retypes the same query.
+Restart from the first page, invalidate a previously selected number on editing,
+and show a recoverable error if the new request fails. Polling every second while
+idle is unnecessary. Uploaded renames and withdrawals appear on the next request;
+there is no server push or automatic observation of the phone address book.
+
+The API uses existing authenticated business membership. Substring search scans
+that business's directory; add search indexes if production measurements require
+them. No Android screen or production-sized search load test is included here.
+
+### Name-selection rules for customer suggestions
 
 1. **Exactly one active POS customer has that number:** its chosen customer name
    wins, with `source: "customer_record"`, the customer ID and recorded name author.
@@ -855,15 +913,16 @@ failure after persistence must not lead to another transaction POST with a new k
 2. Contact permission and sharing selection; international number preparation;
    ordered batches; a local sync manifest; explicit withdrawal and visible pending
    offline changes.
-3. Number lookup with supplier attribution, customer precedence and explicit choice
-   when several customers share a number. Refresh when opening the relevant screen.
+3. Debounced contact autocomplete with personal-name preference, supplier attribution
+   and stale-response rejection; number lookup with customer suggestions and explicit
+   choice when several customers share a number. Refresh when opening the screen.
 4. Customer selection/creation and IPO/form selection.
 5. WhatsApp account selection/pairing and connection feedback.
 6. Transaction review and submission with a persistent key/payload; a saved-transaction screen,
    receipt status polling, edit/cancel history and clear error handling.
 
 Start with manual **Sync selected contacts** and the existing API. Automatic
-background sync, full-list export, bulk withdrawal, customer correction,
+background sync, fixed-snapshot export, bulk withdrawal, customer correction,
 device conflict resolution and safe receipt resend need explicit further work.
 The backend already has integration coverage for contact provenance, batch/replay
 behaviour, business isolation, atomic transaction/receipt creation and delivery recovery.

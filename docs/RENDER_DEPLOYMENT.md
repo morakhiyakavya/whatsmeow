@@ -12,8 +12,8 @@ Deployed and verified on 11 October 2026 in `kavya's Workspace`:
 - API base URL: [whatsapp-pos-dev](https://whatsapp-pos-dev.onrender.com).
 - [Live health endpoint](https://whatsapp-pos-dev.onrender.com/health).
 - [Render dashboard](https://dashboard.render.com/web/srv-db5nundckfvc73arsvkg).
-- Deployed commit: `96a8ee2d5dae8c926cde0af91113fda5756447e9` on `main`.
-- Deployment: `dep-db5opgflk1mc73anttr0`; service: `srv-db5nundckfvc73arsvkg`.
+- Deployed commit: `2c87f0a23acffd2ad6f8acb46545a6a3c483c895` on `main`.
+- Deployment: `dep-db5qem5ckfvc73b3kqp0`; service: `srv-db5nundckfvc73arsvkg`.
 - One Free instance in Singapore; automatic deployments disabled.
 
 Render reported the deployment live. Public HTTPS checks passed: `/health` returns
@@ -35,13 +35,16 @@ The integration could not set an HTTP health-check path, so the actual service
 uses Render's default TCP check. In its dashboard, open Settings → Health Check
 Path and set `/health` to include database availability in platform health checks.
 The Blueprint already specifies this value for a Blueprint-created service.
-Initial business/admin provisioning and live WhatsApp pairing remain separate.
+Live WhatsApp signup/pairing approval remains unchecked.
 
-Development signup rollout: Supabase migration 010 is installed and verified;
-the source and Blueprint now support `APP_ENV=development` through the same
-WhatsApp login endpoints. The live service above still runs the earlier build
-until the reviewed signup checkpoint is deployed and the environment setting is
-saved. Signup is not yet live on the deployed commit above.
+Development signup is deployed. Supabase migration 010 is installed and verified,
+and Render's environment was updated with `APP_ENV=development` while preserving
+the existing credentials and disabled password login. The environment update
+triggered a deployment of the exact pushed signup checkpoint; no second deploy
+was triggered. The service reached live, listened on `0.0.0.0:10000`, passed public
+health/authentication/no-store checks and returned no deployment-window errors.
+The same WhatsApp start/status/exchange bodies support login and approved new-number
+signup. No real signup or customer message was performed during verification.
 
 ## Service configuration
 
@@ -99,6 +102,13 @@ service might use Render's default TCP health check; set `/health` in its dashbo
 when the tool cannot specify that field.
 
 ## Verify the deployed service
+
+The local health handler executes a read-only `SELECT 1` with a one-second timeout
+through the API's database connection. Once deployed, external `/health` requests
+generate database queries without reading customer data or changing records.
+A monitor can request it every five minutes to prevent Render's idle shutdown;
+this also generates activity for Supabase, but neither provider guarantees
+continuous availability on its Free plan. No external monitor is configured here.
 
 Open `https://YOUR-SERVICE.onrender.com/health`; expect `{"status":"ok"}`.
 An unauthenticated `GET /api/me` must return 401. With password login disabled,

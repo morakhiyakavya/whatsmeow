@@ -151,6 +151,14 @@ Content-Type: application/json
 GET {{base}}/api/businesses/{{business}}/contacts?phone_number=%2B919000001010
 Authorization: Bearer {{token}}
 
+### Contact dropdown: request again when the search text changes
+GET {{base}}/api/businesses/{{business}}/contacts?q=Demo&limit=20
+Authorization: Bearer {{token}}
+
+### Browse uploaded business contacts (use next_after_phone for another page)
+GET {{base}}/api/businesses/{{business}}/contacts?limit=100
+Authorization: Bearer {{token}}
+
 ### Withdraw your own contribution
 DELETE {{base}}/api/businesses/{{business}}/contacts?phone_number=%2B919000001010
 Authorization: Bearer {{token}}

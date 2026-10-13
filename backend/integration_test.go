@@ -151,8 +151,11 @@ func TestManualLedgerIntegration(t *testing.T) {
 	server := httptest.NewServer(app.routes())
 	defer server.Close()
 	client := testClient{t: t, URL: server.URL, HTTP: server.Client()}
-	status, object, _ := client.request("GET", "/health", nil, "")
+	status, object, healthHeaders := client.request("GET", "/health", nil, "")
 	expectStatus(t, 200, status, object)
+	if field(t, object, "status") != "ok" || healthHeaders.Get("Cache-Control") != "no-store" {
+		t.Fatal("health response changed or could be cached")
+	}
 	status, object, _ = client.request("GET", "/api/me", nil, "")
 	expectStatus(t, 401, status, object)
 	status, object, _ = client.request("POST", "/api/login", map[string]string{"phone_number": bootstrap.AdminPhone, "password": "wrong-password"}, "")
@@ -410,6 +413,14 @@ func TestManualLedgerIntegration(t *testing.T) {
 	}
 	status, object, _ = cashier.request("GET", "/api/me", nil, "")
 	expectStatus(t, 401, status, object)
+	if err = db.Close(); err != nil {
+		t.Fatal(err)
+	}
+	status, object, healthHeaders = client.request("GET", "/health", nil, "")
+	expectStatus(t, 503, status, object)
+	if field(t, object["error"].(map[string]any), "code") != "database_unavailable" || healthHeaders.Get("Cache-Control") != "no-store" {
+		t.Fatal("failed health check changed its error contract or could be cached")
+	}
 }
 
 func cloneMap(input map[string]any) map[string]any {

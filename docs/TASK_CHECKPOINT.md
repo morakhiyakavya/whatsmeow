@@ -8,6 +8,23 @@ None.
 
 ## Checkpoints
 
+### Batch 21 — Hosted signup status, contact search and database health queries
+
+1. Publish and deploy development signup through the existing WhatsApp login flow on Render.
+   - Verification: the user requested reflecting development-mode signup on Render and connected the integration. Pushed reviewed checkpoint `2c87f0a23acffd2ad6f8acb46545a6a3c483c895` to `origin/main` and verified the remote SHA. Confirmed the existing Free Singapore service and merged only APP_ENV=development into its environment; its update triggered deployment `dep-db5qem5ckfvc73b3kqp0` of that exact commit, so no duplicate deploy was requested. Render reached live; startup passed the migration-010 guard and listened on 0.0.0.0:10000. Public health 200, unauthenticated me 401, disabled password-login 403 and no-store headers passed; deployment-window error logs were empty. Reviewed deployment/Supabase document and ledger content/diffs.
+   - Paths: `docs/RENDER_DEPLOYMENT.md`, `docs/SUPABASE_SETUP.md`, `docs/TASK_CHECKPOINT.md`. External changes: authorised Git push and merged environment update/deployment of `srv-db5nundckfvc73arsvkg` in `tea-csp7ifjgbbvc73etj3cg`; schema/configuration preparation is in Batch 20. Credentials remain private.
+   - Limits: real WhatsApp approval, hosted authenticated transaction requests and customer sends remain unchecked; signup/session behavior has disposable database and fake-protocol coverage. New numbers receive isolated development businesses, not access to existing businesses or master-admin privileges. Render Free can sleep and interrupt WhatsApp processing.
+
+2. Add searchable business contacts for a dropdown with personal names and colleague fallback.
+   - Verification: backend unit tests and vet passed; disposable `database/Test-Schema.ps1 -WithApiTests` passed. Integration checks cover incremental/case-insensitive/rewritten name and phone searches, own-name priority over newer colleague contributions, per-user display, fallback, immediate saved renames/withdrawals, matching exact lookup, literal wildcard/injection input, empty results, deduplicated directory pagination, query/page validation, no-store responses, authentication and cross-business isolation. Reviewed code/API examples, documentation content/diffs and whitespace. Reused existing contact storage and business authentication; no migration or dependency added.
+   - Paths: `backend/contacts.go`, `backend/contacts_test.go`, `backend/README.md`, `backend/requests.http`, `docs/POS_AND_CONTACTS_GUIDE.md`, `docs/PROJECT_VISION.md`, `docs/TASK_CHECKPOINT.md`.
+   - Limits: Android dropdown/debounce/cancellation and stale-response handling are documented but not implemented because no mobile app exists here. Changes are local and not deployed. Search scans the business directory and has no production-sized load test; pages reflect current data, not a fixed snapshot. Uploaded contacts only; existing customer suggestions remain separate. No automatic phone contact observation or server push.
+
+3. Execute a small read-only database query on every health request.
+   - Verification: backend unit tests and vet passed; disposable `database/Test-Schema.ps1 -WithApiTests` passed, including restricted-runtime-role health success, the unchanged JSON/no-store contract and a 503 database_unavailable response after closing the pool. Replaced only the health connection ping with `SELECT 1`, retaining its one-second context timeout. Reviewed the three-task batch's code, API examples and documentation diffs; changed-document local links and whitespace checks passed. No migration, dependency, customer-data read or database write added.
+   - Paths: `backend/main.go`, `backend/integration_test.go`, `backend/README.md`, `docs/RENDER_DEPLOYMENT.md`, `docs/TASK_CHECKPOINT.md`.
+   - Limits: local change only; no Git push, Render deployment, Sentry setup or scheduled external pings. Supabase's classification of synthetic queries and continuous Free-plan availability remain unverified; health does not prove WhatsApp connectivity. All three reviewed tasks are included in this local checkpoint under the standing three-task policy.
+
 ### Batch 20 — Development signup and business-onboarding plan
 
 1. Deploy the signed-rate correction to the existing Render development API after Supabase migration 009.

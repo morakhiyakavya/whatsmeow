@@ -167,7 +167,8 @@ func (a *api) routes() http.Handler {
 func (a *api) health(w http.ResponseWriter, r *http.Request) {
 	ctx, cancel := context.WithTimeout(r.Context(), time.Second)
 	defer cancel()
-	if a.db.PingContext(ctx) != nil {
+	var ready int
+	if a.db.QueryRowContext(ctx, "SELECT 1").Scan(&ready) != nil {
 		fail(w, 503, "database_unavailable", "Database is unavailable")
 		return
 	}

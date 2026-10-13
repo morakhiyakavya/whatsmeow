@@ -58,6 +58,38 @@ This checks health, login, business access, the catalogue and WhatsApp account
 reads, then logs out. It does not create demo customers or ledger entries. For a full flow, use
 `backend/requests.http` or the isolated integration runner below.
 
+## Sentry monitoring
+
+The Go `net/http` service uses Sentry project
+[`vanitilabs/whatsapp-pos-api`](https://vanitilabs.sentry.io/settings/projects/whatsapp-pos-api/).
+Set `SENTRY_DSN` privately in the environment or the existing `.env` file; leaving
+it unset disables telemetry. `SENTRY_ENVIRONMENT` defaults to `APP_ENV`, or
+`production` when unset. `SENTRY_RELEASE` defaults to Render's `RENDER_GIT_COMMIT`;
+set it explicitly for a named local release.
+
+Tracing captures **100% in `APP_ENV=development`** and 10% in production.
+The HTTP middleware captures panics and request timings while preserving Go's
+existing panic behaviour. Unexpected database failures are also captured;
+normal authentication and validation rejections are not reported as exceptions.
+Selected structured logs cover API startup and unexpected database failures.
+Sentry Go 0.50 enables logs by default; the older `EnableLogs` option is unnecessary.
+This does not forward all Render or WhatsApp library logs.
+
+Telemetry excludes request bodies, headers, cookies, query parameters, user
+information, raw request URLs, breadcrumbs, panic/error values and stack-frame
+variables. Stack functions, files, lines, release and environment remain available.
+Matched traces use route templates instead of business/customer IDs; unmatched
+routes receive a generic name. Error values are deliberately generic, so use the
+stack trace and protected operational logs for diagnosis. Shutdown flushes buffered
+telemetry for up to two seconds.
+
+The [Sentry uptime monitor](https://vanitilabs.sentry.io/monitors/10630540/)
+requests the deployed `/health` every five minutes. It requires three consecutive
+failures to open a downtime issue and one success to recover. The project's
+high-priority notification rule is enabled. Monitoring does not guarantee continuous
+Free-plan availability, and `/health` does not prove WhatsApp connectivity.
+There is no frontend/mobile Session Replay integration in this repository.
+
 ## Database credentials
 
 For a fresh hosted development database, follow the

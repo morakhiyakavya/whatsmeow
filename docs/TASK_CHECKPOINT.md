@@ -8,6 +8,15 @@ None.
 
 ## Checkpoints
 
+### Batch 23 — Sentry monitoring setup
+
+Checkpointed below the three-task threshold under the user's standing instruction to commit each completed request.
+
+1. Install/connect the Sentry agent plugin and configure monitoring for the Go HTTP backend.
+   - Verification: installed and enabled Sentry plugin 1.4.3; worked around the installed CLI's OAuth issuer-callback defect using official Codex CLI 0.162.1, without weakening authentication or replacing the installed CLI. Verified the supplied organisation, existing team, user-created `whatsapp-pos-api` project and DSN through the authenticated Sentry MCP. Backend tests/vet, disposable `database/Test-Schema.ps1 -WithApiTests`, deployment-style Windows and Linux amd64 builds, documentation-link review and whitespace checks passed. Privacy tests exercise real HTTP middleware with string panics, sensitive request fixtures, route parameters and unmatched URLs, preserving stack frames, release/environment and panic behaviour. The actual Supabase-backed API ran locally with WhatsApp restoration disabled; health 200 and unauthenticated me 401 passed. A temporary panic route produced Sentry issue `WHATSAPP-POS-API-1`; MCP confirmed its generic error value, readable application file/function/line frames, development sample rate 1, startup log and HTTP traces. Removed the route and stopped the isolated server. Created active uptime monitor `10630540`, confirmed a scheduled HTTP 200 check, and verified enabled high-priority alert rule `6162949`.
+   - Paths: `.env.example`, `backend/config.go`, `backend/config_test.go`, `backend/go.mod`, `backend/go.sum`, `backend/main.go`, `backend/sentry.go`, `backend/sentry_test.go`, `backend/README.md`, `render.yaml`, `docs/RENDER_DEPLOYMENT.md`, `docs/TASK_CHECKPOINT.md`. External changes: authenticated plugin installation and active five-minute Sentry monitor. The user created the project after organisation permissions denied agent creation. Private `.env` and `.env.supabase` now contain the supplied DSN; credentials, onboarding data and generated verification binaries are excluded from Git.
+   - Limits: no Git push or Render SDK deployment yet; hosted application telemetry and the deployed `SELECT 1` health query await deployment approval. Captures HTTP traces at 100% in development and 10% in production, panics/unexpected database failures and selected operational logs; does not forward all Render/WhatsApp logs or add SQL spans, frontend replay or product analytics. Request/identity data and error values are filtered; diagnostic source frames remain readable, but VCS source snippets are not configured. Test issue remains available for inspection. Race/load tests, real WhatsApp operation and Free-plan inactivity guarantees remain unchecked. Existing contact-profile checkpoint is preserved separately.
+
 ### Batch 22 — Contact WhatsApp profiles
 
 Checkpointed below the three-task threshold under the user's standing instruction to commit each completed request.

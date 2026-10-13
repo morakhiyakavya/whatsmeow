@@ -16,6 +16,8 @@ import (
 	"syscall"
 	"time"
 
+	"github.com/getsentry/sentry-go"
+	sentryhttp "github.com/getsentry/sentry-go/http"
 	"github.com/jackc/pgx/v5/pgconn"
 	_ "github.com/jackc/pgx/v5/stdlib"
 )
@@ -45,6 +47,10 @@ func run(envPath string, bootstrap bool) error {
 	if err != nil {
 		return err
 	}
+	if err = sentry.Init(sentryOptions(config)); err != nil {
+		return errors.New("invalid Sentry configuration; check SENTRY_DSN")
+	}
+	defer sentry.Flush(2 * time.Second)
 	db, err := sql.Open("pgx", config.DatabaseURL)
 	if err != nil {
 		return errors.New("invalid DATABASE_URL configuration")
@@ -99,6 +105,7 @@ func run(envPath string, bootstrap bool) error {
 	}
 	go func() { serverErr <- server.Serve(listener) }()
 	log.Printf("IPO API listening on http://%s", config.Addr)
+	sentry.NewLogger(ctx).Info().Emit("IPO API started")
 	select {
 	case err := <-serverErr:
 		if !errors.Is(err, http.ErrServerClosed) {
@@ -156,12 +163,13 @@ func (a *api) routes() http.Handler {
 	mux.HandleFunc("POST /api/businesses/{businessID}/transactions/{id}/cancel", a.protect(false, a.cancelTransaction))
 	mux.HandleFunc("GET /api/businesses/{businessID}/transactions/{id}/history", a.protect(false, a.transactionHistory))
 	mux.HandleFunc("GET /api/businesses/{businessID}/transactions/{id}/confirmation", a.protect(false, a.getConfirmation))
+	handler := sentryhttp.New(sentryhttp.Options{Repanic: true}).Handle(mux)
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		w.Header().Set("Cache-Control", "no-store")
 		w.Header().Set("X-Content-Type-Options", "nosniff")
 		ctx, cancel := context.WithTimeout(r.Context(), 10*time.Second)
 		defer cancel()
-		mux.ServeHTTP(w, r.WithContext(ctx))
+		handler.ServeHTTP(w, r.WithContext(ctx))
 	})
 }
 
@@ -220,6 +228,8 @@ func dbFailure(w http.ResponseWriter, err error) {
 	} else {
 		log.Printf("database request failed (%T)", err)
 	}
+	sentry.CaptureException(errors.New("Unexpected database failure"))
+	sentry.NewLogger(context.Background()).Error().Emit("Unexpected database failure")
 	fail(w, 500, "internal_error", "The request could not be completed")
 }
 

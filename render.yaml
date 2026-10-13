@@ -18,3 +18,7 @@ services:
         sync: false
       - key: ALLOW_PASSWORD_LOGIN
         value: "false"
+      - key: SENTRY_DSN
+        sync: false
+      - key: SENTRY_ENVIRONMENT
+        value: development

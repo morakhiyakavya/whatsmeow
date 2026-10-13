@@ -5,6 +5,7 @@ go 1.26.0
 toolchain go1.27.1
 
 require (
+	github.com/getsentry/sentry-go v0.50.0
 	github.com/jackc/pgx/v5 v5.11.0
 	go.mau.fi/whatsmeow v0.0.0
 	golang.org/x/crypto v0.57.0

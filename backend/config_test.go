@@ -105,3 +105,24 @@ func TestDevelopmentSignupConfiguration(t *testing.T) {
 		}
 	})
 }
+
+func TestSentryConfiguration(t *testing.T) {
+	t.Setenv("DATABASE_URL", "postgres://api:private-test-secret@localhost/postgres")
+	t.Setenv("APP_ENV", "development")
+	t.Setenv("ALLOW_PASSWORD_LOGIN", "false")
+	t.Setenv("API_ADDR", "127.0.0.1:8180")
+	t.Setenv("SENTRY_DSN", "https://public@example.invalid/1")
+	t.Setenv("SENTRY_ENVIRONMENT", "")
+	t.Setenv("SENTRY_RELEASE", "")
+	t.Setenv("RENDER_GIT_COMMIT", "fixture-commit")
+	c, err := loadConfig(filepath.Join(t.TempDir(), "missing.env"))
+	if err != nil || c.SentryDSN == "" || c.SentryEnvironment != "development" || c.SentryRelease != "fixture-commit" {
+		t.Fatal("Sentry did not use hosted configuration/environment/release")
+	}
+	t.Setenv("SENTRY_ENVIRONMENT", "verification")
+	t.Setenv("SENTRY_RELEASE", "verification-release")
+	c, err = loadConfig(filepath.Join(t.TempDir(), "missing.env"))
+	if err != nil || c.SentryEnvironment != "verification" || c.SentryRelease != "verification-release" {
+		t.Fatal("explicit Sentry settings did not override defaults")
+	}
+}

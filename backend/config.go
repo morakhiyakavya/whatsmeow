@@ -17,6 +17,7 @@ type configuration struct {
 	DatabaseURL, Addr, BusinessName, AdminName, AdminPhone, AdminPassword, WhatsAppDatabaseURL string
 	PasswordLogin                                                                              bool
 	DevelopmentSignup                                                                          bool
+	SentryDSN, SentryEnvironment, SentryRelease                                                string
 }
 
 func loadConfig(path string) (configuration, error) {
@@ -64,6 +65,16 @@ func loadConfig(path string) (configuration, error) {
 		return c, errors.New("APP_ENV must be development or production")
 	}
 	c.DevelopmentSignup = environment == "development"
+	c.SentryDSN, c.SentryEnvironment, c.SentryRelease = get("SENTRY_DSN"), get("SENTRY_ENVIRONMENT"), get("SENTRY_RELEASE")
+	if c.SentryEnvironment == "" {
+		c.SentryEnvironment = environment
+		if c.SentryEnvironment == "" {
+			c.SentryEnvironment = "production"
+		}
+	}
+	if c.SentryRelease == "" {
+		c.SentryRelease = get("RENDER_GIT_COMMIT")
+	}
 	if c.DatabaseURL == "" {
 		return c, errors.New("DATABASE_URL is required")
 	}

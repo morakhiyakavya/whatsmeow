@@ -81,6 +81,15 @@ In Render's private Environment settings, set only:
 | `WHATSAPP_DATABASE_URL` | Worker URL from `.env.supabase`, with the same certificate path |
 | `ALLOW_PASSWORD_LOGIN` | `false` |
 | `APP_ENV` | `development` for this dev service; production/unset disables automatic signup |
+| `SENTRY_DSN` | DSN for `vanitilabs/whatsapp-pos-api`, supplied privately |
+| `SENTRY_ENVIRONMENT` | `development` for this service |
+
+Sentry instrumentation is prepared locally and must be deployed before Render
+sends application errors, traces and logs. The runtime uses `RENDER_GIT_COMMIT` as
+the Sentry release unless `SENTRY_RELEASE` is explicitly set. Development captures
+100% of HTTP traces; production captures 10%. Request data and error values are
+excluded from telemetry while stack traces remain available. See the
+[Sentry monitoring contract](../backend/README.md#sentry-monitoring).
 
 Preserve `sslmode=verify-full`, the session-pooler host, port `5432` and each
 role's separate password. The bundled [certificate](../database/supabase-ca.crt)
@@ -108,7 +117,9 @@ through the API's database connection. Once deployed, external `/health` request
 generate database queries without reading customer data or changing records.
 A monitor can request it every five minutes to prevent Render's idle shutdown;
 this also generates activity for Supabase, but neither provider guarantees
-continuous availability on its Free plan. No external monitor is configured here.
+continuous availability on its Free plan. The active
+[Sentry monitor](https://vanitilabs.sentry.io/monitors/10630540/) now checks this URL
+every five minutes, with a ten-second timeout and response capture disabled.
 
 Open `https://YOUR-SERVICE.onrender.com/health`; expect `{"status":"ok"}`.
 An unauthenticated `GET /api/me` must return 401. With password login disabled,

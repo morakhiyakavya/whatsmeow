@@ -12,8 +12,8 @@ Deployed and verified on 14 October 2026 in `kavya's Workspace`:
 - API base URL: [whatsapp-pos-dev](https://whatsapp-pos-dev.onrender.com).
 - [Live health endpoint](https://whatsapp-pos-dev.onrender.com/health).
 - [Render dashboard](https://dashboard.render.com/web/srv-db5nundckfvc73arsvkg).
-- Deployed commit: `7005f559c229d750afc642c7d1ed3e4d9362f67c` on `main`.
-- Deployment: `dep-db78botg1s2s739gfe90`; service: `srv-db5nundckfvc73arsvkg`.
+- Deployed commit: `c269a0ef6785df5b504cd2bed2a35916c483ce3e` on `main`.
+- Deployment: `dep-db7h27u7bikc73asdv20`; service: `srv-db5nundckfvc73arsvkg`.
 - One Free instance in Singapore; automatic deployments disabled.
 
 Render reported the deployment live. Public HTTPS checks passed: `/health` returns
@@ -55,11 +55,24 @@ health/authentication/no-store checks and returned no deployment-window errors.
 The same WhatsApp start/status/exchange bodies support login and approved new-number
 signup. No real signup or customer message was performed during verification.
 
-The next backend version adds FCM photo invalidations and requires migration
-`011_contact_profile_push.sql` plus the updated runtime grants before deployment.
-These changes are not included in the deployed commit above. FCM sending remains
-disabled until a private server credential file and `FCM_PROJECT_ID` are supplied;
-see [the Android/FCM handover](FCM_ANDROID_HANDOVER.md) for configuration and client work.
+The FCM contact-photo invalidation backend was deployed on 14 October 2026.
+Applied Supabase migration `011_contact_profile_push.sql` and the shared runtime
+grants first, preserving the existing user and business. Verified the new tables,
+restricted runtime writes and rollback-only registration/revision/outbox/disablement
+behavior; no probe records remain. Pushed the reviewed commit above and triggered
+one manual deployment with the existing build cache. Render built that exact commit
+and reported it live; startup passed the migration-011 guard and listened on
+`0.0.0.0:10000`. Public health 200, unauthenticated me 401, disabled password login
+403 and unauthenticated PUT `/api/push-devices/{installationID}` 401 all passed
+with `no-store` headers. Deployment-window error logs were empty.
+
+No Render environment values or secret files were changed by this deploy. No FCM
+server credentials are configured in the local hosted environment file; actual
+Google credential readiness, authenticated hosted registration/profile requests and
+live device delivery remain unverified. Sending requires `FCM_PROJECT_ID` and a
+private server credential file, and Android still needs token/event integration;
+see [the Android/FCM handover](FCM_ANDROID_HANDOVER.md). The local application
+database has not received migration 011. No real WhatsApp/customer message was sent.
 
 ## Service configuration
 

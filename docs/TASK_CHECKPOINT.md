@@ -8,6 +8,15 @@ None.
 
 ## Checkpoints
 
+### Batch 26 — Deploy the FCM backend after Supabase migration 011
+
+Checkpointed below the three-task threshold under the user's standing instruction to commit each completed request.
+
+1. Apply the FCM schema to Supabase and deploy the latest reviewed backend to Render.
+   - Verification: the user explicitly requested both hosted migration and deployment. Confirmed the clean checkout, known project/service/workspace/repository and disabled automatic deploys. Connected through verified TLS using the private migration role; migration 011 and shared runtime grants completed, and existing CONNECT permission was verified after the harmless owner regrant warning. Checked all three new tables, owner/runtime separation, registration grants and denied revision/outbox writes. Hosted rollback-only synthetic registration/revision/outbox/disablement probes passed; the existing one user/business were preserved and no probe records remain. Pushed `c269a0ef6785df5b504cd2bed2a35916c483ce3e` and verified remote main matches it. Manual Render deployment `dep-db7h27u7bikc73asdv20` built that exact commit and reached live, passed the migration guard and listened on 0.0.0.0:10000. Hosted health 200, unauthenticated me 401, disabled password login 403 and new unauthenticated PUT push-registration 401 passed with no-store. Deployment-window error logs were empty. Reused the implementation's passing tests/builds, reviewed documentation content/diffs and checked local links/whitespace.
+   - Paths: `docs/RENDER_DEPLOYMENT.md`, `docs/SUPABASE_SETUP.md`, `docs/TASK_CHECKPOINT.md`. External changes: additive migration/grants in Supabase project `tqfwoudoxundtrhogmwa`, authorised Git push and manual deployment on existing Free Singapore service `srv-db5nundckfvc73arsvkg` in workspace `tea-csp7ifjgbbvc73etj3cg`. No Render environment values or secret files changed; credentials/session data remain private.
+   - Limits: no FCM server credentials exist in the local hosted config; remote Google credential readiness, authenticated hosted registration/profile behavior, real WhatsApp events, Android integration and end-to-end FCM delivery remain unchecked. No customer/WhatsApp message sent. Local database migration 011 remains unapplied; Free hosting may interrupt WhatsApp processing. SQL rollback requires deliberate database work rather than Git revert. This documentation-only checkpoint is newer than the deployed application commit.
+
 ### Batch 25 — FCM contact-photo invalidation backend
 
 Checkpointed below the three-task threshold under the user's standing instruction to commit each completed request.

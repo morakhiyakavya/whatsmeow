@@ -8,9 +8,9 @@ WhatsApp credentials are not copied by this setup.
 
 Project `tqfwoudoxundtrhogmwa` was installed and verified on 11 October 2026 using
 the Singapore session pooler on port `5432`. PostgreSQL reports version 17.11.
-All ten application migrations are installed: `ipo_pos` has 22 tables, and the
+All eleven application migrations are installed: `ipo_pos` has 25 tables, and the
 backend initialized 17 WhatsApp credential tables at library schema version 16.
-No users, businesses or linked WhatsApp devices have been provisioned there yet.
+One existing user and business were observed and preserved during migration 011.
 Do not rerun the fresh-install script for this project.
 
 Migration 008 was applied on 11 October 2026 and verified on both current
@@ -30,6 +30,18 @@ created. The separate local database now has migrations 008, 009 and 010 too;
 its existing user and business were preserved. Both private configuration files
 use `APP_ENV=development`; Render now uses the same setting on its deployed
 signup build. Real WhatsApp signup approval remains unchecked.
+
+Migration 011 was applied on 14 October 2026 before deploying the FCM backend.
+It adds `push_devices`, `contact_profile_revisions` and `profile_push_outbox`, their
+constraints/indexes and disablement cleanup triggers. Reapplied the shared runtime
+grants and verified that the API role can manage registrations but cannot write
+revisions or outbox jobs. Its existing database CONNECT grant was verified; the
+owner-role regrant emitted a harmless already-held/no-grant-option warning.
+Hosted rollback-only probes exercised session/device association, revision/outbox
+inserts and disabled-user cascade cleanup. The existing user/business remained,
+with zero probe registrations, revisions or pending notifications afterward.
+The local application database remains on migration 010. See
+[the FCM/Android handover](FCM_ANDROID_HANDOVER.md) for credential and client setup.
 
 Generated, separate role credentials are saved privately in the Git-ignored
 root `.env.supabase`, with file access restricted to your Windows account and

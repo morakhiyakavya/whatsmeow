@@ -106,7 +106,7 @@ At the `postgres=>` prompt, run:
 \i 'C:/Users/Admin/Documents/programming/whatsmeow/database/Setup-Supabase.psql'
 ```
 
-The [setup file](../database/Setup-Supabase.psql) installs our ten existing
+The [setup file](../database/Setup-Supabase.psql) installs our eleven existing
 migrations and the [shared runtime grants](../database/api_grants.sql). It creates:
 
 | Role | Purpose |

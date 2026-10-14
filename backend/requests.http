@@ -14,6 +14,15 @@
 @device_token = COPY_TOKEN_DISPLAYED_ON_ORIGINAL_DEVICE
 @refresh = COPY_CURRENT_REFRESH_TOKEN
 @session = COPY_OWN_SESSION_ID
+@installation = COPY_STABLE_INSTALLATION_UUID
+@fcm_token = COPY_FIREBASE_DEVICE_TOKEN
+
+### Register my Android installation after POS login and FCM token changes
+PUT {{base}}/api/push-devices/{{installation}}
+Authorization: Bearer {{token}}
+Content-Type: application/json
+
+{"fcm_token":"{{fcm_token}}"}
 
 ### First-device login/signup: APP_ENV=development permits new numbers after approval
 POST {{base}}/api/auth/whatsapp/start

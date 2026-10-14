@@ -286,7 +286,7 @@ func (s *whatsAppService) run(user actor, id string, c *accountConnection) strin
 	lifecycle := make(chan any, 16)
 	client.AddEventHandler(func(evt any) {
 		switch evt.(type) {
-		case *events.PairSuccess, *events.Connected, *events.Disconnected, *events.ManualLoginReconnect, events.PermanentDisconnect:
+		case *events.PairSuccess, *events.Connected, *events.Disconnected, *events.ManualLoginReconnect, *events.Picture, events.PermanentDisconnect:
 			select {
 			case lifecycle <- evt:
 			case <-ctx.Done():
@@ -327,6 +327,10 @@ func (s *whatsAppService) run(user actor, id string, c *accountConnection) strin
 				result.err = errProfileUnavailable
 			} else if err == nil {
 				result.profile, result.err = lookupContactProfile(profileCtx, client, device.Contacts, request.phone)
+				if result.err == nil {
+					result.profile.Revision, result.err = saveProfileObservation(profileCtx, s.db, user, id, saved.String,
+						request.phone, result.profile.PictureState, result.profile.pictureID, time.Time{})
+				}
 			}
 			stopOnShutdown()
 			stop()
@@ -416,6 +420,15 @@ func (s *whatsAppService) run(user actor, id string, c *accountConnection) strin
 			}
 		case evt := <-lifecycle:
 			switch evt.(type) {
+			case *events.Picture:
+				if saved.Valid && c.state().State == "connected" {
+					eventCtx, stop := context.WithTimeout(ctx, 5*time.Second)
+					err = s.pictureChanged(eventCtx, device, user, id, saved.String, evt.(*events.Picture))
+					stop()
+					if err != nil {
+						return "storage_unavailable"
+					}
+				}
 			case *events.PairSuccess, *events.Connected:
 				jid := device.GetJID()
 				if jid.Server != types.DefaultUserServer || jid.Device == 0 || !phonePattern.MatchString("+"+jid.User) || (c.Method == "phone" && "+"+jid.User != c.phone) {

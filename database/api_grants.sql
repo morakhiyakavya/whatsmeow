@@ -10,6 +10,7 @@ GRANT INSERT, UPDATE, DELETE ON ipo_pos.contact_names TO :"api_role";
 GRANT INSERT ON ipo_pos.transaction_confirmations TO :"api_role";
 GRANT INSERT, UPDATE, DELETE ON ipo_pos.login_sessions TO :"api_role";
 GRANT INSERT, UPDATE, DELETE ON ipo_pos.device_login_tokens TO :"api_role";
+GRANT INSERT, UPDATE, DELETE ON ipo_pos.push_devices TO :"api_role";
 GRANT UPDATE (consumed_at) ON ipo_pos.login_attempts TO :"api_role";
 -- Only the trusted WhatsApp worker may supply bindings and verification results.
 GRANT INSERT (business_id, label, linked_by_user_id) ON ipo_pos.whatsapp_accounts TO :"api_role";

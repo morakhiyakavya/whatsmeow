@@ -18,6 +18,7 @@ type configuration struct {
 	PasswordLogin                                                                              bool
 	DevelopmentSignup                                                                          bool
 	SentryDSN, SentryEnvironment, SentryRelease                                                string
+	FCMProjectID, FCMCredentialsFile                                                           string
 }
 
 func loadConfig(path string) (configuration, error) {
@@ -65,6 +66,10 @@ func loadConfig(path string) (configuration, error) {
 		return c, errors.New("APP_ENV must be development or production")
 	}
 	c.DevelopmentSignup = environment == "development"
+	c.FCMProjectID, c.FCMCredentialsFile = get("FCM_PROJECT_ID"), get("GOOGLE_APPLICATION_CREDENTIALS")
+	if c.FCMProjectID != "" && (!firebaseProjectPattern.MatchString(c.FCMProjectID) || c.FCMCredentialsFile == "" || c.WhatsAppDatabaseURL == "") {
+		return c, errors.New("FCM_PROJECT_ID requires a valid Firebase project ID, GOOGLE_APPLICATION_CREDENTIALS and WHATSAPP_DATABASE_URL")
+	}
 	c.SentryDSN, c.SentryEnvironment, c.SentryRelease = get("SENTRY_DSN"), get("SENTRY_ENVIRONMENT"), get("SENTRY_RELEASE")
 	if c.SentryEnvironment == "" {
 		c.SentryEnvironment = environment

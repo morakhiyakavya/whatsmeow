@@ -20,6 +20,8 @@ type contactProfile struct {
 	About        *string `json:"about"`
 	PictureURL   *string `json:"picture_url"`
 	PictureState string  `json:"picture_state"`
+	Revision     string  `json:"profile_revision"`
+	pictureID    string
 }
 
 type profileRequest struct {
@@ -138,6 +140,7 @@ func lookupContactProfile(ctx context.Context, client pairingClient, contacts st
 		return profile, errors.New("incomplete WhatsApp profile picture")
 	default:
 		profile.PictureURL, profile.PictureState = &picture.URL, "available"
+		profile.pictureID = picture.ID
 	}
 	return profile, nil
 }

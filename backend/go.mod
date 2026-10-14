@@ -9,9 +9,11 @@ require (
 	github.com/jackc/pgx/v5 v5.11.0
 	go.mau.fi/whatsmeow v0.0.0
 	golang.org/x/crypto v0.57.0
+	golang.org/x/oauth2 v0.37.0
 )
 
 require (
+	cloud.google.com/go/compute/metadata v0.3.0 // indirect
 	filippo.io/edwards25519 v1.2.0 // indirect
 	github.com/beeper/argo-go v1.1.2 // indirect
 	github.com/coder/websocket v1.8.15 // indirect

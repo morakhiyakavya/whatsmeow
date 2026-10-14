@@ -116,7 +116,8 @@ For a new database, apply `database/001_initial.sql`, `002_api.sql` and
 `003_whatsapp_accounts.sql`, `004_contact_names.sql` and
 `005_transaction_confirmations.sql`, `006_passwordless_sessions.sql`, then
 `007_whatsapp_number_checks.sql`, `008_signed_transaction_quantity.sql`,
-`009_signed_transaction_rate.sql` and `010_development_signup.sql` once,
+`009_signed_transaction_rate.sql`, `010_development_signup.sql` and
+`011_contact_profile_push.sql` once,
 in that order, as its migration owner. The API
 does not execute migrations on startup. Apply only missing migrations to an
 existing database. For the local installation that already has migrations 001/002:
@@ -259,6 +260,7 @@ IDs from `/api/me`. Supplying another business ID never confers access.
 | GET, DELETE | `/api/sessions`, `/api/sessions/{id}` | List own sessions / revoke one own session |
 | POST | `/api/logout-all` | Revoke all this user's POS sessions |
 | GET | `/api/me` | User and active businesses |
+| PUT | `/api/push-devices/{installationID}` | Register/replace an installation's FCM token for the authenticated POS session |
 | GET, POST | `/staff` | List/create staff |
 | GET, POST | `/customers` | List/create customers, including referrals |
 | GET, POST | `/ipos` | List/create shared IPO catalogue entries |
@@ -414,7 +416,8 @@ international-format validation; unknown JSON fields are rejected.
   "name": "Contact's WhatsApp name",
   "about": "Available",
   "picture_url": "https://example.com/photo.jpg",
-  "picture_state": "available"
+  "picture_state": "available",
+  "profile_revision": "42"
 }
 ```
 
@@ -436,11 +439,21 @@ whether the number is registered; use `/check-number` for registration checks.
 
 Lookups run serially in the existing account worker with an eight-second budget,
 including waiting; service shutdown cancels them. Responses are `no-store`.
-No message is sent, business contact/customer records and registration checks are
-not updated, and photos are not downloaded or archived on the server. The library
-may update its existing synced business names/LID mappings. No schema migration or
-dependency is needed. Bulk lookup, a dedicated rate limiter and a profile screen
-remain unimplemented; fetch a selected contact's profile on demand.
+No WhatsApp message is sent, business contact/customer records and registration
+checks are not updated, and photos are not downloaded or archived on the server.
+The library may update its existing synced business names/LID mappings.
+
+Migration `011_contact_profile_push.sql` adds persistent photo revisions, session-bound
+FCM registrations and an asynchronous notification outbox. Successful profile reads
+now include `profile_revision`, a positive decimal integer encoded as a string.
+Picture-change/removal events and observed hidden/unset transitions invalidate
+registered devices. Failures never count as removal. Sending is disabled unless
+`FCM_PROJECT_ID` and private server credentials are configured; Android registration
+and cache handling are still required. See the complete
+[Android/FCM handover](../docs/FCM_ANDROID_HANDOVER.md) for migration/grants, credential
+setup, registration/event contracts, retries and remaining live checks.
+Startup requires migration 011 even when sending is disabled. Bulk lookup, dedicated
+rate limiting and a profile screen remain unimplemented; fetch selected contacts on demand.
 
 ## Authenticated pairing and reconnecting
 

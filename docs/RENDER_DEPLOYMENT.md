@@ -55,6 +55,12 @@ health/authentication/no-store checks and returned no deployment-window errors.
 The same WhatsApp start/status/exchange bodies support login and approved new-number
 signup. No real signup or customer message was performed during verification.
 
+The next backend version adds FCM photo invalidations and requires migration
+`011_contact_profile_push.sql` plus the updated runtime grants before deployment.
+These changes are not included in the deployed commit above. FCM sending remains
+disabled until a private server credential file and `FCM_PROJECT_ID` are supplied;
+see [the Android/FCM handover](FCM_ANDROID_HANDOVER.md) for configuration and client work.
+
 ## Service configuration
 
 The root [render.yaml](../render.yaml) defines the development service. It uses

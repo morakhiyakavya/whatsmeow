@@ -4,3 +4,4 @@
 /backend/ipo-api
 /backend/ipo-api.exe
 /backend/*.log
+/secrets/

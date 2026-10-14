@@ -225,6 +225,7 @@ func testWhatsAppPairing(t *testing.T, dsn string, db *sql.DB, app *api, admin, 
 	awaitConnection(t, s, businessID, id, "connected")
 	testWhatsAppNumbers(t, db, cashier, other, s, fake, upperPath)
 	testWhatsAppProfiles(t, cashier, other, s, fake, upperPath)
+	testPictureEvents(t, s, fake, cashier, upperPath)
 	status, object, _ = cashier.request("GET", path, nil, "")
 	expectStatus(t, 200, status, object)
 	if field(t, object, "pairing_state") != "paired" || field(t, object, "phone_number") != "+999000000011" || field(t, object, "id") != id {

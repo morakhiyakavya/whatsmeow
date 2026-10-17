@@ -10,6 +10,9 @@ For the complete staff and mobile workflow, read the
 transaction entry, contact uploads, name changes, new numbers, withdrawals, provenance
 and the distinction between implemented APIs and remaining mobile work.
 
+For linked-account sign-in recovery, Android approval/expiry/retry behaviour and
+private session diagnostics, see the [Android recovery contract](../docs/ANDROID_ACCOUNT_RECOVERY.md).
+
 ## Local setup and start
 
 From the repository root in PowerShell:
@@ -117,7 +120,7 @@ For a new database, apply `database/001_initial.sql`, `002_api.sql` and
 `005_transaction_confirmations.sql`, `006_passwordless_sessions.sql`, then
 `007_whatsapp_number_checks.sql`, `008_signed_transaction_quantity.sql`,
 `009_signed_transaction_rate.sql`, `010_development_signup.sql` and
-`011_contact_profile_push.sql` once,
+`011_contact_profile_push.sql` and `012_account_recovery.sql` once,
 in that order, as its migration owner. The API
 does not execute migrations on startup. Apply only missing migrations to an
 existing database. For the local installation that already has migrations 001/002:

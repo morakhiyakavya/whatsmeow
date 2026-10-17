@@ -87,6 +87,11 @@ func (a *api) startWhatsAppLogin(w http.ResponseWriter, r *http.Request) {
 	if !a.limitedAuth(w, r) {
 		return
 	}
+	recovery, recoveryHash, err := newSecret()
+	if err != nil {
+		dbFailure(w, err)
+		return
+	}
 	var input struct {
 		Phone string `json:"phone_number"`
 		Name  string `json:"device_name"`
@@ -159,12 +164,12 @@ func (a *api) startWhatsAppLogin(w http.ResponseWriter, r *http.Request) {
 			return
 		}
 		var outstanding bool
-		if err = tx.QueryRowContext(r.Context(), `SELECT EXISTS(SELECT 1 FROM ipo_pos.login_attempts WHERE business_id=$1 AND whatsapp_account_id=$2 AND consumed_at IS NULL)`, user.BusinessID, account).Scan(&outstanding); err != nil {
+		if err = tx.QueryRowContext(r.Context(), `SELECT EXISTS(SELECT 1 FROM ipo_pos.login_attempts WHERE business_id=$1 AND whatsapp_account_id=$2 AND consumed_at IS NULL AND recovery_hash IS NULL)`, user.BusinessID, account).Scan(&outstanding); err != nil {
 			dbFailure(w, err)
 			return
 		}
 		// Never let a second unauthenticated caller inherit the first caller's pairing proof.
-		if outstanding || jid.Valid {
+		if outstanding && !jid.Valid {
 			known = false
 		}
 	}
@@ -192,9 +197,14 @@ func (a *api) startWhatsAppLogin(w http.ResponseWriter, r *http.Request) {
 		userArg, businessArg, accountArg = user.UserID, user.BusinessID, account
 	}
 	var expiry time.Time
+	var recoveryArg any = recoveryHash
+	if known && !jid.Valid {
+		recoveryArg = nil
+	}
 	if err = tx.QueryRowContext(r.Context(), `INSERT INTO ipo_pos.login_attempts(token_hash,phone_number,user_id,business_id,whatsapp_account_id,device_name,
-        signup_user_id,signup_business_id,signup_account_id)
-        VALUES($1,$2,$3,$4,$5,$6,$7,$8,$9) RETURNING expires_at`, hash, input.Phone, userArg, businessArg, accountArg, input.Name, signupUser, signupBusiness, signupAccount).Scan(&expiry); err != nil {
+        signup_user_id,signup_business_id,signup_account_id,recovery_hash,auth_generation)
+        VALUES($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,
+        (SELECT auth_generation FROM ipo_pos.whatsapp_accounts WHERE business_id=$4 AND id=$5)) RETURNING expires_at`, hash, input.Phone, userArg, businessArg, accountArg, input.Name, signupUser, signupBusiness, signupAccount, recoveryArg).Scan(&expiry); err != nil {
 		dbFailure(w, err)
 		return
 	}
@@ -202,7 +212,7 @@ func (a *api) startWhatsAppLogin(w http.ResponseWriter, r *http.Request) {
 		dbFailure(w, err)
 		return
 	}
-	if known {
+	if known && !jid.Valid {
 		if _, err = a.whatsapp.start(user, account, "phone", input.Phone, hash); err != nil {
 			_, _ = a.whatsapp.db.ExecContext(r.Context(), `DELETE FROM ipo_pos.login_attempts WHERE token_hash=$1`, hash)
 			fail(w, 409, "login_busy", "An attempt is already running; wait for it to finish")
@@ -210,7 +220,8 @@ func (a *api) startWhatsAppLogin(w http.ResponseWriter, r *http.Request) {
 		}
 	}
 	// Pending starts expose neither account IDs nor another caller's pairing proof.
-	writeJSON(w, 202, map[string]any{"attempt_token": token, "state": "pending", "expires_at": expiry})
+	writeJSON(w, 202, map[string]any{"attempt_token": token, "state": "pending", "expires_at": expiry,
+		"next_step": "check_status", "recovery_message": recoveryPrefix + recovery})
 }
 
 func decodeSecret(w http.ResponseWriter, r *http.Request, key string) ([]byte, bool) {
@@ -237,8 +248,11 @@ func (a *api) whatsAppLoginStatus(w http.ResponseWriter, r *http.Request) {
 	}
 	var business, account sql.NullString
 	var state string
-	err := a.db.QueryRowContext(r.Context(), `SELECT COALESCE(business_id,signup_business_id),COALESCE(whatsapp_account_id,signup_account_id),state FROM ipo_pos.login_attempts
-        WHERE token_hash=$1 AND expires_at>now() AND consumed_at IS NULL`, hash).Scan(&business, &account, &state)
+	var recovery bool
+	var expiry time.Time
+	err := a.db.QueryRowContext(r.Context(), `SELECT COALESCE(business_id,signup_business_id),COALESCE(whatsapp_account_id,signup_account_id),state,
+		recovery_hash IS NOT NULL,expires_at FROM ipo_pos.login_attempts
+        WHERE token_hash=$1 AND expires_at>now() AND consumed_at IS NULL`, hash).Scan(&business, &account, &state, &recovery, &expiry)
 	if errors.Is(err, sql.ErrNoRows) {
 		fail(w, 401, "invalid_token", "Token is invalid or expired")
 		return
@@ -247,10 +261,19 @@ func (a *api) whatsAppLoginStatus(w http.ResponseWriter, r *http.Request) {
 		dbFailure(w, err)
 		return
 	}
-	result := connectionState{State: state}
-	if state == "pending" && account.Valid && a.whatsapp != nil {
+	result := connectionState{State: state, NextStep: "send_recovery_message"}
+	result.ExpiresAt = expiry
+	if state == "verified" {
+		result.NextStep = "exchange"
+	}
+	if state == "pending" && !recovery && account.Valid && a.whatsapp != nil {
+		result.NextStep = "restart_login"
 		if current, found := a.whatsapp.state(business.String, account.String); found {
 			result = current
+			result.NextStep = "link_whatsapp"
+			if result.Code == "" && result.State != "connecting" && result.State != "finishing_pairing" {
+				result.NextStep = "restart_login"
+			}
 		}
 	}
 	writeJSON(w, 200, result)
@@ -272,8 +295,9 @@ func (a *api) exchangeWhatsAppLogin(w http.ResponseWriter, r *http.Request) {
 	defer tx.Rollback()
 	var user, business, account, name string
 	var generation int64
-	err = tx.QueryRowContext(r.Context(), `SELECT user_id,business_id,whatsapp_account_id,device_name,auth_generation
-        FROM ipo_pos.login_attempts WHERE token_hash=$1 AND state='verified' AND expires_at>now() AND consumed_at IS NULL`, hash).Scan(&user, &business, &account, &name, &generation)
+	var recovery bool
+	err = tx.QueryRowContext(r.Context(), `SELECT user_id,business_id,whatsapp_account_id,device_name,auth_generation,recovery_hash IS NOT NULL
+        FROM ipo_pos.login_attempts WHERE token_hash=$1 AND state='verified' AND expires_at>clock_timestamp() AND consumed_at IS NULL`, hash).Scan(&user, &business, &account, &name, &generation, &recovery)
 	if errors.Is(err, sql.ErrNoRows) {
 		fail(w, 401, "login_unverified", "Login proof is invalid, incomplete or expired")
 		return
@@ -281,6 +305,29 @@ func (a *api) exchangeWhatsAppLogin(w http.ResponseWriter, r *http.Request) {
 	if err != nil {
 		dbFailure(w, err)
 		return
+	}
+	if recovery {
+		// Serialize replacements before taking any session/attempt locks.
+		var id string
+		err = tx.QueryRowContext(r.Context(), `SELECT id FROM ipo_pos.whatsapp_accounts WHERE business_id=$1 AND id=$2 FOR UPDATE`, business, account).Scan(&id)
+		if err == nil {
+			err = lockSessionLink(r.Context(), tx, user, business, account, generation)
+		}
+		if err != nil {
+			if errors.Is(err, sql.ErrNoRows) {
+				fail(w, 401, "login_unverified", "Login proof is invalid, incomplete or expired")
+			} else {
+				dbFailure(w, err)
+			}
+			return
+		}
+		if _, err = tx.ExecContext(r.Context(), `SELECT set_config('venweb.auth_reason','recovery_replaced',true),set_config('venweb.auth_release',$1,true)`, a.release); err == nil {
+			_, err = tx.ExecContext(r.Context(), `DELETE FROM ipo_pos.login_sessions WHERE user_id=$1`, user)
+		}
+		if err != nil {
+			dbFailure(w, err)
+			return
+		}
 	}
 	result, err := issueLinkedSession(r.Context(), tx, user, business, account, generation, name, "", nil)
 	if errors.Is(err, sql.ErrNoRows) {
@@ -292,7 +339,7 @@ func (a *api) exchangeWhatsAppLogin(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	consumed, err := tx.ExecContext(r.Context(), `UPDATE ipo_pos.login_attempts SET consumed_at=now()
-	WHERE token_hash=$1 AND consumed_at IS NULL AND expires_at>now()`, hash)
+	WHERE token_hash=$1 AND consumed_at IS NULL AND expires_at>clock_timestamp()`, hash)
 	if err != nil {
 		dbFailure(w, err)
 		return
@@ -303,6 +350,14 @@ func (a *api) exchangeWhatsAppLogin(w http.ResponseWriter, r *http.Request) {
 	} else if count != 1 {
 		fail(w, 401, "invalid_token", "Login proof was already consumed")
 		return
+	}
+	if recovery {
+		// The first successful replacement invalidates sibling approvals atomically.
+		if _, err = tx.ExecContext(r.Context(), `UPDATE ipo_pos.login_attempts SET consumed_at=now()
+			WHERE user_id=$1 AND recovery_hash IS NOT NULL AND consumed_at IS NULL`, user); err != nil {
+			dbFailure(w, err)
+			return
+		}
 	}
 	if err = tx.Commit(); err != nil {
 		dbFailure(w, err)
@@ -330,6 +385,8 @@ func (a *api) refreshSession(w http.ResponseWriter, r *http.Request) {
 	err = tx.QueryRowContext(r.Context(), `SELECT s.user_id,s.business_id,s.whatsapp_account_id,s.auth_generation,s.device_name,s.id
 		FROM ipo_pos.login_sessions s`+sessionJoins+`WHERE s.refresh_hash=$1 AND s.refresh_expires_at>now() AND `+sessionEligible, hash).Scan(&user, &business, &account, &generation, &name, &id)
 	if errors.Is(err, sql.ErrNoRows) {
+		_ = tx.Rollback()
+		a.recordRefreshRejection(r.Context(), hash)
 		fail(w, 401, "invalid_token", "Session is invalid or expired")
 		return
 	}
@@ -341,10 +398,17 @@ func (a *api) refreshSession(w http.ResponseWriter, r *http.Request) {
 	result, err := issueLinkedSession(r.Context(), tx, user, business, account, generation, name, id, hash)
 	if err != nil {
 		if errors.Is(err, sql.ErrNoRows) {
-			fail(w, 401, "link_revoked", "Approve a fresh login")
+			_ = tx.Rollback()
+			a.recordRefreshRejection(r.Context(), hash)
+			fail(w, 401, "invalid_token", "Session is invalid or expired")
 		} else {
 			dbFailure(w, err)
 		}
+		return
+	}
+	if _, err = tx.ExecContext(r.Context(), `INSERT INTO ipo_pos.auth_events(user_id,session_id,reason,release)
+		VALUES($1,$2,'refresh_rotated',$3)`, user, id, a.release); err != nil {
+		dbFailure(w, err)
 		return
 	}
 	if err = tx.Commit(); err != nil {
@@ -503,7 +567,7 @@ func (a *api) removeSession(w http.ResponseWriter, r *http.Request) {
 		fail(w, 400, "invalid_id", "Invalid session ID")
 		return
 	}
-	if _, err := a.db.ExecContext(r.Context(), `DELETE FROM ipo_pos.login_sessions WHERE user_id=$1 AND id=$2`, user, id); err != nil {
+	if err := a.deleteSessions(r.Context(), "device_removed", `DELETE FROM ipo_pos.login_sessions WHERE user_id=$1 AND id=$2`, user, id); err != nil {
 		dbFailure(w, err)
 		return
 	}
@@ -515,7 +579,7 @@ func (a *api) logoutAll(w http.ResponseWriter, r *http.Request) {
 	if !ok {
 		return
 	}
-	if _, err := a.db.ExecContext(r.Context(), `DELETE FROM ipo_pos.login_sessions WHERE user_id=$1`, user); err != nil {
+	if err := a.deleteSessions(r.Context(), "logout_all", `DELETE FROM ipo_pos.login_sessions WHERE user_id=$1`, user); err != nil {
 		dbFailure(w, err)
 		return
 	}

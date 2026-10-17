@@ -335,6 +335,10 @@ func testPasswordless(t *testing.T, dsn string, owner, db *sql.DB, app *api, adm
 	expectStatus(t, 204, status, obj)
 	status, obj, _ = laptop.request("GET", "/api/me", nil, "")
 	expectStatus(t, 401, status, obj)
+	t.Run("Recover a linked account without POS sessions", func(t *testing.T) {
+		public.t = t
+		testRecovery(t, owner, db, app, public, s, fake, user, business, account)
+	})
 	// Restore a fixture-only session to exercise explicit remote unlink without new pairing.
 	tx, err := owner.BeginTx(ctx, nil)
 	if err != nil {

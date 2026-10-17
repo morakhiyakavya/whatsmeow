@@ -51,7 +51,7 @@ func testDevelopmentSignup(t *testing.T, dsn string, owner, db *sql.DB, app *api
 		reset()
 		status, obj, _ := public.request("POST", "/api/auth/whatsapp/start", map[string]string{"phone_number": phone, "device_name": "Signup phone"}, "")
 		expectStatus(t, 202, status, obj)
-		if len(obj) != 3 {
+		if len(obj) != 5 || field(t, obj, "next_step") != "check_status" || field(t, obj, "recovery_message") == "" {
 			t.Fatal("start exposed identity or changed the contract")
 		}
 		token := field(t, obj, "attempt_token")

@@ -30,6 +30,7 @@ SET ROLE ipo_platform_owner;
 \ir 009_signed_transaction_rate.sql
 \ir 010_development_signup.sql
 \ir 011_contact_profile_push.sql
+\ir 012_account_recovery.sql
 REVOKE ALL ON SCHEMA ipo_pos, whatsapp FROM PUBLIC;
 RESET ROLE;
 \set api_role ipo_platform_api

@@ -156,7 +156,11 @@ platform scales; this is tracked in [TODO.md](TODO.md). Several POS devices shar
 that user's one backend WhatsApp connection, with separate renewable sessions.
 The original signed-in device can
 display a two-minute, one-use token for another device; no second WhatsApp pairing
-is performed. Removal from WhatsApp's Linked devices invalidates the user's POS
+is performed. Users who lose every POS session can approve a fresh recovery through
+a primary-phone WhatsApp self-chat challenge; successful exchange replaces POS
+sessions/push registrations while retaining the existing link, memberships and
+transaction identities. See the [Android recovery contract](ANDROID_ACCOUNT_RECOVERY.md).
+Removal from WhatsApp's Linked devices invalidates the user's POS
 sessions when detected, preserving users and history. Device-only logout, all-POS
 logout and WhatsApp disconnect are distinct actions. Temporary network loss keeps
 login. Backend integration checks passed; live passwordless login and mobile

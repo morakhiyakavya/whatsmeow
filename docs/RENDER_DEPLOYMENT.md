@@ -74,6 +74,11 @@ private server credential file, and Android still needs token/event integration;
 see [the Android/FCM handover](FCM_ANDROID_HANDOVER.md). The local application
 database has not received migration 011. No real WhatsApp/customer message was sent.
 
+The account-recovery API is implemented locally and is not deployed. Before
+publishing it, apply migration `012_account_recovery.sql` and the shared runtime
+grants to the hosted database. Its Android changes and live primary-phone approval
+must also be verified; see the [recovery contract](ANDROID_ACCOUNT_RECOVERY.md).
+
 ## Service configuration
 
 The root [render.yaml](../render.yaml) defines the development service. It uses
@@ -182,8 +187,9 @@ always-running service plan. It is suitable for development and manual API tests
 
 ## Database changes and rollback
 
-All ten existing POS migrations are already applied in the current Supabase
-project. Do not run them in the build command, the start command or every deploy.
+POS migrations 001–011 are already applied in the current Supabase project;
+migration 012 remains pending. Do not run migrations in the build command, the
+start command or every deploy.
 For subsequent changes, follow the
 [Supabase table and migration instructions](SUPABASE_SETUP.md#inspect-tables-and-apply-future-migrations).
 

@@ -147,13 +147,14 @@ Content-Type: application/json
 {"phone_number":"+919000001003","device_name":"My primary phone"}
 ```
 
-HTTP 202 returns `attempt_token`, `state: "pending"` and `expires_at`. Keep this
-private credential on the requesting device. The attempt lasts three minutes and
-cannot be shared between callers. Only one active proof attempt owns a given account;
-unknown numbers in production, already-linked and overlapping attempts return a generic pending shape
-without account/user IDs or another caller's code. If no code becomes available,
-check staff provisioning or use the additional-device token flow below. This is
-not a promise that every accepted request starts a new WhatsApp pairing.
+HTTP 202 returns `attempt_token`, `state: "pending"`, `expires_at`,
+`next_step: "check_status"` and an independent `recovery_message`. Keep these
+private values on the requesting device. The attempt lasts three minutes and
+cannot be shared between callers. Pairing stays exclusive; recovery attempts have
+independent challenges. Start responses retain a generic shape without account/user
+IDs or another caller's code. Follow status `next_step` and stop at the deadline.
+See the [Android recovery contract](ANDROID_ACCOUNT_RECOVERY.md) for all fields,
+approval instructions, terminal errors, offline behaviour and retry limits.
 
 Poll with the attempt credential in the body, about every two seconds:
 
@@ -186,9 +187,14 @@ An unverified, expired or consumed attempt cannot issue a session. Existing
 owner-authenticated pairing endpoints stay protected; they were not made public.
 
 The account/user IDs remain stable across logout and relinking. A returning user
-with no signed-in POS device must remove the old POS link in WhatsApp if it is still
-present, then repeat verified number linking. Saved server credentials or typing
-an already-linked number alone never authorise a new device.
+with no signed-in POS device follows `next_step: "send_recovery_message"`: send
+the exact recovery message as a new message to **Message yourself** from the
+primary WhatsApp phone. Fresh verified approval permits a one-use session exchange,
+replacing old POS sessions and push registrations while preserving the WhatsApp
+link and all business/transaction identities. Unknown/ineligible numbers receive
+the same pending shape and expire without credentials. Saved server credentials
+or typing an already-linked number alone never authorise a new device. Manual
+WhatsApp unlinking is an exceptional fallback, not normal recovery.
 
 #### Additional devices: token displayed on the original device
 

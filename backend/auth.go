@@ -109,6 +109,10 @@ func (a *api) login(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	defer tx.Rollback()
+	if _, err = tx.ExecContext(r.Context(), `SELECT set_config('venweb.auth_reason','session_expired',true),set_config('venweb.auth_release',$1,true)`, a.release); err != nil {
+		dbFailure(w, err)
+		return
+	}
 	if _, err = tx.ExecContext(r.Context(), "DELETE FROM ipo_pos.login_sessions WHERE expires_at<=now() AND (refresh_expires_at IS NULL OR refresh_expires_at<=now())"); err != nil {
 		dbFailure(w, err)
 		return
@@ -211,7 +215,7 @@ func (a *api) logout(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	hash, _ := sessionHash(r)
-	if _, err := a.db.ExecContext(r.Context(), "DELETE FROM ipo_pos.login_sessions WHERE token_hash=$1", hash); err != nil {
+	if err := a.deleteSessions(r.Context(), "logout", "DELETE FROM ipo_pos.login_sessions WHERE token_hash=$1", hash); err != nil {
 		dbFailure(w, err)
 		return
 	}

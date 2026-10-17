@@ -24,19 +24,23 @@ Content-Type: application/json
 
 {"fcm_token":"{{fcm_token}}"}
 
-### First-device login/signup: APP_ENV=development permits new numbers after approval
+### Login/recovery: retain attempt_token, recovery_message and expires_at; see docs/ANDROID_ACCOUNT_RECOVERY.md
+# APP_ENV=development permits new numbers only after WhatsApp pairing approval.
 POST {{base}}/api/auth/whatsapp/start
 Content-Type: application/json
 
 {"phone_number":"{{whatsapp_login_phone}}","device_name":"My phone"}
 
-### Poll the private attempt; enter its code in WhatsApp Linked devices
+### Poll every two seconds until expiry and follow next_step
+# link_whatsapp: enter code in WhatsApp Linked devices.
+# send_recovery_message: send the exact start response's recovery_message to Message yourself from the primary phone.
+# restart_login: stop polling and start again. verified/exchange: exchange below.
 POST {{base}}/api/auth/whatsapp/status
 Content-Type: application/json
 
 {"attempt_token":"{{attempt}}"}
 
-### Exchange only after verified; capture access/refresh/account IDs
+### Exchange only after verified; save both tokens atomically and register FCM again after recovery
 POST {{base}}/api/auth/whatsapp/exchange
 Content-Type: application/json
 

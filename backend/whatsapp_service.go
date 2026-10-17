@@ -37,6 +37,7 @@ type connectionState struct {
 	Method    string    `json:"method,omitempty"`
 	Code      string    `json:"code,omitempty"`
 	ExpiresAt time.Time `json:"expires_at,omitzero"`
+	NextStep  string    `json:"next_step,omitempty"`
 }
 
 type accountConnection struct {
@@ -285,6 +286,16 @@ func (s *whatsAppService) run(user actor, id string, c *accountConnection) strin
 	defer func() { cancel(); client.Disconnect() }()
 	lifecycle := make(chan any, 16)
 	client.AddEventHandler(func(evt any) {
+		if message, ok := evt.(*events.Message); ok {
+			if _, approval := recoveryMessageHash(device, message); !approval {
+				return
+			}
+			select {
+			case lifecycle <- message:
+			case <-ctx.Done():
+			}
+			return
+		}
 		switch evt.(type) {
 		case *events.PairSuccess, *events.Connected, *events.Disconnected, *events.ManualLoginReconnect, *events.Picture, events.PermanentDisconnect:
 			select {
@@ -420,6 +431,15 @@ func (s *whatsAppService) run(user actor, id string, c *accountConnection) strin
 			}
 		case evt := <-lifecycle:
 			switch evt.(type) {
+			case *events.Message:
+				if saved.Valid && c.state().State == "connected" {
+					eventCtx, stop := context.WithTimeout(ctx, 5*time.Second)
+					err = s.approveRecovery(eventCtx, device, user, id, saved.String, evt.(*events.Message))
+					stop()
+					if err != nil {
+						return "storage_unavailable"
+					}
+				}
 			case *events.Picture:
 				if saved.Valid && c.state().State == "connected" {
 					eventCtx, stop := context.WithTimeout(ctx, 5*time.Second)

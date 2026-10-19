@@ -205,6 +205,18 @@ The schema indexes business/customer/IPO transaction timelines, conversation mes
 
 IPOs/forms have relational fields; validated JSON is reserved for extra IPO metadata and versioned AI/rule payloads. Add future domain fields with explicit migrations. Because snapshot fields mirror the current record, any new transaction field must be added to both tables in the same migration (same column order while the snapshot trigger uses `NEW.*`) and the tests updated. Do not alter historical snapshots to reinterpret older category calculations. Future analytics can join raw versions with separately versioned analytical rules.
 
+The planned [IPO catalogue collection contract](PROJECT_VISION.md#ipo-information)
+adds board/exchange identity, issue/application terms, tentative date precision,
+registrar, explicit issue-size units, investor reservations, promoter shareholding
+and anchor lock-in dates to the current core. Subscription observations need
+their own source/coverage/as-of data. The Sentry-triggered importer needs durable
+run state; category application amounts come from one shared Go calculation
+adapted from the reviewed frontend. User-entered GMP is shared
+within a business and must be stored separately from global catalogue values,
+with actor/time/history and business isolation. These are future migrations, not
+existing tables/APIs. The 30-minute importer must preserve IPO IDs and references;
+an issue leaving the active list or a source failing must not delete its history.
+
 IPO price metadata is not a transaction rate source unless an explicit later rule says so. No extra units column, numbered-form combinations, inventory tables, payment assumptions, or Subject 1/2 formulas are included.
 
 ## Validation and application

@@ -7,13 +7,13 @@ business/admin or copy local WhatsApp sessions.
 
 ## Current deployment
 
-Deployed and verified on 14 October 2026 in `kavya's Workspace`:
+Deployed and verified on 17 October 2026 in `kavya's Workspace`:
 
 - API base URL: [whatsapp-pos-dev](https://whatsapp-pos-dev.onrender.com).
 - [Live health endpoint](https://whatsapp-pos-dev.onrender.com/health).
 - [Render dashboard](https://dashboard.render.com/web/srv-db5nundckfvc73arsvkg).
-- Deployed commit: `c269a0ef6785df5b504cd2bed2a35916c483ce3e` on `main`.
-- Deployment: `dep-db7h27u7bikc73asdv20`; service: `srv-db5nundckfvc73arsvkg`.
+- Deployed commit: `7646f19a91401079fd90162280a5df46854c16e1` on `main`.
+- Deployment: `dep-db9mfn0m7kps73dui9r0`; service: `srv-db5nundckfvc73arsvkg`.
 - One Free instance in Singapore; automatic deployments disabled.
 
 Render reported the deployment live. Public HTTPS checks passed: `/health` returns
@@ -59,7 +59,7 @@ The FCM contact-photo invalidation backend was deployed on 14 October 2026.
 Applied Supabase migration `011_contact_profile_push.sql` and the shared runtime
 grants first, preserving the existing user and business. Verified the new tables,
 restricted runtime writes and rollback-only registration/revision/outbox/disablement
-behavior; no probe records remain. Pushed the reviewed commit above and triggered
+behavior; no probe records remain. Pushed FCM commit `c269a0e` and triggered
 one manual deployment with the existing build cache. Render built that exact commit
 and reported it live; startup passed the migration-011 guard and listened on
 `0.0.0.0:10000`. Public health 200, unauthenticated me 401, disabled password login
@@ -72,12 +72,26 @@ Google credential readiness, authenticated hosted registration/profile requests 
 live device delivery remain unverified. Sending requires `FCM_PROJECT_ID` and a
 private server credential file, and Android still needs token/event integration;
 see [the Android/FCM handover](FCM_ANDROID_HANDOVER.md). The local application
-database has not received migration 011. No real WhatsApp/customer message was sent.
+database had not received migration 011 at that deployment. No real WhatsApp/customer message was sent.
 
-The account-recovery API is implemented locally and is not deployed. Before
-publishing it, apply migration `012_account_recovery.sql` and the shared runtime
-grants to the hosted database. Its Android changes and live primary-phone approval
-must also be verified; see the [recovery contract](ANDROID_ACCOUNT_RECOVERY.md).
+The account-recovery API was deployed on 17 October 2026 at 12:20:24 UTC
+(17:50:24 IST), after applying migration `012_account_recovery.sql` and shared
+runtime grants to Supabase. Local PostgreSQL received missing migrations 011/012
+and the same grants. Verified migration ownership, client-to-pooler TLS with
+certificate/hostname verification, restricted runtime permissions, rollback-only
+session deletion/audit probes and preserved account, membership, session and
+transaction/retry/confirmation identities. No probe records remain.
+
+Render built the exact reviewed commit with its cache, passed the migration-012
+startup guard, listened on `0.0.0.0:10000` and reached `live`. Hosted checks passed:
+health 200, unauthenticated me/logout-all 401, disabled password login 403,
+linked-account start 202, status 200 with `next_step: send_recovery_message`, and
+401 for both unapproved attempt-token and challenge-only exchanges. All responses
+were `no-store`; session/link identities were unchanged by the smoke test. The
+unapproved verification attempt expires normally. No WhatsApp approval, session
+replacement or customer message was performed. Deployment-window logs show no
+startup failure. Android integration and live primary-phone approval remain
+unverified; see the [recovery contract](ANDROID_ACCOUNT_RECOVERY.md).
 
 ## Service configuration
 
@@ -187,8 +201,8 @@ always-running service plan. It is suitable for development and manual API tests
 
 ## Database changes and rollback
 
-POS migrations 001–011 are already applied in the current Supabase project;
-migration 012 remains pending. Do not run migrations in the build command, the
+POS migrations 001–012 are already applied in the current Supabase project
+and local database. Do not run migrations in the build command, the
 start command or every deploy.
 For subsequent changes, follow the
 [Supabase table and migration instructions](SUPABASE_SETUP.md#inspect-tables-and-apply-future-migrations).

@@ -8,7 +8,7 @@ WhatsApp credentials are not copied by this setup.
 
 Project `tqfwoudoxundtrhogmwa` was installed and verified on 11 October 2026 using
 the Singapore session pooler on port `5432`. PostgreSQL reports version 17.11.
-Application migrations 001–011 are installed: `ipo_pos` has 25 tables, and the
+Application migrations 001–012 are installed: `ipo_pos` has 26 tables, and the
 backend initialized 17 WhatsApp credential tables at library schema version 16.
 One existing user and business were observed and preserved during migration 011.
 Do not rerun the fresh-install script for this project.
@@ -40,13 +40,20 @@ owner-role regrant emitted a harmless already-held/no-grant-option warning.
 Hosted rollback-only probes exercised session/device association, revision/outbox
 inserts and disabled-user cascade cleanup. The existing user/business remained,
 with zero probe registrations, revisions or pending notifications afterward.
-The local application database remains on migration 010. See
+At that deployment the local application database remained on migration 010. See
 [the FCM/Android handover](FCM_ANDROID_HANDOVER.md) for credential and client setup.
 
-Migration `012_account_recovery.sql` is implemented locally and remains unapplied
-to the existing local and hosted databases. Apply it and the shared runtime grants
-before deploying the recovery API; the local database also still needs migration
-011. See the [Android recovery contract](ANDROID_ACCOUNT_RECOVERY.md).
+Migration `012_account_recovery.sql` and the shared runtime grants were applied
+to Supabase on 17 October 2026 before deploying recovery commit `7646f19` to Render.
+The local database also received missing migrations 011/012 and runtime grants.
+Verified the expected project, owner/runtime role separation and client-to-pooler
+TLS using `verify-full` and the bundled CA. Existing users, businesses, memberships,
+link generations, POS sessions and transaction/history/retry/confirmation identities
+were preserved. Both actual runtime connections passed rollback-only synthetic
+session deletion/audit checks; no probe records remain. The hosted account retained
+its existing POS session and WhatsApp link. A CONNECT regrant warning from the
+restricted owner was harmless: existing runtime CONNECT permission was verified.
+See the [Android recovery contract](ANDROID_ACCOUNT_RECOVERY.md).
 
 Generated, separate role credentials are saved privately in the Git-ignored
 root `.env.supabase`, with file access restricted to your Windows account and
@@ -223,7 +230,7 @@ ORDER BY schemaname, tablename;
 SELECT code, name FROM ipo_pos.form_types ORDER BY code;
 ```
 
-Currently expect 25 POS tables (26 after migration 012), 17 WhatsApp tables and seven form types seeded by
+Currently expect 26 POS tables, 17 WhatsApp tables and seven form types seeded by
 migration 001. In Table Editor, select schema `ipo_pos` to browse the application
 tables. Many tables are empty until you create a business, staff or sales.
 The `whatsapp` schema contains private linked-device credentials; inspect its
@@ -231,7 +238,7 @@ structure without sharing credential rows. You do not need to expose either
 schema in the Data API to inspect it in the dashboard.
 
 A migration is a versioned SQL file that changes the database structure or seed
-data. Migrations 001–011 already ran on this project; 012 is pending. The API does not apply
+data. Migrations 001–012 already ran on this project. The API does not apply
 them on startup, and these files are not tracked by Supabase CLI's migration
 history. Do not run `supabase db push` expecting it to recognise this installation.
 

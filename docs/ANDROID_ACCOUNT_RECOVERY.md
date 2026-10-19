@@ -218,6 +218,11 @@ The disposable PostgreSQL/fake-protocol suite covers zero-session linked recover
 fresh live approval, wrong source/device/chat, expired/replayed proofs, concurrent
 replacement, offline waiting, unauthorized logout/disconnect, preserved database
 records and transaction retry identities, push cleanup and private refresh reasons.
-Real primary-phone self-chat delivery, Android screens/secure persistence and
-hosted migration/deployment remain separate rollout checks. Manually unlinking in
-WhatsApp is an exceptional fallback, not the recovery protocol.
+Migration 012 and runtime grants were applied to local PostgreSQL and Supabase on
+17 October 2026 (local storage also received missing migration 011). Render deploy
+`dep-db9mfn0m7kps73dui9r0` reached live on commit `7646f19`. Hosted health/auth checks,
+linked-account `send_recovery_message` status, unapproved/challenge-only exchange
+rejections and unchanged session/link identities passed. No live ownership approval
+or session replacement was performed. Real primary-phone self-chat delivery and
+Android screens/secure persistence remain separate rollout checks. Manually
+unlinking in WhatsApp is an exceptional fallback, not the recovery protocol.

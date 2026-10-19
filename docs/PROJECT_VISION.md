@@ -43,7 +43,141 @@ Both methods use the same transaction records, calculations, validation, and ver
 
 ### IPO information
 
-The system needs an IPO catalogue containing the IPO's identity and relevant information. The initial database design allows names, identifiers, relevant dates, optional price-band data, and additional metadata. Further IPO fields can be added as the business requirements become clearer.
+IPOs are the products in a shared catalogue. The existing database stores their
+identity, names, confirmed opening/closing/listing dates, optional price band and
+extra metadata. The expanded catalogue and refresh workflow below are planned;
+the current API supports manual creation/listing, not automatic collection.
+
+The required collection scope is:
+
+| Data | Required representation |
+|---|---|
+| Identity | Stable internal IPO ID, issuer/name, source issue identifier, exchange/symbol where available, Mainboard or SME |
+| Price band | Exact decimal lower/upper prices; distinguish fixed-price issues and unknown/unannounced prices |
+| Overall subscription | Subscription multiple, with underlying offered/bid shares when published, source coverage and observation time |
+| Subscription by investor category | QIB, total NII/HNI, sNII/SHNI, bNII/BHNI, Retail or SME Individual Investor, and issue-specific reservations when available; preserve source labels |
+| Dates | Opening, closing and listing; preserve expected dates/windows separately from confirmed dates and leave unknown dates unknown |
+| Base lot size | Shares per exchange bid lot |
+| Category application requirements | Applicable minimum/maximum lots, corresponding shares and amount for Retail/Individual Investor, SHNI and BHNI; retain the rule and price basis when calculated |
+| Investor reservations | Reserved share counts and percentages by category, with the stated issue/net-offer basis; unavailable values remain unknown |
+| Promoter shareholding | Published pre-IPO and post-IPO percentages, with the source's holder labels and observation time |
+| Anchor lock-ins | Published expiry dates and associated allocation portions when available; do not invent dates from an assumed listing-date offset |
+| Registrar | Issuer-appointed registrar name and official allotment link when available; separate from listing exchange |
+| Issue size | Share count and monetary amount with explicit currency/units; distinguish total issue, fresh issue and offer for sale when available |
+
+Investor subscription categories are separate from the transaction's
+None/Subject 1/Subject 2 category. A base lot size is not a different share count
+for every investor category: category application limits refer to multiples of
+that lot. Preserve issue/board-specific rules and effective dates rather than
+applying Mainboard retail assumptions to SME issues. For example, NSE's current
+[e-IPO FAQ](https://www.nseindia.com/static/trade/e-ipo-faqs) distinguishes SME
+Individual Investors from NII by the number of lots; see also
+[circular IPO68604](https://nsearchives.nseindia.com/content/circulars/IPO68604.pdf).
+Do not sum overlapping NII parent/subcategory rows or subscription multiples.
+Unavailable subscription is unknown, not zero; distinguish exchange-only figures
+from consolidated figures before displaying a total.
+
+Adapt the reviewed repository's frontend `categoryOptions` calculation into one
+shared Go calculation used by the catalogue API. Return minimum lots, shares and
+application amount with the price basis and applicable category rules. Preserve
+strict/inclusive amount boundaries correctly, use exact decimal arithmetic and
+validate Mainboard/SME differences before reuse. Missing price/lot/rule inputs
+produce unavailable calculations. Do not copy its investment recommendations or
+allotment-odds estimates along with the amount calculation.
+
+Useful additional fields to confirm are allotment/refund/demat dates, final issue
+price, face value, prospectus/RHP links and issue status.
+These are candidates, not a requirement to collect every company financial metric.
+
+### Catalogue collection and lifecycle (planned)
+
+- Use **Sentry Uptime Monitoring** to send an authenticated POST every **30
+  minutes** to a dedicated Render endpoint. The user confirms Render is
+  continuously available. The uptime request triggers the backend importer;
+  Sentry does not host its code. No GitHub Actions schedule or paid Render cron
+  is required for this selected design. See the
+  [Sentry request options](https://docs.sentry.io/product/monitors-and-alerts/monitors/uptime-monitoring/#configuring-an-uptime-monitor).
+- The proposed `POST /internal/jobs/ipo-refresh` uses a dedicated, rotatable job
+  credential in a header, not a phone user's POS session or URL parameter. Persist
+  accepted work before returning a fast acknowledgement; imports run in the
+  existing Go process outside the request lifetime. Deduplicate repeated triggers,
+  prevent overlapping imports and resume interrupted work after restart with
+  bounded retries/timeouts. Manual verification requests must obey the same rules.
+- Store run/source results, last successful refresh and freshness. Request
+  acceptance is not import completion: capture actual import failures in Sentry
+  and expose stale/partial data through the catalogue API. A delayed/missed uptime
+  request must be visible, and the next accepted trigger refreshes current data.
+- Discover new issues and refresh existing terms, dates, status and subscriptions.
+  Target active/upcoming and recently closed issues for ongoing updates; retain
+  older records and final observations for transaction history. Lifecycle states
+  include upcoming, open, closed/awaiting listing, listed, postponed or withdrawn
+  when supported by evidence. Leaving the active list does not delete the product.
+- Reuse the existing Go backend, IPO catalogue and read API. Selectively adapt
+  collection logic and the category-amount calculation from the reviewed
+  [ipo-tracker repository](https://github.com/hedaprateek/ipo-tracker), retaining
+  required notices for copied code. Do not depend on its published JSON or import
+  its investor dashboard, GMP scraper or investment-report features. This is
+  selective adaptation into our repository, not a fork or a second Node service;
+  upstream fixes must be evaluated and ported deliberately.
+- Select permitted sources and verify coverage of both Mainboard and SME issues,
+  including NSE/BSE coverage, before claiming a complete catalogue. Preserve
+  source references, provider timestamps where available, local fetch times and
+  per-source/run results. Confirmed and tentative dates must remain distinguishable.
+- Validate parsed shapes, identities, dates, decimals and units before upserting.
+  Keep internal IDs stable and avoid automatic name-prefix joins. Partial/empty
+  responses or missing fields must not erase valid data, imply withdrawal or
+  recreate a product. Surface stale/partial coverage and parser failures for repair.
+- Keep changing subscription observations separate from product identity. Add
+  relational fields/observations through migrations as the source contract is
+  implemented; JSON metadata is for extras, not the only definition of core fields.
+- Before delivery, check parser fixtures for Mainboard/SME and schema changes,
+  tentative dates, category/amount boundaries, repeated imports, partial failures,
+  restart scheduling, stale data and preservation of transaction references.
+
+### Final delivery plan (19 October 2026)
+
+1. **Source fixtures and field mapping:** validate current NSE issue/detail data
+   and IPO Watch reservation, promoter-shareholding and anchor-lock-in data.
+   Record which required values are available and which need another permitted
+   source, including coverage gaps for BSE/SME and tentative dates. Keep missing
+   values explicit. Reuse only the selected code, retaining required notices.
+2. **Database and catalogue API:** extend existing IPO records and related data
+   through additive migrations. Preserve stable IPO IDs, transaction references
+   and manual data provenance; store source/coverage/timestamps and import state.
+   Update existing catalogue reads for the agreed fields and calculated category
+   amounts, reusing current authentication and decimal-string conventions.
+3. **Collector and calculation:** port the selected extraction/mapping logic into
+   Go with bounded requests, source validation and safe upserts. Implement one
+   exact-decimal category calculation and test strict amount boundaries and board
+   differences. Record partial failures without erasing valid prior observations.
+4. **Trigger and execution:** implement the protected endpoint, durable job state,
+   non-overlapping worker, restart recovery and run/freshness diagnostics in the
+   existing backend. Test duplicates, invalid credentials, cancellation, timeouts,
+   failures and interrupted runs with synthetic data before live configuration.
+5. **Rollout:** after the implementation is reviewed and verified, apply the
+   migration, deploy to the existing Render service and configure one Sentry
+   uptime monitor with POST, a protected header and a 30-minute interval. Verify
+   a controlled import and subsequent scheduled triggers, final stored data and
+   error reporting. Configure actual uptime entitlements and alert settings then;
+   the plan itself creates no resources or credentials and performs no deployment.
+
+Completion means the agreed data is readable through the catalogue API, category
+amounts are correct, scheduled triggers produce completed imports, source failures
+and stale results are identifiable, and existing transactions and business GMP
+remain intact. This increment does not implement user GMP-entry screens/API,
+investment reports, allotment checking, or a replacement web/mobile dashboard.
+
+### User-maintained GMP (planned)
+
+GMP is normally entered or updated by users and **shared within their business**.
+It is separate from the global IPO catalogue: one business's value must not change
+another business's value. Keep the supplying user, effective/recorded time and
+change history with each update, with business-authorised writes. The exact staff
+permission and whether one or multiple quote types are needed remain to be agreed.
+External GMP collection is outside the initial importer scope. A catalogue refresh
+must never overwrite user GMP or an agreed transaction rate. IPO price band, GMP
+and transaction rate remain distinct values, and neither lot size nor market-data
+updates change the agreed transaction amount calculation.
 
 ### Form types
 
@@ -252,6 +386,8 @@ Implemented and tested:
 
 Still to implement or connect:
 
+- Automated 30-minute IPO catalogue collection, expanded issue/application data,
+  subscription observations and business-shared user GMP as specified above.
 - Remote deployment configuration. Local PostgreSQL-backed WhatsApp pairing and saved-session restoration are configured and verified.
 - Password reset, master-admin-controlled production business onboarding, staff membership management, and expansion of the baseline admin/cashier permissions; see [TODO.md](TODO.md).
 - Web/mobile pairing screens on the implemented QR/phone API and deployment hardening of the trusted worker credentials/capacity.
@@ -323,7 +459,9 @@ historical backfill, attachments and unrelated viewer refactoring are deferred.
 - Expansion of the implemented phone/password authentication and baseline role permissions for deployment and additional workflows.
 - Frontend technologies for web and mobile.
 - Final numeric precision, currency, and rounding requirements.
-- Complete IPO fields and analytical formulas.
+- Final catalogue source/coverage contracts, optional IPO fields, GMP write
+  permissions/quote types and analytical formulas; the required IPO fields and
+  30-minute collection cadence are specified above.
 
 Inventory, payment settlement, and media processing are not part of the agreed initial scope. Their requirements should be established separately before implementation.
 

@@ -8,6 +8,15 @@ None.
 
 ## Checkpoints
 
+### Batch 30 — NSE request sessions and safe source diagnostics
+
+Checkpointed below the three-task threshold because diagnosing the authorised hosted rollout requires deploying this reviewed integration correction.
+
+1. Establish NSE's public cookie session before API collection, supply the source's request headers and retain safe HTTP/schema failure descriptions in protected run results.
+   - Verification: the first hosted run failed all feeds without altering application records; the failure reached Sentry issue WHATSAPP-POS-API-2. Reviewed the pinned upstream request/session code. Targeted source/category/configuration fixtures and a cookie/header integration fixture passed; the affected read-only live test again collected 117 issues, nine details and seven verified enrichments. Backend vet and the Linux amd64 deployment build passed. Reviewed source/diff and whitespace. Reused unchanged database/application integration checks from Batch 29.
+   - Paths: `backend/ipo_sources.go`, `backend/ipo_catalogue_test.go`, `docs/TASK_CHECKPOINT.md`.
+   - Limits: hosted source success still requires verification after this deployment. Failure results contain locally generated HTTP/schema messages, never response bodies or credentials. The separate Sentry monitor exists disabled at 1800 seconds because activation was rejected for insufficient pay-as-you-go budget; the existing health monitor remains active. No account-plan change or substitute scheduler was made.
+
 ### Batch 29 — IPO catalogue ingestion and protected refresh worker
 
 Checkpointed below the three-task threshold because the approved rollout requires publishing the reviewed implementation to Render.

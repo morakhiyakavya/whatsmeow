@@ -128,7 +128,7 @@ func TestIPOSourceFailureAndHostBounds(t *testing.T) {
 		return &http.Response{StatusCode: 503, Body: io.NopCloser(strings.NewReader("unavailable")), Header: make(http.Header)}, nil
 	})}}
 	items, results := s.collect(context.Background())
-	if len(items) != 0 || results["current"] != "failed" || results["upcoming"] != "failed" || results["past"] != "failed" {
+	if len(items) != 0 || results["current"] != "source HTTP 503" || results["upcoming"] != "source HTTP 503" || results["past"] != "source HTTP 503" {
 		t.Fatal(items, results)
 	}
 	for _, host := range []string{"http://www.nseindia.com/api", "https://attacker.invalid/a", "https://www.nseindia.com.attacker.invalid/"} {
@@ -142,6 +142,30 @@ func TestIPOSourceFailureAndHostBounds(t *testing.T) {
 	app.routes().ServeHTTP(w, r)
 	if w.Code != 401 || w.Header().Get("Cache-Control") != "no-store" {
 		t.Fatal(w.Code, w.Body.String())
+	}
+}
+
+func TestIPOSourceSession(t *testing.T) {
+	s := newIPOSourceClient()
+	warmed := false
+	s.http.Transport = ipoTransport(func(r *http.Request) (*http.Response, error) {
+		headers := make(http.Header)
+		body := "[]"
+		if r.URL.Path == "/" {
+			warmed = true
+			headers.Add("Set-Cookie", "nse_session=fixture; Path=/; Secure")
+			body = "<html></html>"
+		} else {
+			cookie, err := r.Cookie("nse_session")
+			if !warmed || err != nil || cookie.Value != "fixture" || r.Referer() != "https://www.nseindia.com/market-data/all-upcoming-issues-ipo" || r.Header.Get("Accept-Language") == "" {
+				t.Fatal("NSE API request lacks the established site session")
+			}
+		}
+		return &http.Response{StatusCode: 200, Body: io.NopCloser(strings.NewReader(body)), Header: headers}, nil
+	})
+	_, results := s.collect(context.Background())
+	if results["current"] != "ok" || results["upcoming"] != "ok" || results["past"] != "ok" {
+		t.Fatal(results)
 	}
 }
 

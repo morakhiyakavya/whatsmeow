@@ -8,6 +8,7 @@ import (
 	"io"
 	"math/big"
 	"net/http"
+	"net/http/cookiejar"
 	"net/url"
 	"regexp"
 	"sort"
@@ -46,7 +47,8 @@ type ipoSourceIssue struct {
 type ipoSourceClient struct{ http *http.Client }
 
 func newIPOSourceClient() *ipoSourceClient {
-	return &ipoSourceClient{http: &http.Client{Timeout: 15 * time.Second, CheckRedirect: func(req *http.Request, via []*http.Request) error {
+	jar, _ := cookiejar.New(nil)
+	return &ipoSourceClient{http: &http.Client{Jar: jar, Timeout: 15 * time.Second, CheckRedirect: func(req *http.Request, via []*http.Request) error {
 		if len(via) >= 3 || req.URL.Scheme != "https" || req.URL.Hostname() != via[0].URL.Hostname() {
 			return errors.New("source redirect rejected")
 		}
@@ -63,8 +65,12 @@ func (s *ipoSourceClient) get(ctx context.Context, target string) ([]byte, error
 	if err != nil {
 		return nil, err
 	}
-	req.Header.Set("User-Agent", "WhatsAppPOS-IPO-Catalogue/1.0")
+	req.Header.Set("User-Agent", "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/128.0 Safari/537.36 WhatsAppPOS-IPO-Catalogue/1.0")
 	req.Header.Set("Accept", "application/json,text/html")
+	if u.Host == "www.nseindia.com" {
+		req.Header.Set("Accept-Language", "en-US,en;q=0.9")
+		req.Header.Set("Referer", "https://www.nseindia.com/market-data/all-upcoming-issues-ipo")
+	}
 	res, err := s.http.Do(req)
 	if err != nil {
 		return nil, errors.New("source request failed")
@@ -225,6 +231,8 @@ func parseIPOFeed(data []byte, past bool, now time.Time) ([]ipoSourceIssue, erro
 
 func (s *ipoSourceClient) collect(ctx context.Context) ([]ipoSourceIssue, map[string]string) {
 	results := map[string]string{"coverage": "NSE only; BSE-only coverage unverified"}
+	// NSE issues API-session cookies on its public homepage.
+	_, _ = s.get(ctx, "https://www.nseindia.com/")
 	bySymbol := map[string]ipoSourceIssue{}
 	for _, feed := range []struct {
 		key, path string
@@ -236,7 +244,7 @@ func (s *ipoSourceClient) collect(ctx context.Context) ([]ipoSourceIssue, map[st
 			rows, err = parseIPOFeed(data, feed.past, time.Now())
 		}
 		if err != nil {
-			results[feed.key] = "failed"
+			results[feed.key] = err.Error()
 			continue
 		}
 		results[feed.key] = "ok"
@@ -271,7 +279,7 @@ func (s *ipoSourceClient) collect(ctx context.Context) ([]ipoSourceIssue, map[st
 			err = parseIPODetail(data, item)
 		}
 		if err != nil {
-			results["detail:"+item.Symbol] = "failed"
+			results["detail:"+item.Symbol] = err.Error()
 		} else {
 			results["detail:"+item.Symbol] = "ok"
 		}

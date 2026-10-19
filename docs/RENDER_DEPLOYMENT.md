@@ -7,13 +7,13 @@ business/admin or copy local WhatsApp sessions.
 
 ## Current deployment
 
-Deployed and verified on 17 October 2026 in `kavya's Workspace`:
+Deployed and verified on 19 October 2026 in `kavya's Workspace`:
 
 - API base URL: [whatsapp-pos-dev](https://whatsapp-pos-dev.onrender.com).
 - [Live health endpoint](https://whatsapp-pos-dev.onrender.com/health).
 - [Render dashboard](https://dashboard.render.com/web/srv-db5nundckfvc73arsvkg).
-- Deployed commit: `7646f19a91401079fd90162280a5df46854c16e1` on `main`.
-- Deployment: `dep-db9mfn0m7kps73dui9r0`; service: `srv-db5nundckfvc73arsvkg`.
+- Deployed commit: `76e63bb381ce2a72e957bfd998b4100ac3c6483d` on `main`.
+- Deployment: `dep-dbattcdg1s2s73dh2go0`; service: `srv-db5nundckfvc73arsvkg`.
 - One Free instance in Singapore; automatic deployments disabled.
 
 Render reported the deployment live. Public HTTPS checks passed: `/health` returns
@@ -92,6 +92,52 @@ unapproved verification attempt expires normally. No WhatsApp approval, session
 replacement or customer message was performed. Deployment-window logs show no
 startup failure. Android integration and live primary-phone approval remain
 unverified; see the [recovery contract](ANDROID_ACCOUNT_RECOVERY.md).
+
+The IPO backend was deployed on 19 October 2026 after applying migration 013 and
+runtime grants locally and to Supabase. The first source checkpoint `33b386b`
+was deployed by merging only the private `IPO_JOB_TOKEN`; no duplicate deploy
+was requested. Follow-up `76e63bb` establishes the NSE public cookie session and
+records safe HTTP/schema failures. Render built both exact commits and reached
+live; the current deployment finished at 09:11:55 UTC. Public health 200,
+unauthenticated API/job-trigger 401 and authenticated job acceptance 202 passed.
+Repeated triggers returned one durable half-hour job. Existing user/business/POS
+session records were preserved; no real customer messages or transactions were made.
+
+**Recurring collection is unreliable:** the NSE current/upcoming/past APIs returned
+HTTP 403 from Render despite the session/header integration. An intervening
+scheduled run imported 118 products, but later runs again failed with HTTP 403.
+Source failure reached Sentry issue `WHATSAPP-POS-API-2`. This is not reliable
+scheduled data collection.
+
+The separate Sentry monitor `10687890` is configured for POST every 1800 seconds,
+with the dedicated header credential, empty body and response capture disabled.
+Sentry initially forced it disabled and refused activation with "You don't have
+enough pay-as-you-go available to create a new seat". The existing health monitor
+`10630540` remains active at 60 seconds and has successful scheduled HTTP 200 checks.
+No billing plan was changed. Sentry's current documentation limits PAYG to paid
+plans: the USD 1 additional monitor price excludes any required base subscription.
+The user subsequently enabled the IPO monitor. A brief one-minute verification
+interval produced a scheduled POST at 09:17:02 UTC (14:47:02 IST), returning HTTP
+202 in 474 ms; the active interval was then restored to 1800 seconds. The health
+monitor remains active and unchanged. No additional job was created in the same
+half-hour. The existing import exhausted three attempts with zero issues and NSE
+HTTP 403 on every feed. Scheduling is verified; permitted hosted source access
+remains unresolved.
+
+The user authorised a one-off local collection into the hosted database on
+19 October 2026. Run `d430c51a-18d0-4ccf-986e-c37aabbddb50` finished at 10:41:38 UTC
+(16:11:38 IST), saving all 118 collected products (82 Mainboard, 36 SME). All three
+feeds and ten NSE detail requests succeeded. TONBO/ZETWERK enrichment was unavailable,
+so the run honestly reports partial coverage. Verified 55 subscription rows, 24
+reservation rows, 14 promoter rows and ten products with category calculations;
+published anchor dates remain unavailable. The runtime catalogue handlers and
+before/after preservation checks were verified separately. This used the existing
+collector, advisory lock, import writer and private hosted worker connection through
+a temporary operator entry point, removed after use. The manual run is labelled
+`execution=local_manual` with automatic retries suppressed; the Sentry monitor and
+deployed application were unchanged. No local recurring process was installed.
+See the
+[catalogue operating guide](IPO_CATALOGUE.md).
 
 ## Service configuration
 

@@ -100,12 +100,44 @@ excluded from upstream's code licence and require the operator's arrangements.
 
 ## Rollout and verification
 
-After deployment and a controlled import, add a separate Sentry uptime monitor:
+Current development rollout (19 October 2026): migration 013 is installed locally
+and in Supabase; Render is live on `76e63bb`. The protected trigger/deduplication
+works, but NSE access from Render is intermittent: early and later runs returned
+HTTP 403, while an intervening scheduled run imported 118 issues. Source failure
+is visible in job results and Sentry issue `WHATSAPP-POS-API-2`.
+
+At the user's request, a one-off local collection refreshed the hosted database
+on 19 October 2026, finishing at 10:41:38 UTC (16:11:38 IST). Manual run
+`d430c51a-18d0-4ccf-986e-c37aabbddb50` saved all 118 collected products: 82 Mainboard,
+36 SME, all with price bands. The database contains 55 subscription rows, 24
+reservation rows, 14 promoter rows, 10 lot/registrar records and eight issue amounts.
+Ten products produce category application calculations. Historical products retain
+core fields; detailed enrichment targets the active/recent window. No published
+anchor dates were available. Status is partial because TONBO and ZETWERK enrichment
+was unavailable; all three feeds and ten NSE details succeeded. The manual run is
+annotated `execution=local_manual` and excluded from automatic retries. Existing
+users/businesses/memberships, POS sessions, transactions/history, retry records,
+confirmations and manual products passed before/after checksum verification.
+
+The user enabled monitor `10687890` after resolving its billing-capacity block.
+Verified a real scheduled POST at 09:17:02 UTC (14:47:02 IST) on 19 October 2026:
+Sentry received HTTP 202 in 474 ms. A brief 60-second verification interval was
+then restored to 1800 seconds; the monitor remains active and the separate health
+monitor is unchanged. Trigger scheduling works; recurring collection still needs
+reliable source access. A later failed scheduled run exhausted its three attempts
+without erasing the previously imported products. The manual refresh above is a
+temporary population, not a new local scheduler or a source-access resolution.
+
+The separate Sentry uptime monitor uses:
 `https://whatsapp-pos-dev.onrender.com/internal/jobs/ipo-refresh`, POST, 1800-second
 interval, protected Authorization header, empty body, response capture disabled.
 Keep the existing health monitor. The user approved the possible USD 1/month
-second-monitor charge. Verify entitlement and a scheduled trigger/completed job
-before reporting scheduling live; health/202 alone do not prove completion.
+second-monitor charge. Additional monitors require PAYG, which Sentry only offers
+on paid plans; the earlier USD 1 estimate excludes that base subscription. Do not
+treat the Developer plan as supporting a USD 1 add-on. See
+[monitor billing](https://docs.sentry.io/pricing/quotas/manage-cron-monitors/).
+Verify the resulting import separately; health/202 alone do not prove data
+collection completed.
 
 Run backend tests/vet, disposable hosted/schema/API/session checks and a deployment
 build. Tests cover category boundaries, source/identity failures, missing fields,

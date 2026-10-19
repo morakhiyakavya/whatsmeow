@@ -205,17 +205,17 @@ The schema indexes business/customer/IPO transaction timelines, conversation mes
 
 IPOs/forms have relational fields; validated JSON is reserved for extra IPO metadata and versioned AI/rule payloads. Add future domain fields with explicit migrations. Because snapshot fields mirror the current record, any new transaction field must be added to both tables in the same migration (same column order while the snapshot trigger uses `NEW.*`) and the tests updated. Do not alter historical snapshots to reinterpret older category calculations. Future analytics can join raw versions with separately versioned analytical rules.
 
-The planned [IPO catalogue collection contract](PROJECT_VISION.md#ipo-information)
-adds board/exchange identity, issue/application terms, tentative date precision,
-registrar, explicit issue-size units, investor reservations, promoter shareholding
-and anchor lock-in dates to the current core. Subscription observations need
-their own source/coverage/as-of data. The Sentry-triggered importer needs durable
-run state; category application amounts come from one shared Go calculation
-adapted from the reviewed frontend. User-entered GMP is shared
-within a business and must be stored separately from global catalogue values,
-with actor/time/history and business isolation. These are future migrations, not
-existing tables/APIs. The 30-minute importer must preserve IPO IDs and references;
-an issue leaving the active list or a source failing must not delete its history.
+Migration [013](../database/013_ipo_catalogue.sql) implements the
+[IPO catalogue collection contract](PROJECT_VISION.md#ipo-information). It extends
+`ipos` with board/provider identity, dates, lot/registrar/issue terms and provenance.
+`ipo_subscriptions`, `ipo_reservations`, `ipo_promoter_shareholdings` and
+`ipo_anchor_lockins` retain source observations; `ipo_import_runs` stores durable,
+deduplicated refresh attempts. The trusted worker alone writes imported values;
+the runtime role can insert manual IPO columns and job schedule times. One Go
+calculation supplies category application amounts. See [operation and coverage](IPO_CATALOGUE.md).
+User-entered business-shared GMP with attribution/history remains a separate
+future migration. The importer preserves IPO IDs, manual products and transaction
+references; leaving the active list or a source failing never deletes history.
 
 IPO price metadata is not a transaction rate source unless an explicit later rule says so. No extra units column, numbered-form combinations, inventory tables, payment assumptions, or Subject 1/2 formulas are included.
 
@@ -229,10 +229,10 @@ From the workspace root:
 ./database/Test-Schema.ps1 -WithSessionTests -WithApiTests
 ```
 
-The runner uses installed PostgreSQL 17 tools to create an isolated temporary cluster on loopback with a temporary port and synthetic data. It applies migrations 001–003, stops the server and verifies its temporary path before removing the test directory. It does not contact the existing PostgreSQL service. A different PostgreSQL installation can be supplied with `-PostgresBin`; a Go executable outside PATH can be supplied with `-GoExecutable`.
+The runner uses installed PostgreSQL 17 tools to create an isolated temporary cluster on loopback with a temporary port and synthetic data. It applies migrations 001–013, stops the server and verifies its temporary path before removing the test directory. It does not contact the existing PostgreSQL service. A different PostgreSQL installation can be supplied with `-PostgresBin`; a Go executable outside PATH can be supplied with `-GoExecutable`.
 
 Tests cover decimal calculations, CE/PE requirements, categories, business-scoped references, referrals, duplicate messages/transactions, version snapshots, stale revisions, immutable history, accepted/rejected AI linkage, inactive rules, stale/revoked trigger evidence, and disabled staff. `-WithSessionTests` additionally invokes the actual Go PostgreSQL session-store integration test, verifying two saved device sessions and account-specific contacts across database reopen plus schema placement and explicit account selection. This validates persistence/schema behavior, not AI accuracy, an API implementation, load capacity, or a live WhatsApp pairing/migration.
 
-For a new application database, apply migrations 001–003 once using a migration role. For an existing schema, apply only missing migrations and the runtime column grants documented in `backend/README.md`. Existing schemas are never dropped or reset by the test runner or local setup script. Local setup creates a new database and separate owner/runtime roles; the runtime permissions include the column UPDATE grants required by transaction guard row locks and restricted account registration INSERT grants. `-WithApiTests` checks authenticated manual workflows, account registration and business isolation using that permission model in the disposable cluster.
+For a new application database, apply migrations 001–013 once using a migration role. For an existing schema, apply only missing migrations and the runtime column grants documented in `backend/README.md`. Existing schemas are never dropped or reset by the test runner or local setup script. Local setup creates a new database and separate owner/runtime roles; the runtime permissions include the column UPDATE grants required by transaction guard row locks and restricted account registration INSERT grants. `-WithApiTests` checks authenticated manual workflows, account registration and business isolation using that permission model in the disposable cluster.
 
 Technical references: [PostgreSQL constraints](https://www.postgresql.org/docs/17/ddl-constraints.html), [exact numeric types](https://www.postgresql.org/docs/17/datatype-numeric.html), [triggers](https://www.postgresql.org/docs/17/sql-createtrigger.html), [whatsmeow SQL storage](https://pkg.go.dev/go.mau.fi/whatsmeow/store/sqlstore), and [pgx database/sql integration](https://pkg.go.dev/github.com/jackc/pgx/v5/stdlib).

@@ -8,7 +8,7 @@ WhatsApp credentials are not copied by this setup.
 
 Project `tqfwoudoxundtrhogmwa` was installed and verified on 11 October 2026 using
 the Singapore session pooler on port `5432`. PostgreSQL reports version 17.11.
-Application migrations 001–012 are installed: `ipo_pos` has 26 tables, and the
+Application migrations 001–013 are installed: `ipo_pos` has 31 tables, and the
 backend initialized 17 WhatsApp credential tables at library schema version 16.
 One existing user and business were observed and preserved during migration 011.
 Do not rerun the fresh-install script for this project.
@@ -54,6 +54,14 @@ session deletion/audit checks; no probe records remain. The hosted account retai
 its existing POS session and WhatsApp link. A CONNECT regrant warning from the
 restricted owner was harmless: existing runtime CONNECT permission was verified.
 See the [Android recovery contract](ANDROID_ACCOUNT_RECOVERY.md).
+
+Migration 013 and runtime grants were applied locally and to Supabase on
+19 October 2026. The five catalogue observation/job tables bring `ipo_pos` to
+31 tables. Before/after database checksums confirmed unchanged users, businesses,
+memberships, POS sessions, transactions, history, retry records and confirmations.
+Verified that runtime can enqueue schedule times but cannot supply source identity
+or update subscriptions. Existing CONNECT permission is retained. See the
+[IPO catalogue guide](IPO_CATALOGUE.md) for collection, coverage and scheduling.
 
 Generated, separate role credentials are saved privately in the Git-ignored
 root `.env.supabase`, with file access restricted to your Windows account and
@@ -230,7 +238,7 @@ ORDER BY schemaname, tablename;
 SELECT code, name FROM ipo_pos.form_types ORDER BY code;
 ```
 
-Currently expect 26 POS tables, 17 WhatsApp tables and seven form types seeded by
+Currently expect 31 POS tables, 17 WhatsApp tables and seven form types seeded by
 migration 001. In Table Editor, select schema `ipo_pos` to browse the application
 tables. Many tables are empty until you create a business, staff or sales.
 The `whatsapp` schema contains private linked-device credentials; inspect its
@@ -238,7 +246,7 @@ structure without sharing credential rows. You do not need to expose either
 schema in the Data API to inspect it in the dashboard.
 
 A migration is a versioned SQL file that changes the database structure or seed
-data. Migrations 001–012 already ran on this project. The API does not apply
+data. Migrations 001–013 already ran on this project. The API does not apply
 them on startup, and these files are not tracked by Supabase CLI's migration
 history. Do not run `supabase db push` expecting it to recognise this installation.
 

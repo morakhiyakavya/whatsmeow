@@ -5,6 +5,11 @@ application sign-in, business membership, customers, the shared IPO/form catalog
 transactions, complete immutable transaction history, and business-owned WhatsApp
 account registration. No frontend is required to exercise the API.
 
+The [IPO catalogue importer](../docs/IPO_CATALOGUE.md) adds source-owned IPO terms,
+subscriptions, reservations, promoter shareholding, anchor lock-ins and category
+application amounts. A protected Sentry uptime POST queues a durable refresh job.
+Apply migration 013 and runtime grants before starting this version.
+
 For the complete staff and mobile workflow, read the
 [POS transactions and shared contacts guide](../docs/POS_AND_CONTACTS_GUIDE.md). It covers
 transaction entry, contact uploads, name changes, new numbers, withdrawals, provenance
@@ -120,7 +125,8 @@ For a new database, apply `database/001_initial.sql`, `002_api.sql` and
 `005_transaction_confirmations.sql`, `006_passwordless_sessions.sql`, then
 `007_whatsapp_number_checks.sql`, `008_signed_transaction_quantity.sql`,
 `009_signed_transaction_rate.sql`, `010_development_signup.sql` and
-`011_contact_profile_push.sql` and `012_account_recovery.sql` once,
+`011_contact_profile_push.sql`, `012_account_recovery.sql` and
+`013_ipo_catalogue.sql` once,
 in that order, as its migration owner. The API
 does not execute migrations on startup. Apply only missing migrations to an
 existing database. For the local installation that already has migrations 001/002:
@@ -267,6 +273,7 @@ IDs from `/api/me`. Supplying another business ID never confers access.
 | GET, POST | `/staff` | List/create staff |
 | GET, POST | `/customers` | List/create customers, including referrals |
 | GET, POST | `/ipos` | List/create shared IPO catalogue entries |
+| GET | `/ipos/import-status` | Source coverage, refresh runs and freshness |
 | GET | `/form-types` | Supported form catalogue |
 | GET, POST | `/whatsapp-accounts` | List/register business-owned WhatsApp accounts |
 | GET | `/whatsapp-accounts/{id}` | Read one business-owned account |

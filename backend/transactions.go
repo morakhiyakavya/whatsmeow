@@ -313,7 +313,7 @@ func (a *api) listTransactions(w http.ResponseWriter, r *http.Request, user acto
 		dbFailure(w, err)
 		return
 	}
-	paginated(w, rows, p)
+	paginated(w, rows, p, nil)
 }
 
 func (a *api) transactionHistory(w http.ResponseWriter, r *http.Request, user actor) {

@@ -91,7 +91,7 @@ func (p page) args() (any, any) {
 	return p.After.At, p.After.ID
 }
 
-func paginated(w http.ResponseWriter, rows *sql.Rows, p page) {
+func paginated(w http.ResponseWriter, rows *sql.Rows, p page, decorate func(json.RawMessage) (json.RawMessage, error)) {
 	defer rows.Close()
 	items := []json.RawMessage{}
 	var last cursor
@@ -106,6 +106,14 @@ func paginated(w http.ResponseWriter, rows *sql.Rows, p page) {
 		if len(items) == p.Limit {
 			more = true
 			break
+		}
+		if decorate != nil {
+			var err error
+			data, err = decorate(data)
+			if err != nil {
+				dbFailure(w, err)
+				return
+			}
 		}
 		items = append(items, data)
 		last = c
@@ -136,7 +144,7 @@ func (a *api) listCustomers(w http.ResponseWriter, r *http.Request, user actor) 
 		dbFailure(w, err)
 		return
 	}
-	paginated(w, rows, p)
+	paginated(w, rows, p, nil)
 }
 
 func (a *api) createCustomer(w http.ResponseWriter, r *http.Request, user actor) {
@@ -161,19 +169,27 @@ func (a *api) createCustomer(w http.ResponseWriter, r *http.Request, user actor)
 const ipoJSON = `to_jsonb(i) || jsonb_build_object('price_low',i.price_low::text,'price_high',i.price_high::text)`
 
 func (a *api) listIPOs(w http.ResponseWriter, r *http.Request, user actor) {
+	board, active := r.URL.Query().Get("board"), r.URL.Query().Get("active")
+	if (board != "" && board != "Mainboard" && board != "SME") || (active != "" && active != "true" && active != "false") {
+		fail(w, 400, "invalid_filter", "Use board=Mainboard|SME and active=true|false")
+		return
+	}
 	p, ok := readPage(w, r)
 	if !ok {
 		return
 	}
 	at, id := p.args()
-	rows, err := a.db.QueryContext(r.Context(), `SELECT `+ipoJSON+`,i.created_at,i.id FROM ipo_pos.ipos i
+	rows, err := a.db.QueryContext(r.Context(), `SELECT `+ipoCatalogueJSON+`,i.created_at,i.id FROM ipo_pos.ipos i
         WHERE archived_at IS NULL AND ($1::timestamptz IS NULL OR (created_at,id)<($1,$2::uuid))
-        ORDER BY created_at DESC,id DESC LIMIT $3`, at, id, p.Limit+1)
+        AND ($3='' OR board=$3) AND (NOT $4 OR (COALESCE(source_status,'') NOT IN ('withdrawn','postponed')
+        AND (listing_on IS NULL OR listing_on>=(now() AT TIME ZONE 'Asia/Kolkata')::date)
+        AND (closes_on IS NULL OR closes_on>=(now() AT TIME ZONE 'Asia/Kolkata')::date-7)))
+        ORDER BY created_at DESC,id DESC LIMIT $5`, at, id, board, active == "true", p.Limit+1)
 	if err != nil {
 		dbFailure(w, err)
 		return
 	}
-	paginated(w, rows, p)
+	paginated(w, rows, p, decorateIPO)
 }
 
 func (a *api) createIPO(w http.ResponseWriter, r *http.Request, user actor) {
@@ -241,7 +257,7 @@ func (a *api) listStaff(w http.ResponseWriter, r *http.Request, user actor) {
 		dbFailure(w, err)
 		return
 	}
-	paginated(w, rows, p)
+	paginated(w, rows, p, nil)
 }
 
 func (a *api) createStaff(w http.ResponseWriter, r *http.Request, user actor) {

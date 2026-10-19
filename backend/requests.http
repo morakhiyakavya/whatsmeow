@@ -16,6 +16,19 @@
 @session = COPY_OWN_SESSION_ID
 @installation = COPY_STABLE_INSTALLATION_UUID
 @fcm_token = COPY_FIREBASE_DEVICE_TOKEN
+@ipo_job_token = COPY_DEDICATED_JOB_CREDENTIAL
+
+### Enqueue the current half-hour catalogue refresh (operator credential only)
+POST {{base}}/internal/jobs/ipo-refresh
+Authorization: Bearer {{ipo_job_token}}
+
+### Catalogue terms, source observations and calculated category amounts
+GET {{base}}/api/businesses/{{business}}/ipos?active=true&board=Mainboard
+Authorization: Bearer {{token}}
+
+### Refresh completion, coverage and freshness
+GET {{base}}/api/businesses/{{business}}/ipos/import-status
+Authorization: Bearer {{token}}
 
 ### Register my Android installation after POS login and FCM token changes
 PUT {{base}}/api/push-devices/{{installation}}

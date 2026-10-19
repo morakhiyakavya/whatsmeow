@@ -30,6 +30,7 @@ type api struct {
 	passwordLogin     bool
 	developmentSignup bool
 	release           string
+	ipoJobToken       string
 }
 
 func main() {
@@ -76,6 +77,7 @@ func run(envPath string, bootstrap bool) error {
 		AND to_regclass('ipo_pos.contact_profile_revisions') IS NOT NULL AND to_regclass('ipo_pos.profile_push_outbox') IS NOT NULL
 		AND to_regclass('ipo_pos.push_devices') IS NOT NULL
 		AND to_regclass('ipo_pos.auth_events') IS NOT NULL
+		AND to_regclass('ipo_pos.ipo_import_runs') IS NOT NULL
 		AND EXISTS (SELECT 1 FROM information_schema.columns WHERE table_schema='ipo_pos' AND table_name='login_attempts' AND column_name='recovery_hash')
         AND to_regclass('ipo_pos.device_login_tokens') IS NOT NULL AND to_regclass('ipo_pos.whatsapp_number_checks') IS NOT NULL
 		AND EXISTS (SELECT 1 FROM information_schema.columns WHERE table_schema='ipo_pos' AND table_name='login_attempts' AND column_name='signup_account_id')
@@ -83,7 +85,7 @@ func run(envPath string, bootstrap bool) error {
         AND EXISTS (SELECT 1 FROM pg_constraint WHERE conrelid=to_regclass('ipo_pos.transaction_versions') AND conname='transaction_versions_nonzero_quantity_check')
         AND EXISTS (SELECT 1 FROM pg_constraint WHERE conrelid=to_regclass('ipo_pos.transactions') AND conname='transactions_signed_rate_check')
         AND EXISTS (SELECT 1 FROM pg_constraint WHERE conrelid=to_regclass('ipo_pos.transaction_versions') AND conname='transaction_versions_signed_rate_check')`).Scan(&schemaReady); err != nil || !schemaReady {
-		return errors.New("apply application migrations through database/012_account_recovery.sql before starting the API")
+		return errors.New("apply application migrations through database/013_ipo_catalogue.sql before starting the API")
 	}
 	app, err := newAPI(db)
 	if err != nil {
@@ -92,12 +94,17 @@ func run(envPath string, bootstrap bool) error {
 	app.passwordLogin = config.PasswordLogin
 	app.developmentSignup = config.DevelopmentSignup
 	app.release = config.SentryRelease
+	app.ipoJobToken = config.IPOJobToken
 	if config.WhatsAppDatabaseURL != "" {
 		app.whatsapp, err = openWhatsAppService(ctx, config.WhatsAppDatabaseURL)
 		if err != nil {
 			return err
 		}
 		defer app.whatsapp.close()
+		if config.IPOJobToken != "" {
+			stopImporter := startIPOImporter(ctx, app.whatsapp.db)
+			defer stopImporter()
+		}
 		if config.FCMProjectID != "" {
 			sender, err := newFCMSender(ctx, config.FCMProjectID, config.FCMCredentialsFile)
 			if err != nil {
@@ -138,6 +145,7 @@ func run(envPath string, bootstrap bool) error {
 func (a *api) routes() http.Handler {
 	mux := http.NewServeMux()
 	mux.HandleFunc("GET /health", a.health)
+	mux.HandleFunc("POST /internal/jobs/ipo-refresh", a.triggerIPORefresh)
 	mux.HandleFunc("POST /api/login", a.login)
 	mux.HandleFunc("POST /api/logout", a.logout)
 	mux.HandleFunc("PUT /api/push-devices/{installationID}", a.registerPushDevice)
@@ -160,6 +168,7 @@ func (a *api) routes() http.Handler {
 	mux.HandleFunc("GET /api/businesses/{businessID}/contacts", a.protect(false, a.lookupContact))
 	mux.HandleFunc("DELETE /api/businesses/{businessID}/contacts", a.protect(false, a.removeContactName))
 	mux.HandleFunc("GET /api/businesses/{businessID}/ipos", a.protect(false, a.listIPOs))
+	mux.HandleFunc("GET /api/businesses/{businessID}/ipos/import-status", a.protect(false, a.ipoImportStatus))
 	mux.HandleFunc("POST /api/businesses/{businessID}/ipos", a.protect(true, a.createIPO))
 	mux.HandleFunc("GET /api/businesses/{businessID}/form-types", a.protect(false, a.listFormTypes))
 	mux.HandleFunc("GET /api/businesses/{businessID}/whatsapp-accounts", a.protect(false, a.listWhatsAppAccounts))

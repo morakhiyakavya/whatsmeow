@@ -45,8 +45,9 @@ Both methods use the same transaction records, calculations, validation, and ver
 
 IPOs are the products in a shared catalogue. The existing database stores their
 identity, names, confirmed opening/closing/listing dates, optional price band and
-extra metadata. The expanded catalogue and refresh workflow below are planned;
-the current API supports manual creation/listing, not automatic collection.
+extra metadata. Migration 013 and the catalogue API now support the expanded
+fields and durable refresh workflow below. See the
+[implementation and operating guide](IPO_CATALOGUE.md) for coverage and rollout.
 
 The required collection scope is:
 
@@ -89,7 +90,7 @@ Useful additional fields to confirm are allotment/refund/demat dates, final issu
 price, face value, prospectus/RHP links and issue status.
 These are candidates, not a requirement to collect every company financial metric.
 
-### Catalogue collection and lifecycle (planned)
+### Catalogue collection and lifecycle
 
 - Use **Sentry Uptime Monitoring** to send an authenticated POST every **30
   minutes** to a dedicated Render endpoint. The user confirms Render is
@@ -97,7 +98,7 @@ These are candidates, not a requirement to collect every company financial metri
   Sentry does not host its code. No GitHub Actions schedule or paid Render cron
   is required for this selected design. See the
   [Sentry request options](https://docs.sentry.io/product/monitors-and-alerts/monitors/uptime-monitoring/#configuring-an-uptime-monitor).
-- The proposed `POST /internal/jobs/ipo-refresh` uses a dedicated, rotatable job
+- `POST /internal/jobs/ipo-refresh` uses a dedicated, rotatable job
   credential in a header, not a phone user's POS session or URL parameter. Persist
   accepted work before returning a fast acknowledgement; imports run in the
   existing Go process outside the request lifetime. Deduplicate repeated triggers,
@@ -386,8 +387,7 @@ Implemented and tested:
 
 Still to implement or connect:
 
-- Automated 30-minute IPO catalogue collection, expanded issue/application data,
-  subscription observations and business-shared user GMP as specified above.
+- Business-shared user GMP entry and history, separate from the implemented global catalogue importer.
 - Remote deployment configuration. Local PostgreSQL-backed WhatsApp pairing and saved-session restoration are configured and verified.
 - Password reset, master-admin-controlled production business onboarding, staff membership management, and expansion of the baseline admin/cashier permissions; see [TODO.md](TODO.md).
 - Web/mobile pairing screens on the implemented QR/phone API and deployment hardening of the trusted worker credentials/capacity.

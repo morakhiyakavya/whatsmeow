@@ -44,7 +44,7 @@ func (a *api) listWhatsAppAccounts(w http.ResponseWriter, r *http.Request, user 
 		dbFailure(w, err)
 		return
 	}
-	paginated(w, rows, p)
+	paginated(w, rows, p, nil)
 }
 
 func (a *api) getWhatsAppAccount(w http.ResponseWriter, r *http.Request, user actor) {

@@ -201,7 +201,7 @@ always-running service plan. It is suitable for development and manual API tests
 
 ## Database changes and rollback
 
-POS migrations 001–012 are already applied in the current Supabase project
+POS migrations 001–013 are already applied in the current Supabase project
 and local database. Do not run migrations in the build command, the
 start command or every deploy.
 For subsequent changes, follow the

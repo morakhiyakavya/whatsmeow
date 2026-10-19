@@ -19,6 +19,7 @@ type configuration struct {
 	DevelopmentSignup                                                                          bool
 	SentryDSN, SentryEnvironment, SentryRelease                                                string
 	FCMProjectID, FCMCredentialsFile                                                           string
+	IPOJobToken                                                                                string
 }
 
 func loadConfig(path string) (configuration, error) {
@@ -67,6 +68,10 @@ func loadConfig(path string) (configuration, error) {
 	}
 	c.DevelopmentSignup = environment == "development"
 	c.FCMProjectID, c.FCMCredentialsFile = get("FCM_PROJECT_ID"), get("GOOGLE_APPLICATION_CREDENTIALS")
+	c.IPOJobToken = get("IPO_JOB_TOKEN")
+	if c.IPOJobToken != "" && (len(c.IPOJobToken) < 43 || len(c.IPOJobToken) > 128 || strings.ContainsAny(c.IPOJobToken, " \r\n\t") || c.WhatsAppDatabaseURL == "") {
+		return c, errors.New("IPO_JOB_TOKEN requires 43-128 non-whitespace characters and WHATSAPP_DATABASE_URL for trusted import writes")
+	}
 	if c.FCMProjectID != "" && (!firebaseProjectPattern.MatchString(c.FCMProjectID) || c.FCMCredentialsFile == "" || c.WhatsAppDatabaseURL == "") {
 		return c, errors.New("FCM_PROJECT_ID requires a valid Firebase project ID, GOOGLE_APPLICATION_CREDENTIALS and WHATSAPP_DATABASE_URL")
 	}

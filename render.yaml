@@ -18,6 +18,8 @@ services:
         sync: false
       - key: ALLOW_PASSWORD_LOGIN
         value: "false"
+      - key: IPO_JOB_TOKEN
+        sync: false
       - key: SENTRY_DSN
         sync: false
       - key: SENTRY_ENVIRONMENT

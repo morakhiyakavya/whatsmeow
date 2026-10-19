@@ -7,6 +7,30 @@ import (
 	"testing"
 )
 
+func TestIPOJobConfiguration(t *testing.T) {
+	for _, test := range []struct {
+		token, worker string
+		valid         bool
+	}{
+		{"", "", true}, {"short", "postgres://worker", false},
+		{strings.Repeat("a", 43), "", false}, {strings.Repeat("a", 43), "postgres://worker", true},
+		{strings.Repeat("a", 43) + "\n", "postgres://worker", false},
+	} {
+		t.Setenv("DATABASE_URL", "postgres://runtime")
+		t.Setenv("IPO_JOB_TOKEN", test.token)
+		t.Setenv("WHATSAPP_DATABASE_URL", test.worker)
+		t.Setenv("FCM_PROJECT_ID", "")
+		t.Setenv("APP_ENV", "")
+		_, err := loadConfig(filepath.Join(t.TempDir(), "missing.env"))
+		if (err == nil) != test.valid {
+			t.Fatalf("valid=%v error=%v", test.valid, err)
+		}
+		if err != nil && strings.Contains(err.Error(), test.token) {
+			t.Fatal("credential exposed")
+		}
+	}
+}
+
 func TestHostedConfiguration(t *testing.T) {
 	for _, test := range []struct {
 		name, port, addr, passwordLogin, wantAddr, wantError string

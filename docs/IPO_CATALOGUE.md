@@ -107,7 +107,7 @@ excluded from upstream's code licence and require the operator's arrangements.
 ## Rollout and verification
 
 Current development rollout (19 October 2026): migration 013 is installed locally
-and in Supabase; Render is live on `76e63bb`. The protected trigger/deduplication
+and in Supabase; Render is live on `9f3cfa8`. The protected trigger/deduplication
 works, but NSE access from Render is intermittent: early and later runs returned
 HTTP 403, while an intervening scheduled run imported 118 issues. Source failure
 is visible in job results and Sentry issue `WHATSAPP-POS-API-2`.

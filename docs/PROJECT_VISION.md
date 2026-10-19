@@ -429,8 +429,10 @@ tests. The delivered increments are:
    selected customer and the creating user's authorised linked account explicitly.
 2. **Transaction and confirmation intent.** Save the transaction and its durable pending
    confirmation in the same database transaction. Generate the message from saved
-   transaction data, including customer, IPO/form, quantity, rate, total and transaction
-   time; resolve the recipient from the selected customer. Repeated mobile requests
+   transaction data as `{ipo} ipo {Buy|Sell} {forms} {form} {optional category} at {rate}`;
+   use the absolute quantity for forms and preserve the rate's sign. Resolve the
+   recipient from the selected customer. CE, PE and SHARES omit category; RETAIL,
+   RETAIL_199, SHNI and BHNI display `alloted` for category `none`. Repeated mobile requests
    with the same idempotency key must reuse the transaction and confirmation intent.
 3. **Delivery and status.** Use the existing account worker and whatsmeow sender to
    send after database commit. Check sender ownership and eligibility, record the

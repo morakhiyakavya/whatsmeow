@@ -5,7 +5,6 @@ import (
 	"database/sql"
 	"errors"
 	"fmt"
-	"strings"
 	"sync"
 	"testing"
 	"time"
@@ -129,7 +128,7 @@ func testConfirmationDelivery(t *testing.T, dsn string, db *sql.DB, cashier test
 	}
 	awaitConfirmation(t, db, business, restartID, "sent")
 	sender.mu.Lock()
-	if !strings.HasPrefix(sender.body, "Transaction confirmation\nType: Sell\n") || !strings.Contains(sender.body, "Quantity: -2.500000\n") || !strings.Contains(sender.body, "Rate: INR -250.000000\n") || !strings.Contains(sender.body, "Total: INR 625.00\n") {
+	if sender.body != "Fixture IPO ipo Sell 2.5 CE (20) at -250" {
 		t.Error("sell delivery lost its direction or signed values")
 	}
 	sender.fail = true

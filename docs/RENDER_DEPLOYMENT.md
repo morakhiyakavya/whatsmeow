@@ -12,8 +12,8 @@ Deployed and verified on 19 October 2026 in `kavya's Workspace`:
 - API base URL: [whatsapp-pos-dev](https://whatsapp-pos-dev.onrender.com).
 - [Live health endpoint](https://whatsapp-pos-dev.onrender.com/health).
 - [Render dashboard](https://dashboard.render.com/web/srv-db5nundckfvc73arsvkg).
-- Deployed commit: `76e63bb381ce2a72e957bfd998b4100ac3c6483d` on `main`.
-- Deployment: `dep-dbattcdg1s2s73dh2go0`; service: `srv-db5nundckfvc73arsvkg`.
+- Deployed commit: `9f3cfa83aa66d95260107187920d82fdeb823957` on `main`.
+- Deployment: `dep-dbb05d2jnfac739coojg`; service: `srv-db5nundckfvc73arsvkg`.
 - One Free instance in Singapore; automatic deployments disabled.
 
 Render reported the deployment live. Public HTTPS checks passed: `/health` returns
@@ -140,6 +140,19 @@ See the
 [catalogue operating guide](IPO_CATALOGUE.md).
 
 ## Service configuration
+
+The IPO picker lifecycle change was deployed on 19 October 2026 at 11:45:44 UTC
+(17:15:44 IST) using the exact reviewed commit above. The existing list URL now
+filters by lifecycle without requiring `active=true`: confirmed listing dates take
+precedence over exact expected listing dates, and products disappear on the next
+Indian calendar day. Unknown listing dates retain the documented closing-date
+grace. The exact query returned ten eligible products on hosted storage under the
+restricted runtime role; all 118 products, including 104 past listings, remain stored.
+Integration checks covered pagination and both legacy active values. Hosted health
+200 and unauthenticated catalogue/me 401 passed with no-store; startup and the
+deployment-window error log checks passed. No migration, environment, monitor or
+data change was needed. No authenticated hosted request was made without a POS
+access token; authenticated behavior was verified through disposable HTTP tests.
 
 The root [render.yaml](../render.yaml) defines the development service. It uses
 Render's native Go runtime, one Free instance in Singapore and manual deployments.

@@ -619,8 +619,12 @@ missing customer phone or an unavailable/unauthorised sender rejects the creatio
 atomically. Omitting the new field preserves existing manual-entry behaviour.
 
 The transaction, initial immutable version, retry fingerprint and confirmation intent are
-saved in one transaction. The server composes the receipt from saved customer,
-IPO/form, category, quantity, rate, database-calculated total, time and transaction reference;
+saved in one transaction. The server composes one line from saved data:
+`{ipo} ipo {Buy|Sell} {forms} {form} {optional category} at {rate}`.
+The form includes its CE/PE value when applicable. CE, PE and SHARES always omit
+the category. RETAIL, RETAIL_199, SHNI and BHNI show `alloted` for category `none`;
+other category labels use spaces. Forms are the absolute quantity, and numeric
+values omit trailing decimal zeroes while preserving the rate's sign;
 clients cannot supply an arbitrary message body. The receipt is a snapshot of the
 initial transaction; later edits do not silently rewrite it. Replays reuse the transaction and
 confirmation and reject changed data or a different sender under the same key.

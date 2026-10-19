@@ -8,6 +8,23 @@ None.
 
 ## Checkpoints
 
+### Batch 33 — IPO rollout record and concise transaction confirmations
+
+1. Deploy and record the IPO picker lifetime change on the existing Render API.
+   - Verification: checkpointed the implementation in Batch 32, pushed 9f3cfa83aa66d95260107187920d82fdeb823957 and verified remote main. Confirmed workspace/service/repository/branch, disabled auto-deploys and previous live source; one manual cached deployment dep-dbb05d2jnfac739coojg built the exact commit and reached live at 11:45:44 UTC on 19 October 2026. Startup/listening, public health 200 and unauthenticated me/catalogue 401 with no-store passed; deployment-window error logs were empty. The exact listing query was checked read-only as the hosted runtime role and returned ten eligible IPOs. Hosted storage still retains all 118 products including 104 past listings. Reused passing application tests/vet/build; reviewed deployment/operating/POS guide updates, local links and whitespace.
+   - Paths: `docs/RENDER_DEPLOYMENT.md`, `docs/IPO_CATALOGUE.md`, `docs/POS_AND_CONTACTS_GUIDE.md`, `docs/TASK_CHECKPOINT.md`. External changes: approved source publication and manual deployment on the existing service only; no migration, credentials, environment or scheduler change.
+   - Limits: no authenticated hosted GET without a user access token; authenticated endpoint/filter/pagination behavior is covered by disposable HTTP integration tests. Listing day remains selectable until the following Indian calendar day; missing listing dates use the existing seven-day closing grace. Source access reliability remains separate. Pending is 1.
+
+2. Replace the verbose manual-transaction WhatsApp confirmation with the requested single-line format and revised form-count order.
+   - Verification: disposable PostgreSQL schema assertions and `TestManualLedgerIntegration` passed, including API creation/replay/ownership, actual worker ticks with simulated delivery, Buy/Sell, CE/PE values, omitted/default categories, subject labels, absolute form counts, fractional precision and negative/zero rates. Backend `go vet ./...`, Go formatting and diff whitespace checks passed. Reviewed the API contract, POS guide and vision against the saved-data message builder; preserved existing pending rollout documentation.
+   - Paths: `backend/confirmations.go`, `backend/confirmations_test.go`, `backend/confirmation_delivery_test.go`, `backend/integration_test.go`, `backend/README.md`, `docs/POS_AND_CONTACTS_GUIDE.md`, `docs/PROJECT_VISION.md`, `docs/TASK_CHECKPOINT.md`.
+   - Limits: new confirmations use `{ipo} ipo {Buy|Sell} {forms} {form} {optional category} at {rate}`; previously stored bodies remain unchanged. No migration, live customer message, push or Render deployment. The production change is limited to message composition; unrelated builds and device/end-to-end checks were not repeated. Pending is now 2.
+
+3. Apply form-specific category labels to manual-transaction WhatsApp messages.
+   - Verification: disposable PostgreSQL schema assertions and `TestManualLedgerIntegration` passed, including all 14 exact-body formatting cases and simulated worker delivery. Checks cover `alloted` for none/default categories on RETAIL, RETAIL_199, SHNI and BHNI, retained subject labels on eligible forms, and omitted none/subject categories on CE, PE and SHARES. Backend `go vet ./...`, formatting, source/contracts, batch diff and whitespace reviews passed; reused unaffected checks from task 2.
+   - Paths: `backend/confirmations.go`, `backend/confirmations_test.go`, `backend/confirmation_delivery_test.go`, `backend/README.md`, `docs/POS_AND_CONTACTS_GUIDE.md`, `docs/PROJECT_VISION.md`, `docs/TASK_CHECKPOINT.md`.
+   - Limits: the API's existing BHNI code represents the requested HNI case; no HNI alias or stored-category change was added. Preserves the requested spelling `alloted`. Previously queued bodies remain unchanged. No live customer message, deployment, migration or push; unrelated builds/device checks were not repeated. This third completed task triggers the local checkpoint; Pending returns to 0.
+
 ### Batch 32 — IPO picker through listing day
 
 Checkpointed below the three-task threshold because updating the requested live API requires publishing the reviewed implementation to Render.

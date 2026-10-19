@@ -685,6 +685,11 @@ Read the catalogue using `GET .../ipos` and `GET .../form-types`. Supported form
 codes are `RETAIL`, `RETAIL_199`, `SHNI`, `BHNI`, `SHARES`, `CE` and `PE`.
 Customer and IPO lists default to 50 records, maximum 100 per page; follow
 `next_cursor` until the required selection is available.
+The IPO picker includes tentative/upcoming products through their listing day in
+Indian time and omits them the following day. Confirmed listing dates take
+precedence over exact expected dates; unknown dates follow the
+[catalogue lifetime rules](IPO_CATALOGUE.md#read-api). Existing transaction/history
+references remain stored even after a product leaves the picker.
 
 ### Transaction request — implemented
 
@@ -794,22 +799,21 @@ ledger and no confirmation is queued.
 
 ## 10. WhatsApp confirmation and delivery status
 
-The backend composes a fixed text from saved data. For the example above, the body
-has this shape, with the actual selected IPO name and generated transaction reference:
+The backend composes a single line from saved data. For the example above, using
+the actual selected IPO name, the body is:
 
 ```text
-Transaction confirmation
-Type: Buy
-Customer: Mehul Shah
-IPO: Example IPO
-Form: CE (20.000000)
-Category: subject_1
-Quantity: 2.500000
-Rate: INR 250.000000
-Total: INR 625.00
-Transaction time: 2026-10-11T09:00:00.000000Z
-Reference: {transactionID}
+Example IPO ipo Buy 2.5 CE (20) at 250
 ```
+
+The format is `{ipo} ipo {Buy|Sell} {forms} {form} {optional category} at {rate}`.
+Positive quantity means Buy and negative quantity means Sell; the form count is
+always the absolute quantity. CE, PE and SHARES always omit the category; CE/PE
+retain their bracketed value. RETAIL, RETAIL_199, SHNI and BHNI show `alloted` for
+category `none`; `subject_1` and `subject_2` appear as `subject 1` and `subject 2`.
+Numeric values omit trailing decimal zeroes and retain the rate's sign, including
+negative and zero rates. The amount after `at` is the per-form rate.
+Previously saved confirmations retain their original body, including on retries.
 
 The recipient is the selected customer's stored phone. The sender is the creating
 staff member's requested linked WhatsApp account. The receipt is a snapshot of the

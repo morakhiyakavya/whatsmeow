@@ -378,6 +378,9 @@ func TestManualLedgerIntegration(t *testing.T) {
 		testConfirmationDelivery(t, dsn, admin, cashier, businessID, cashierID, request)
 	})
 	loginCashier()
+	t.Run("POS confirmation formatting", func(t *testing.T) {
+		testConfirmationFormatting(t, admin, client, businessID, request)
+	})
 	t.Run("Passwordless and multi-device sessions", func(t *testing.T) { testPasswordless(t, dsn, admin, db, app, client, other, businessID) })
 	t.Run("Development signup through login", func(t *testing.T) { testDevelopmentSignup(t, dsn, admin, db, app, client, businessID) })
 	status, object, _ = other.request("GET", "/api/businesses/"+otherBusiness+"/transactions/"+transactionID, nil, "")

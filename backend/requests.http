@@ -23,7 +23,7 @@ POST {{base}}/internal/jobs/ipo-refresh
 Authorization: Bearer {{ipo_job_token}}
 
 ### Catalogue terms, source observations and calculated category amounts
-GET {{base}}/api/businesses/{{business}}/ipos?active=true&board=Mainboard
+GET {{base}}/api/businesses/{{business}}/ipos?limit=50&board=Mainboard
 Authorization: Bearer {{token}}
 
 ### Refresh completion, coverage and freshness

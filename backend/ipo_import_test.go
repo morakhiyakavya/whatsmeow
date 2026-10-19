@@ -97,7 +97,11 @@ func TestIPOCatalogueIntegration(t *testing.T) {
 		}
 	}
 	ptr := func(s string) *string { return &s }
-	item := ipoSourceIssue{Symbol: "SOURCEFIXTURE", Name: "Source Fixture Limited", Board: "Mainboard", Open: ptr("2026-10-19"), Close: ptr("2026-10-22"), Low: ptr("900"), High: ptr("1000"), Lot: 200, Registrar: "Fixture Registrar", DetailOK: true, EnrichmentOK: true, EnrichmentURL: "https://ipowatch.in/source-fixture-ipo/", Timeline: map[string]any{}, Subscriptions: []ipoSubscription{{Category: "total", Label: "Total", Multiple: ptr("2.5"), Offered: ptr("1000"), Bid: ptr("2500")}}, Reservations: []ipoReservation{{Category: "Retail", Percentage: ptr("35"), Shares: ptr("1000"), Basis: "Net offer"}}, Shareholdings: []ipoShareholding{{Holder: "Promoters", Pre: ptr("90"), Post: ptr("70")}}, Lockins: []ipoLockin{{Label: "30 days", Date: "2026-11-19"}}}
+	var today time.Time
+	if err := db.QueryRow(`SELECT (now() AT TIME ZONE 'Asia/Kolkata')::date`).Scan(&today); err != nil {
+		t.Fatal(err)
+	}
+	item := ipoSourceIssue{Symbol: "SOURCEFIXTURE", Name: "Source Fixture Limited", Board: "Mainboard", Open: ptr(today.Format("2006-01-02")), Close: ptr(today.AddDate(0, 0, 3).Format("2006-01-02")), Low: ptr("900"), High: ptr("1000"), Lot: 200, Registrar: "Fixture Registrar", DetailOK: true, EnrichmentOK: true, EnrichmentURL: "https://ipowatch.in/source-fixture-ipo/", Timeline: map[string]any{}, Subscriptions: []ipoSubscription{{Category: "total", Label: "Total", Multiple: ptr("2.5"), Offered: ptr("1000"), Bid: ptr("2500")}}, Reservations: []ipoReservation{{Category: "Retail", Percentage: ptr("35"), Shares: ptr("1000"), Basis: "Net offer"}}, Shareholdings: []ipoShareholding{{Holder: "Promoters", Pre: ptr("90"), Post: ptr("70")}}, Lockins: []ipoLockin{{Label: "30 days", Date: "2026-11-19"}}}
 	collect := func(context.Context) ([]ipoSourceIssue, map[string]string) {
 		return []ipoSourceIssue{item}, map[string]string{"current": "ok", "upcoming": "ok", "past": "ok"}
 	}
@@ -202,6 +206,71 @@ func TestIPOCatalogueIntegration(t *testing.T) {
 	expectStatus(t, 400, status, body)
 	status, body, _ = client.request("GET", base+"/ipos?active=true&board=Mainboard", nil, "")
 	expectStatus(t, 200, status, body)
+	t.Run("Product picker lifetime", func(t *testing.T) {
+		date := func(days int) string { return today.AddDate(0, 0, days).Format("2006-01-02") }
+		fixtures := []struct {
+			code                              string
+			listing, close                    *string
+			expected, precision, sourceStatus string
+			visible                           bool
+		}{
+			{"LISTED", ptr(date(-1)), ptr(date(-8)), "", "", "", false},
+			{"LISTING-TODAY", ptr(date(0)), ptr(date(-15)), "", "", "", true},
+			{"FUTURE-LISTING", ptr(date(3)), ptr(date(-15)), "", "", "", true},
+			{"EXPECTED-PAST", nil, nil, date(-1), "date", "", false},
+			{"EXPECTED-TODAY", nil, nil, date(0), "date", "", true},
+			{"EXPECTED-FUTURE", nil, ptr(date(-15)), date(3), "date", "", true},
+			{"CONFIRMED-WINS", ptr(date(-1)), nil, date(3), "date", "", false},
+			{"CONFIRMED-FUTURE", ptr(date(3)), nil, date(-1), "date", "", true},
+			{"UNKNOWN", nil, nil, "October 2026", "text", "", true},
+			{"BAD-EXPECTED", nil, nil, "2026-02-31", "date", "", true},
+			{"AWAITING-LISTING", nil, ptr(date(-5)), "", "", "", true},
+			{"OLD-UNKNOWN", nil, ptr(date(-8)), "", "", "", false},
+			{"WITHDRAWN", ptr(date(3)), nil, "", "", "withdrawn", false},
+			{"POSTPONED", nil, nil, "", "", "postponed", false},
+		}
+		ids := map[string]bool{}
+		for _, f := range fixtures {
+			timeline, _ := json.Marshal(map[string]any{"ipo listing": map[string]string{"value": f.expected, "precision": f.precision, "status": "expected"}})
+			var id string
+			if err := db.QueryRow(`INSERT INTO ipo_pos.ipos(code,name,board,listing_on,closes_on,timeline,source_status)
+			VALUES($1,$1,'Mainboard',$2,$3,$4,NULLIF($5,'')) RETURNING id`, "LIFETIME-"+f.code, f.listing, f.close, string(timeline), f.sourceStatus).Scan(&id); err != nil {
+				t.Fatal(err)
+			}
+			ids[id] = f.visible
+		}
+		for _, filter := range []string{"", "&active=true", "&active=false"} {
+			seen := map[string]bool{}
+			path := base + "/ipos?limit=2&board=Mainboard" + filter
+			for pages := 0; pages < 30; pages++ {
+				status, result, _ := client.request("GET", path, nil, "")
+				expectStatus(t, 200, status, result)
+				for _, raw := range result["items"].([]any) {
+					id := field(t, raw.(map[string]any), "id")
+					if seen[id] {
+						t.Fatal("pagination repeated IPO")
+					}
+					seen[id] = true
+				}
+				if result["next_cursor"] == nil {
+					break
+				}
+				if pages == 29 {
+					t.Fatal("pagination did not finish")
+				}
+				path = base + "/ipos?limit=2&board=Mainboard" + filter + "&cursor=" + result["next_cursor"].(string)
+			}
+			for id, want := range ids {
+				if seen[id] != want {
+					t.Fatalf("lifetime visibility mismatch for %s%s: got %v want %v", id, filter, seen[id], want)
+				}
+			}
+		}
+		var retained int
+		if db.QueryRow(`SELECT count(*) FROM ipo_pos.ipos WHERE code LIKE 'LIFETIME-%'`).Scan(&retained) != nil || retained != len(fixtures) {
+			t.Fatal("hidden products were deleted")
+		}
+	})
 	var state json.RawMessage
 	if err = db.QueryRow(`SELECT to_jsonb(j) FROM ipo_pos.ipo_import_runs j`).Scan(&state); err != nil {
 		t.Fatal(err)

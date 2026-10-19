@@ -8,6 +8,15 @@ None.
 
 ## Checkpoints
 
+### Batch 32 — IPO picker through listing day
+
+Checkpointed below the three-task threshold because updating the requested live API requires publishing the reviewed implementation to Render.
+
+1. Make the existing IPO list always return the upcoming/open/awaiting-listing lifecycle through listing day, without an opt-in filter or a historical-list bypass.
+   - Verification: backend tests and vet passed; Linux amd64 deployment build passed. Disposable schema and targeted API integration checks passed, including expired/today/future confirmed and expected listing dates, confirmed-date precedence, undated/tentative products, malformed expected dates, unknown-date close grace, postponed/withdrawn issues, small-page cursor traversal, both legacy active values and retained historical records. Updated the integration fixture to use the database's Indian calendar date so its visibility does not expire. A read-only execution of the exact new query against hosted storage as the restricted runtime role returned ten eligible IPOs while retaining all products. Reviewed source/callers, request examples, documentation and whitespace; reused unrelated passing checks.
+   - Paths: `backend/resources.go`, `backend/ipo_import_test.go`, `backend/requests.http`, `backend/README.md`, `docs/IPO_CATALOGUE.md`, `docs/TASK_CHECKPOINT.md`.
+   - Limits: listing day remains visible until the next Asia/Kolkata calendar day. With no usable confirmed/expected listing date, the existing seven-day grace after closing applies; undated upcoming products remain visible. The source's expected dates remain expectations. No migration, data deletion or source-access correction; transactions/history retain their IPO references. Deployment verification is recorded separately after rollout.
+
 ### Batch 31 — IPO rollout, scheduler verification and local hosted refresh
 
 1. Record the IPO deployment, preserved storage, prepared second monitor and the two external rollout blockers.

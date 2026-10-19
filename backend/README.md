@@ -272,7 +272,7 @@ IDs from `/api/me`. Supplying another business ID never confers access.
 | PUT | `/api/push-devices/{installationID}` | Register/replace an installation's FCM token for the authenticated POS session |
 | GET, POST | `/staff` | List/create staff |
 | GET, POST | `/customers` | List/create customers, including referrals |
-| GET, POST | `/ipos` | List/create shared IPO catalogue entries |
+| GET, POST | `/ipos` | List IPOs through their listing day/create shared catalogue entries |
 | GET | `/ipos/import-status` | Source coverage, refresh runs and freshness |
 | GET | `/form-types` | Supported form catalogue |
 | GET, POST | `/whatsapp-accounts` | List/register business-owned WhatsApp accounts |

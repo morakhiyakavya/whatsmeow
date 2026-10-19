@@ -180,11 +180,16 @@ func (a *api) listIPOs(w http.ResponseWriter, r *http.Request, user actor) {
 	}
 	at, id := p.args()
 	rows, err := a.db.QueryContext(r.Context(), `SELECT `+ipoCatalogueJSON+`,i.created_at,i.id FROM ipo_pos.ipos i
+        CROSS JOIN LATERAL (SELECT COALESCE(i.listing_on,CASE
+        WHEN i.timeline#>>'{ipo listing,precision}'='date'
+        AND pg_input_is_valid(i.timeline#>>'{ipo listing,value}','date')
+        THEN (i.timeline#>>'{ipo listing,value}')::date END) AS listing_date) lifecycle
         WHERE archived_at IS NULL AND ($1::timestamptz IS NULL OR (created_at,id)<($1,$2::uuid))
-        AND ($3='' OR board=$3) AND (NOT $4 OR (COALESCE(source_status,'') NOT IN ('withdrawn','postponed')
-        AND (listing_on IS NULL OR listing_on>=(now() AT TIME ZONE 'Asia/Kolkata')::date)
-        AND (closes_on IS NULL OR closes_on>=(now() AT TIME ZONE 'Asia/Kolkata')::date-7)))
-        ORDER BY created_at DESC,id DESC LIMIT $5`, at, id, board, active == "true", p.Limit+1)
+        AND ($3='' OR board=$3) AND COALESCE(source_status,'') NOT IN ('withdrawn','postponed')
+        AND (lifecycle.listing_date>=(now() AT TIME ZONE 'Asia/Kolkata')::date
+        OR (lifecycle.listing_date IS NULL AND (closes_on IS NULL
+        OR closes_on>=(now() AT TIME ZONE 'Asia/Kolkata')::date-7)))
+        ORDER BY created_at DESC,id DESC LIMIT $4`, at, id, board, p.Limit+1)
 	if err != nil {
 		dbFailure(w, err)
 		return

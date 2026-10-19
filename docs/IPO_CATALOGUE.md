@@ -46,10 +46,16 @@ Actual failures reach the existing privacy-filtered Sentry SDK and generic logs.
 ## Read API
 
 `GET /api/businesses/{businessID}/ipos` retains authentication, membership checks
-and keyset pagination. Optional validated filters are `board=Mainboard|SME` and
-`active=true|false`. The active view excludes explicitly postponed/withdrawn
-issues, confirmed listing dates before today, and issues closed over seven days
-ago; dates use Asia/Kolkata. All retained products remain readable without it.
+and keyset pagination. It always returns the product-picker lifecycle: upcoming
+(including tentative dates), open and awaiting-listing issues, through the listing
+day inclusive in Asia/Kolkata. A confirmed listing date takes precedence; otherwise
+a valid exact date from the expected listing timeline is used. Once that date is
+before today, the IPO disappears from this list. With no usable listing date,
+the existing seven-day grace after closing applies; undated upcoming products
+remain visible. Explicitly postponed/withdrawn issues are excluded. Filtering
+happens before pagination; historical products and transaction references remain
+stored. Optional `board=Mainboard|SME` is unchanged. Legacy `active=true|false`
+values remain accepted and validated but cannot bypass the lifecycle restriction.
 
 New product fields include provider identity, board/exchange, source status/URL,
 lot size, registrar, issue-size wording/shares/amount (INR), last-seen/terms times,

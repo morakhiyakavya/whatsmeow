@@ -8,6 +8,21 @@ None.
 
 ## Checkpoints
 
+### Batch 34 — Venweb linked-device branding and prior rollout record
+
+Checkpointed below the three-task threshold because the user requested deployment,
+which requires publishing the reviewed implementation to Render.
+
+1. Deploy and record the concise transaction-confirmation messages on the existing Render API.
+   - Verification: published and verified remote main at `038317029b7bf5ae42774baceb37c49a5b98f1e5`. Confirmed workspace, service, repository, branch, disabled automatic deploys and previous live source. One cached manual deployment `dep-dbb3o7jl550s7387akgg` built that exact commit and reached live at 15:50:34 UTC on 19 October 2026; startup/listening passed. Hosted health returned 200/ok and unauthenticated me/transaction-list requests returned 401, all with no-store. Deployment-window error logs were empty. Reused Batch 33's passing disposable schema/API, simulated delivery, 14 formatting cases and vet; reviewed rollout/catalogue documentation and diffs.
+   - Paths: `docs/RENDER_DEPLOYMENT.md`, `docs/IPO_CATALOGUE.md`, `docs/TASK_CHECKPOINT.md`. External changes: authorised source publication and one manual deployment on the existing service only.
+   - Limits: no migration, credentials, environment, resource or scheduler change. Previously queued bodies remain unchanged. No authenticated hosted transaction or real customer message was created; live delivery remains unchecked. Unchanged tests/builds were not repeated locally; Render's actual deployment build passed. Pending is now 1.
+
+2. Advertise venweb when linking WhatsApp through the backend or terminal viewer.
+   - Verification: backend and viewer `go test ./...` passed; reviewed startup configuration, registration payload, QR/phone pairing callers, documentation and diff whitespace. Both applications set the existing `store.DeviceProps.Os` before creating clients; the library default and WhatsApp-required phone approval browser/OS label remain unchanged.
+   - Paths: `backend/main.go`, `backend/README.md`, `examples/login/main.go`, `examples/login/README.md`, `docs/TASK_CHECKPOINT.md`.
+   - Limits: local source change only; no push, deployment, running-service restart or real pairing. Existing links need unlinking and fresh pairing to adopt the name. Database integration, live phone display and release builds were not repeated for this startup-label change. Preserved pre-existing rollout documentation changes. Pending is now 2.
+
 ### Batch 33 — IPO rollout record and concise transaction confirmations
 
 1. Deploy and record the IPO picker lifetime change on the existing Render API.

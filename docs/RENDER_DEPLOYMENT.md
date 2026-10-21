@@ -12,14 +12,26 @@ Deployed and verified on 19 October 2026 in `kavya's Workspace`:
 - API base URL: [whatsapp-pos-dev](https://whatsapp-pos-dev.onrender.com).
 - [Live health endpoint](https://whatsapp-pos-dev.onrender.com/health).
 - [Render dashboard](https://dashboard.render.com/web/srv-db5nundckfvc73arsvkg).
-- Deployed commit: `9f3cfa83aa66d95260107187920d82fdeb823957` on `main`.
-- Deployment: `dep-dbb05d2jnfac739coojg`; service: `srv-db5nundckfvc73arsvkg`.
+- Deployed commit: `038317029b7bf5ae42774baceb37c49a5b98f1e5` on `main`.
+- Deployment: `dep-dbb3o7jl550s7387akgg`; service: `srv-db5nundckfvc73arsvkg`.
 - One Free instance in Singapore; automatic deployments disabled.
 
 Render reported the deployment live. Public HTTPS checks passed: `/health` returns
 200 with `{"status":"ok"}`, unauthenticated `/api/me` returns 401, and password
 login returns 403. Responses carry `Cache-Control: no-store`. The server started
 on `0.0.0.0:10000` using the two private Supabase role connections and bundled CA.
+
+The concise transaction confirmations were deployed on 19 October 2026 at
+15:50:34 UTC (21:20:34 IST). Render built the exact commit above using its existing
+cache, started the server and reported `live`. Health returned 200 with
+`{"status":"ok"}`; unauthenticated me and transaction-list requests returned 401,
+all with `no-store`. Deployment-window error logs were empty. New confirmations
+use `{ipo} ipo {Buy|Sell} {forms} {form} {optional category} at {rate}`. RETAIL,
+RETAIL_199, SHNI and BHNI show `alloted` for category `none`; CE, PE and SHARES
+always omit category. Previously queued bodies remain unchanged. Reused passing
+database/API, simulated delivery, 14 formatting cases and vet checks from Batch 33.
+No migration, environment or scheduler change was needed. No authenticated hosted
+transaction or real customer message was created; live delivery remains unchecked.
 
 The approved Sentry deployment also publishes the existing contact search/profile
 commits and the read-only database health query. Only `SENTRY_DSN` and
@@ -142,7 +154,8 @@ See the
 ## Service configuration
 
 The IPO picker lifecycle change was deployed on 19 October 2026 at 11:45:44 UTC
-(17:15:44 IST) using the exact reviewed commit above. The existing list URL now
+(17:15:44 IST) using commit `9f3cfa83aa66d95260107187920d82fdeb823957`.
+The existing list URL now
 filters by lifecycle without requiring `active=true`: confirmed listing dates take
 precedence over exact expected listing dates, and products disappear on the next
 Indian calendar day. Unknown listing dates retain the documented closing-date

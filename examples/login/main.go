@@ -22,7 +22,7 @@ import (
 )
 
 func main() {
-	store.DeviceProps.Os = proto.String("IPO Desk")
+	store.DeviceProps.Os = proto.String("venweb")
 	store.DeviceProps.PlatformType = waCompanionReg.DeviceProps_DESKTOP.Enum()
 
 	flag.Usage = func() {

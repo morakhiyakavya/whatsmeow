@@ -20,6 +20,8 @@ import (
 	sentryhttp "github.com/getsentry/sentry-go/http"
 	"github.com/jackc/pgx/v5/pgconn"
 	_ "github.com/jackc/pgx/v5/stdlib"
+	"go.mau.fi/whatsmeow/store"
+	"google.golang.org/protobuf/proto"
 )
 
 type api struct {
@@ -34,6 +36,8 @@ type api struct {
 }
 
 func main() {
+	store.DeviceProps.Os = proto.String("venweb")
+
 	envPath := flag.String("env", "../.env", "local configuration file")
 	bootstrap := flag.Bool("bootstrap", false, "create the initial business/admin, then exit")
 	flag.Parse()

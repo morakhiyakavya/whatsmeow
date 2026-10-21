@@ -467,6 +467,11 @@ rate limiting and a profile screen remain unimplemented; fetch selected contacts
 
 ## Authenticated pairing and reconnecting
 
+New pairings advertise **venweb** in WhatsApp's Linked devices list. Restart or
+deploy the updated backend before pairing. Existing links retain their previous
+name until they are unlinked and paired again. Phone-code approval can still
+show **Chrome (Windows)**, the browser/OS label required by WhatsApp's pairing protocol.
+
 Set `WHATSAPP_DATABASE_URL` in the server environment/configuration, pointing to
 the same PostgreSQL database as `DATABASE_URL`. The local `.env` already does this.
 The worker initializes library tables under `whatsapp`; no application migration

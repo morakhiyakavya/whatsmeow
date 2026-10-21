@@ -52,7 +52,7 @@ On your phone, open **WhatsApp > Linked devices > Link a device** and scan the
 QR code. Widen your terminal if the QR code wraps. Press **Ctrl+C** to disconnect;
 run `go run .` again to reconnect with your saved session.
 
-New pairings appear as **IPO Desk** in WhatsApp's Linked devices list. Existing
+New pairings appear as **venweb** in WhatsApp's Linked devices list. Existing
 linked devices retain their previous name until they are unlinked and paired again.
 
 Wait for **Connected to WhatsApp** before treating login as complete. Pairing

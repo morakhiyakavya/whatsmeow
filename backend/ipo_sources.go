@@ -56,11 +56,15 @@ func newIPOSourceClient() *ipoSourceClient {
 	}}}
 }
 
-func (s *ipoSourceClient) get(ctx context.Context, target string) ([]byte, error) {
+func (s *ipoSourceClient) get(ctx context.Context, target string) (body []byte, resultErr error) {
 	u, err := url.Parse(target)
 	if err != nil || u.Scheme != "https" || (u.Host != "www.nseindia.com" && u.Host != "ipowatch.in") {
 		return nil, errors.New("invalid source host")
 	}
+	span := startOperation(ctx, "http.client", "ipo.source_request")
+	span.SetData("server.address", u.Host)
+	defer func() { finishOperation(span, resultErr) }()
+	ctx = span.Context()
 	req, err := http.NewRequestWithContext(ctx, http.MethodGet, target, nil)
 	if err != nil {
 		return nil, err
@@ -76,6 +80,7 @@ func (s *ipoSourceClient) get(ctx context.Context, target string) ([]byte, error
 		return nil, errors.New("source request failed")
 	}
 	defer res.Body.Close()
+	span.SetData("http.response.status_code", res.StatusCode)
 	if res.StatusCode != 200 {
 		return nil, fmt.Errorf("source HTTP %d", res.StatusCode)
 	}

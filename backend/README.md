@@ -79,7 +79,8 @@ Tracing captures **100% in `APP_ENV=development`** and 10% in production.
 The HTTP middleware captures panics and request timings while preserving Go's
 existing panic behaviour. Unexpected database failures are also captured;
 normal authentication and validation rejections are not reported as exceptions.
-Selected structured logs cover API startup and unexpected database failures.
+Selected structured logs cover API startup, unexpected database failures,
+account-state changes and background/slow/failed operations.
 Sentry Go 0.50 enables logs by default; the older `EnableLogs` option is unnecessary.
 This does not forward all Render or WhatsApp library logs.
 
@@ -90,6 +91,22 @@ Matched traces use route templates instead of business/customer IDs; unmatched
 routes receive a generic name. Error values are deliberately generic, so use the
 stack trace and protected operational logs for diagnosis. Shutdown flushes buffered
 telemetry for up to two seconds.
+
+Performance tracing additionally captures PostgreSQL query/fetch and connection
+timings, WhatsApp queue admission and processing, user-info/picture/number requests,
+connection/pairing/recovery work, confirmation sends and persistence, profile-push
+attempts, and IPO collection/source/persistence. SQL spans contain the statement
+operation and a stable fingerprint, never SQL text, arguments, URLs or error text.
+Query/fetch spans begin after the Go SQL pool acquires a connection; cumulative
+pool waits are measured separately. Existing ownership/session locks, retry rules
+and delivery semantics are preserved.
+
+See [server performance telemetry](../docs/SERVER_PERFORMANCE_TELEMETRY.md) for the
+metric names, queue timing definitions, Sentry filters and verification evidence.
+Metrics cover every instrumented execution independently of trace sampling; idle
+job polls do not export traces. When a DSN is configured, a once-per-minute monitor
+also records pool, runtime, worker-configuration and queue gauges. No new dependency,
+schema migration, credential or public diagnostic endpoint is required.
 
 The [Sentry uptime monitor](https://vanitilabs.sentry.io/monitors/10630540/)
 requests the deployed `/health` every five minutes. It requires three consecutive

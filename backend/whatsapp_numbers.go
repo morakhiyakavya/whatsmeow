@@ -57,7 +57,11 @@ func (a *api) checkWhatsAppNumber(w http.ResponseWriter, r *http.Request, user a
 	}
 }
 
-func (s *whatsAppService) checkNumber(ctx context.Context, businessID, id, phone string) numberCheckResult {
+func (s *whatsAppService) checkNumber(ctx context.Context, businessID, id, phone string) (result numberCheckResult) {
+	span := startOperation(ctx, "whatsapp.number_check", "whatsapp.number_check")
+	span.SetTag("worker.key", performanceKey(strings.ToLower(businessID+"/"+id)))
+	defer func() { finishOperation(span, result.err) }()
+	ctx = span.Context()
 	s.mu.Lock()
 	c := s.accounts[strings.ToLower(businessID+"/"+id)]
 	s.mu.Unlock()
@@ -67,8 +71,17 @@ func (s *whatsAppService) checkNumber(ctx context.Context, businessID, id, phone
 	ctx, cancel := context.WithTimeout(ctx, 8*time.Second)
 	defer cancel()
 	request := numberCheck{ctx: ctx, phone: phone, result: make(chan numberCheckResult, 1)}
+	queue := startOperation(ctx, "queue.wait", "whatsapp.number_check.queue_wait")
+	queued := true
+	defer func() {
+		if queued {
+			finishOperation(queue, result.err)
+		}
+	}()
 	select {
 	case c.numberChecks <- request:
+		finishOperation(queue, nil)
+		queued = false
 	case <-c.done:
 		return numberCheckResult{err: errNumberCheckUnavailable}
 	case <-ctx.Done():
@@ -85,7 +98,9 @@ func (s *whatsAppService) checkNumber(ctx context.Context, businessID, id, phone
 }
 
 func checkRegisteredNumber(ctx context.Context, client pairingClient, phone string) (bool, error) {
-	results, err := client.IsOnWhatsApp(ctx, []string{phone})
+	span := startOperation(ctx, "whatsapp.request", "whatsapp.number_check.remote")
+	results, err := client.IsOnWhatsApp(span.Context(), []string{phone})
+	finishOperation(span, err)
 	if err != nil {
 		return false, err
 	}

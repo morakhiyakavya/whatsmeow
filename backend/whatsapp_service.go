@@ -10,6 +10,7 @@ import (
 	"sync"
 	"time"
 
+	"github.com/getsentry/sentry-go"
 	"github.com/jackc/pgx/v5"
 	"github.com/jackc/pgx/v5/stdlib"
 	"go.mau.fi/whatsmeow"
@@ -49,6 +50,8 @@ type accountConnection struct {
 	logout       chan chan error
 	numberChecks chan numberCheck
 	profiles     chan profileRequest
+	telemetryCtx context.Context
+	telemetryKey string
 }
 
 func (c *accountConnection) state() connectionState {
@@ -63,8 +66,12 @@ func (c *accountConnection) state() connectionState {
 
 func (c *accountConnection) update(state, code string, expires time.Time) {
 	c.mu.Lock()
-	defer c.mu.Unlock()
+	changed := c.State != state
 	c.State, c.Code, c.ExpiresAt = state, code, expires
+	c.mu.Unlock()
+	if changed && c.telemetryCtx != nil {
+		sentry.NewLogger(c.telemetryCtx).Info().String("worker.key", c.telemetryKey).String("worker.state", state).Emit("WhatsApp account state changed")
+	}
 }
 
 type whatsAppService struct {
@@ -85,6 +92,7 @@ func openWhatsAppService(ctx context.Context, dsn string) (*whatsAppService, err
 		return nil, errors.New("invalid WHATSAPP_DATABASE_URL")
 	}
 	config.RuntimeParams["search_path"] = "whatsapp"
+	config.Tracer = databaseTrace{pool: "whatsapp"}
 	config.ConnectTimeout = 10 * time.Second
 	db := stdlib.OpenDB(*config)
 	db.SetMaxOpenConns(40)
@@ -164,7 +172,7 @@ func (s *whatsAppService) start(user actor, id, method, phone string, proof ...[
 	if active >= 32 {
 		return nil, errors.New("connection_capacity")
 	}
-	c := &accountConnection{connectionState: connectionState{State: "connecting", Method: method}, phone: phone, done: make(chan struct{}), proof: loginProof, logout: make(chan chan error), numberChecks: make(chan numberCheck), profiles: make(chan profileRequest)}
+	c := &accountConnection{connectionState: connectionState{State: "connecting", Method: method}, phone: phone, done: make(chan struct{}), proof: loginProof, logout: make(chan chan error), numberChecks: make(chan numberCheck), profiles: make(chan profileRequest), telemetryCtx: s.ctx, telemetryKey: performanceKey(key)}
 	s.accounts[key] = c
 	s.wg.Add(1)
 	go func() {
@@ -221,7 +229,10 @@ const pendingSignupAccount = `SELECT NULL::text FROM ipo_pos.login_attempts a
 func (s *whatsAppService) run(user actor, id string, c *accountConnection) string {
 	ctx, cancel := context.WithCancel(s.ctx)
 	defer cancel()
-	conn, err := s.db.Conn(ctx)
+	acquire := startOperation(ctx, "db.pool.acquire", "whatsapp.account.acquire")
+	acquire.SetTag("worker.key", performanceKey(strings.ToLower(user.BusinessID+"/"+id)))
+	conn, err := s.db.Conn(acquire.Context())
+	finishOperation(acquire, err)
 	if err != nil {
 		return "storage_unavailable"
 	}
@@ -311,7 +322,11 @@ func (s *whatsAppService) run(user actor, id string, c *accountConnection) strin
 			return "pairing_failed"
 		}
 	}
-	if client.ConnectContext(ctx) != nil {
+	connect := startOperation(ctx, "whatsapp.connect", "whatsapp.connect")
+	connect.SetTag("worker.key", performanceKey(strings.ToLower(user.BusinessID+"/"+id)))
+	connectErr := client.ConnectContext(connect.Context())
+	finishOperation(connect, connectErr)
+	if connectErr != nil {
 		return "connection_failed"
 	}
 	checks := time.NewTicker(15 * time.Second)
@@ -329,7 +344,8 @@ func (s *whatsAppService) run(user actor, id string, c *accountConnection) strin
 	for {
 		select {
 		case request := <-c.profiles:
-			profileCtx, stop := context.WithCancel(request.ctx)
+			process := startOperation(request.ctx, "whatsapp.profile", "whatsapp.profile.process")
+			profileCtx, stop := context.WithCancel(process.Context())
 			stopOnShutdown := context.AfterFunc(ctx, stop)
 			var current sql.NullString
 			err = conn.QueryRowContext(profileCtx, activeWhatsAppAccount, user.BusinessID, id, user.UserID).Scan(&current)
@@ -343,11 +359,13 @@ func (s *whatsAppService) run(user actor, id string, c *accountConnection) strin
 						request.phone, result.profile.PictureState, result.profile.pictureID, time.Time{})
 				}
 			}
+			finishOperation(process, result.err)
 			stopOnShutdown()
 			stop()
 			request.result <- result
 		case request := <-c.numberChecks:
-			checkCtx, stop := context.WithCancel(request.ctx)
+			process := startOperation(request.ctx, "whatsapp.number_check", "whatsapp.number_check.process")
+			checkCtx, stop := context.WithCancel(process.Context())
 			stopOnShutdown := context.AfterFunc(ctx, stop)
 			var current sql.NullString
 			err = conn.QueryRowContext(checkCtx, activeWhatsAppAccount, user.BusinessID, id, user.UserID).Scan(&current)
@@ -369,12 +387,15 @@ func (s *whatsAppService) run(user actor, id string, c *accountConnection) strin
 					}
 				}
 			}
+			finishOperation(process, result.err)
 			stopOnShutdown()
 			stop()
 			request.result <- result
 		case result := <-c.logout:
 			logoutCtx, stop := context.WithTimeout(ctx, 5*time.Second)
-			logoutErr := client.Logout(logoutCtx)
+			logout := startOperation(logoutCtx, "whatsapp.logout", "whatsapp.logout")
+			logoutErr := client.Logout(logout.Context())
+			finishOperation(logout, logoutErr)
 			stop()
 			result <- logoutErr
 			return "needs_relink"
@@ -393,8 +414,11 @@ func (s *whatsAppService) run(user actor, id string, c *accountConnection) strin
 			}
 		case <-checks.C:
 			checkCtx, stop := context.WithTimeout(ctx, 5*time.Second)
+			guard := startOperation(checkCtx, "whatsapp.guard", "whatsapp.account.guard")
+			guard.SetTag("worker.key", performanceKey(user.BusinessID+"/"+id))
 			var current sql.NullString
-			err = conn.QueryRowContext(checkCtx, accountQuery, accountArgs...).Scan(&current)
+			err = conn.QueryRowContext(guard.Context(), accountQuery, accountArgs...).Scan(&current)
+			finishOperation(guard, err)
 			stop()
 			if err != nil || current != saved {
 				return "account_unavailable"
@@ -409,7 +433,9 @@ func (s *whatsAppService) run(user actor, id string, c *accountConnection) strin
 					if !phoneRequested {
 						phoneRequested = true
 						phoneCtx, stop := context.WithTimeout(ctx, 15*time.Second)
-						code, phoneErr := client.PairPhone(phoneCtx, c.phone, false, whatsmeow.PairClientChrome, "Chrome (Windows)")
+						pair := startOperation(phoneCtx, "whatsapp.connect", "whatsapp.pair_phone")
+						code, phoneErr := client.PairPhone(pair.Context(), c.phone, false, whatsmeow.PairClientChrome, "Chrome (Windows)")
+						finishOperation(pair, phoneErr)
 						stop()
 						if phoneErr != nil {
 							return "pairing_failed"
@@ -480,7 +506,11 @@ func (s *whatsAppService) run(user actor, id string, c *accountConnection) strin
 				}
 			case *events.ManualLoginReconnect:
 				client.Disconnect()
-				if client.ConnectContext(ctx) != nil {
+				reconnect := startOperation(ctx, "whatsapp.connect", "whatsapp.reconnect")
+				reconnect.SetTag("worker.key", performanceKey(strings.ToLower(user.BusinessID+"/"+id)))
+				reconnectErr := client.ConnectContext(reconnect.Context())
+				finishOperation(reconnect, reconnectErr)
+				if reconnectErr != nil {
 					return "connection_failed"
 				}
 			case *events.Disconnected:
@@ -497,7 +527,11 @@ func (s *whatsAppService) run(user actor, id string, c *accountConnection) strin
 	}
 }
 
-func (s *whatsAppService) bind(ctx context.Context, user actor, id, jid, phone string, proof []byte) error {
+func (s *whatsAppService) bind(ctx context.Context, user actor, id, jid, phone string, proof []byte) (resultErr error) {
+	span := startOperation(ctx, "whatsapp.lifecycle", "whatsapp.bind")
+	span.SetTag("worker.key", performanceKey(user.BusinessID+"/"+id))
+	defer func() { finishOperation(span, resultErr) }()
+	ctx = span.Context()
 	tx, err := s.db.BeginTx(ctx, nil)
 	if err != nil {
 		return err
@@ -558,7 +592,11 @@ func (s *whatsAppService) bind(ctx context.Context, user actor, id, jid, phone s
 	return tx.Commit()
 }
 
-func (s *whatsAppService) clearBinding(ctx context.Context, user actor, id, jid string) error {
+func (s *whatsAppService) clearBinding(ctx context.Context, user actor, id, jid string) (resultErr error) {
+	span := startOperation(ctx, "whatsapp.lifecycle", "whatsapp.clear_binding")
+	span.SetTag("worker.key", performanceKey(user.BusinessID+"/"+id))
+	defer func() { finishOperation(span, resultErr) }()
+	ctx = span.Context()
 	_, err := s.db.ExecContext(ctx, `UPDATE ipo_pos.whatsapp_accounts SET device_jid=NULL,unlinked_at=now()
         WHERE business_id=$1 AND id=$2 AND linked_by_user_id=$3 AND device_jid=$4`, user.BusinessID, id, user.UserID, jid)
 	return err

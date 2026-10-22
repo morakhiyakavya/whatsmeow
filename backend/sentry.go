@@ -1,6 +1,9 @@
 package main
 
-import "github.com/getsentry/sentry-go"
+import (
+	"github.com/getsentry/sentry-go"
+	"github.com/getsentry/sentry-go/attribute"
+)
 
 func sentryOptions(c configuration) sentry.ClientOptions {
 	traceSampleRate := 0.1
@@ -21,6 +24,14 @@ func sentryOptions(c configuration) sentry.ClientOptions {
 			},
 		},
 		BeforeSend: redactSentryEvent, BeforeSendTransaction: redactSentryEvent,
+		BeforeSendMetric: func(metric *sentry.Metric) *sentry.Metric {
+			redactPerformanceAttributes(metric.Attributes, false)
+			return metric
+		},
+		BeforeSendLog: func(entry *sentry.Log) *sentry.Log {
+			redactPerformanceAttributes(entry.Attributes, true)
+			return entry
+		},
 	}
 }
 
@@ -33,6 +44,8 @@ func redactSentryEvent(event *sentry.Event, _ *sentry.EventHint) *sentry.Event {
 		if event.Message != "" {
 			event.Message = "Application error (details omitted for privacy)"
 		}
+	} else if event.TransactionInfo != nil && event.TransactionInfo.Source == sentry.SourceTask && performanceTask(event.Transaction) {
+		// Background names are static application operations, never customer IDs.
 	} else if event.TransactionInfo == nil || event.TransactionInfo.Source != sentry.SourceRoute {
 		event.Transaction = "unmatched route"
 	}
@@ -52,4 +65,27 @@ func redactSentryEvent(event *sentry.Event, _ *sentry.EventHint) *sentry.Event {
 		}
 	}
 	return event
+}
+
+func performanceTask(name string) bool {
+	switch name {
+	case "database.connect", "whatsapp.account.acquire", "whatsapp.connect", "whatsapp.reconnect", "whatsapp.pair_phone", "whatsapp.logout",
+		"whatsapp.profile", "whatsapp.number_check", "whatsapp.account.guard", "whatsapp.bind", "whatsapp.clear_binding", "whatsapp.picture_changed", "whatsapp.recovery", "confirmation.deliver", "profile_push.deliver", "ipo.import":
+		return true
+	}
+	return false
+}
+
+func redactPerformanceAttributes(attributes map[string]attribute.Value, logs bool) {
+	for key := range attributes {
+		switch key {
+		case "sentry.environment", "sentry.release", "sentry.sdk.name", "sentry.sdk.version", "db.pool.name", "operation", "outcome", "queue.name", "worker.name", "http.route", "duration_ms":
+			continue
+		case "job.key", "worker.key", "worker.state":
+			if logs {
+				continue
+			}
+		}
+		delete(attributes, key)
+	}
 }

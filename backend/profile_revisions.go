@@ -112,7 +112,11 @@ func pictureEventPhone(ctx context.Context, device *store.Device, jid types.JID)
 	return "+" + jid.User, nil
 }
 
-func (s *whatsAppService) pictureChanged(ctx context.Context, device *store.Device, user actor, account, binding string, event *events.Picture) error {
+func (s *whatsAppService) pictureChanged(ctx context.Context, device *store.Device, user actor, account, binding string, event *events.Picture) (resultErr error) {
+	span := startOperation(ctx, "whatsapp.lifecycle", "whatsapp.picture_changed")
+	span.SetTag("worker.key", performanceKey(user.BusinessID+"/"+account))
+	defer func() { finishOperation(span, resultErr) }()
+	ctx = span.Context()
 	phone, err := pictureEventPhone(ctx, device, event.JID)
 	if err != nil || phone == "" {
 		return err

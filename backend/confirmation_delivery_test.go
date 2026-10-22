@@ -60,7 +60,7 @@ func awaitConfirmation(t *testing.T, db *sql.DB, business, id, want string) {
 
 func testConfirmationDelivery(t *testing.T, dsn string, db *sql.DB, cashier testClient, business, cashierID string, request map[string]any) {
 	cashier.t = t
-	ctx := context.Background()
+	ctx, capture := performanceContext(t)
 	var account, id, jidText string
 	if err := db.QueryRow(`SELECT q.whatsapp_account_id,q.transaction_id,q.sender_device_jid
         FROM ipo_pos.transaction_confirmations q JOIN ipo_pos.transactions t ON t.business_id=q.business_id AND t.id=q.transaction_id
@@ -242,4 +242,21 @@ func testConfirmationDelivery(t *testing.T, dsn string, db *sql.DB, cashier test
 		t.Fatal(err)
 	}
 	cleanup.close()
+	capture.Lock()
+	defer capture.Unlock()
+	traced := false
+	for _, event := range capture.events {
+		if event.Transaction != "confirmation.deliver" || event.Tags["job.key"] != performanceKey(id) {
+			continue
+		}
+		sent, persisted := false, false
+		for _, span := range event.Spans {
+			sent = sent || span.Description == "confirmation.send"
+			persisted = persisted || span.Description == "confirmation.persist"
+		}
+		traced = sent && persisted
+	}
+	if !traced {
+		t.Fatal("real worker did not separate confirmation sending and persistence")
+	}
 }

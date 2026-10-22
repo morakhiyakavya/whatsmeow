@@ -67,7 +67,11 @@ func (a *api) whatsAppContactProfile(w http.ResponseWriter, r *http.Request, use
 	}
 }
 
-func (s *whatsAppService) contactProfile(ctx context.Context, businessID, id, phone string) profileResult {
+func (s *whatsAppService) contactProfile(ctx context.Context, businessID, id, phone string) (result profileResult) {
+	span := startOperation(ctx, "whatsapp.profile", "whatsapp.profile")
+	span.SetTag("worker.key", performanceKey(strings.ToLower(businessID+"/"+id)))
+	defer func() { finishOperation(span, result.err) }()
+	ctx = span.Context()
 	s.mu.Lock()
 	c := s.accounts[strings.ToLower(businessID+"/"+id)]
 	s.mu.Unlock()
@@ -77,8 +81,17 @@ func (s *whatsAppService) contactProfile(ctx context.Context, businessID, id, ph
 	ctx, cancel := context.WithTimeout(ctx, 8*time.Second)
 	defer cancel()
 	request := profileRequest{ctx: ctx, phone: phone, result: make(chan profileResult, 1)}
+	queue := startOperation(ctx, "queue.wait", "whatsapp.profile.queue_wait")
+	queued := true
+	defer func() {
+		if queued {
+			finishOperation(queue, result.err)
+		}
+	}()
 	select {
 	case c.profiles <- request:
+		finishOperation(queue, nil)
+		queued = false
 	case <-c.done:
 		return profileResult{err: errProfileUnavailable}
 	case <-ctx.Done():
@@ -97,7 +110,9 @@ func (s *whatsAppService) contactProfile(ctx context.Context, businessID, id, ph
 func lookupContactProfile(ctx context.Context, client pairingClient, contacts store.ContactStore, phone string) (contactProfile, error) {
 	profile := contactProfile{Phone: phone}
 	jid := types.NewJID(strings.TrimPrefix(phone, "+"), types.DefaultUserServer)
-	users, err := client.GetUserInfo(ctx, []types.JID{jid})
+	infoSpan := startOperation(ctx, "whatsapp.request", "whatsapp.user_info")
+	users, err := client.GetUserInfo(infoSpan.Context(), []types.JID{jid})
+	finishOperation(infoSpan, err)
 	if err != nil {
 		return profile, err
 	}
@@ -128,7 +143,13 @@ func lookupContactProfile(ctx context.Context, client pairingClient, contacts st
 	if profile.Name == nil && businessName != "" {
 		profile.Name = &businessName
 	}
-	picture, err := client.GetProfilePictureInfo(ctx, jid, nil)
+	pictureSpan := startOperation(ctx, "whatsapp.request", "whatsapp.picture")
+	picture, err := client.GetProfilePictureInfo(pictureSpan.Context(), jid, nil)
+	pictureErr := err
+	if errors.Is(err, whatsmeow.ErrProfilePictureUnauthorized) || errors.Is(err, whatsmeow.ErrProfilePictureNotSet) {
+		pictureErr = nil
+	}
+	finishOperation(pictureSpan, pictureErr)
 	switch {
 	case errors.Is(err, whatsmeow.ErrProfilePictureUnauthorized):
 		profile.PictureState = "hidden"

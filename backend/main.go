@@ -17,9 +17,11 @@ import (
 	"time"
 
 	"github.com/getsentry/sentry-go"
+	"github.com/getsentry/sentry-go/attribute"
 	sentryhttp "github.com/getsentry/sentry-go/http"
+	"github.com/jackc/pgx/v5"
 	"github.com/jackc/pgx/v5/pgconn"
-	_ "github.com/jackc/pgx/v5/stdlib"
+	"github.com/jackc/pgx/v5/stdlib"
 	"go.mau.fi/whatsmeow/store"
 	"google.golang.org/protobuf/proto"
 )
@@ -57,10 +59,12 @@ func run(envPath string, bootstrap bool) error {
 		return errors.New("invalid Sentry configuration; check SENTRY_DSN")
 	}
 	defer sentry.Flush(2 * time.Second)
-	db, err := sql.Open("pgx", config.DatabaseURL)
+	databaseConfig, err := pgx.ParseConfig(config.DatabaseURL)
 	if err != nil {
 		return errors.New("invalid DATABASE_URL configuration")
 	}
+	databaseConfig.Tracer = databaseTrace{pool: "api"}
+	db := stdlib.OpenDB(*databaseConfig)
 	defer db.Close()
 	db.SetMaxOpenConns(10)
 	db.SetMaxIdleConns(5)
@@ -121,6 +125,10 @@ func run(envPath string, bootstrap bool) error {
 		if err = app.whatsapp.resume(); err != nil {
 			return errors.New("could not restore mapped WhatsApp accounts")
 		}
+	}
+	if config.SentryDSN != "" {
+		stopPerformance := startPerformanceMonitor(ctx, app, config)
+		defer stopPerformance()
 	}
 	server := &http.Server{Addr: config.Addr, Handler: app.routes(), ReadHeaderTimeout: 5 * time.Second, ReadTimeout: 10 * time.Second, WriteTimeout: 15 * time.Second, IdleTimeout: 60 * time.Second}
 	serverErr := make(chan error, 1)
@@ -191,7 +199,19 @@ func (a *api) routes() http.Handler {
 	mux.HandleFunc("POST /api/businesses/{businessID}/transactions/{id}/cancel", a.protect(false, a.cancelTransaction))
 	mux.HandleFunc("GET /api/businesses/{businessID}/transactions/{id}/history", a.protect(false, a.transactionHistory))
 	mux.HandleFunc("GET /api/businesses/{businessID}/transactions/{id}/confirmation", a.protect(false, a.getConfirmation))
-	handler := sentryhttp.New(sentryhttp.Options{Repanic: true}).Handle(mux)
+	observed := http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		started := time.Now()
+		defer func() {
+			route := r.Pattern
+			if route == "" {
+				route = "unmatched route"
+			}
+			sentry.NewMeter(r.Context()).Distribution("server.http.duration", float64(time.Since(started))/float64(time.Millisecond),
+				sentry.WithUnit(sentry.UnitMillisecond), sentry.WithAttributes(attribute.String("http.route", route)))
+		}()
+		mux.ServeHTTP(w, r)
+	})
+	handler := sentryhttp.New(sentryhttp.Options{Repanic: true}).Handle(observed)
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		w.Header().Set("Cache-Control", "no-store")
 		w.Header().Set("X-Content-Type-Options", "nosniff")

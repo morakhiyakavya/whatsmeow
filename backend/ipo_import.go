@@ -76,8 +76,14 @@ func startIPOImporter(ctx context.Context, db *sql.DB) func() {
 	return func() { cancel(); <-done }
 }
 
-func runIPOImport(ctx context.Context, db *sql.DB, collect func(context.Context) ([]ipoSourceIssue, map[string]string)) (bool, error) {
-	conn, err := db.Conn(ctx)
+func runIPOImport(ctx context.Context, db *sql.DB, collect func(context.Context) ([]ipoSourceIssue, map[string]string)) (worked bool, resultErr error) {
+	span := startOperation(ctx, "queue.process", "ipo.import")
+	defer func() { finishPoll(span, worked, resultErr) }()
+	ctx = span.Context()
+	acquire := startOperation(ctx, "db.pool.acquire", "ipo.connection_wait")
+	conn, err := db.Conn(acquire.Context())
+	// Idle importer polls have no standalone timing metrics.
+	acquire.Finish()
 	if err != nil {
 		return false, err
 	}
@@ -99,11 +105,12 @@ func runIPOImport(ctx context.Context, db *sql.DB, collect func(context.Context)
 		return false, err
 	}
 	var id string
+	var created time.Time
 	err = conn.QueryRowContext(ctx, `WITH due AS (SELECT id FROM ipo_pos.ipo_import_runs
 	 WHERE status IN ('pending','running','failed','partial') AND attempts<3 AND next_attempt_at<=clock_timestamp()
 	 ORDER BY next_attempt_at,id LIMIT 1 FOR UPDATE SKIP LOCKED)
 	 UPDATE ipo_pos.ipo_import_runs j SET status='running',attempts=attempts+1,started_at=clock_timestamp(),
-	 next_attempt_at=clock_timestamp()+interval '10 minutes' FROM due WHERE j.id=due.id RETURNING j.id`).Scan(&id)
+	 next_attempt_at=clock_timestamp()+interval '10 minutes' FROM due WHERE j.id=due.id RETURNING j.id,j.created_at`).Scan(&id, &created)
 	if errors.Is(err, sql.ErrNoRows) {
 		return false, nil
 	}
@@ -111,7 +118,11 @@ func runIPOImport(ctx context.Context, db *sql.DB, collect func(context.Context)
 		return false, err
 	}
 	collectCtx, cancel := context.WithTimeout(ctx, 6*time.Minute)
-	items, results := collect(collectCtx)
+	span.SetTag("job.key", performanceKey(id))
+	recordQueueAge(ctx, "ipo_import", created)
+	collectSpan := startOperation(collectCtx, "http.client", "ipo.collect")
+	items, results := collect(collectSpan.Context())
+	collectErr := collectCtx.Err()
 	interrupted := collectCtx.Err() != nil
 	cancel()
 	if results == nil {
@@ -131,10 +142,17 @@ func runIPOImport(ctx context.Context, db *sql.DB, collect func(context.Context)
 		results["catalogue"] = "empty"
 	}
 	count := 0
+	if status != "succeeded" {
+		collectSpan.Status = sentry.SpanStatusInternalError
+	}
+	finishOperation(collectSpan, collectErr)
 	saveCtx, saveCancel := context.WithTimeout(ctx, 90*time.Second)
 	defer saveCancel()
+	save := startOperation(saveCtx, "db.persist", "ipo.persist")
+	var saveErr error
 	for _, item := range items {
-		if err = saveSourceIPO(saveCtx, db, item); err != nil {
+		if err = saveSourceIPO(save.Context(), db, item); err != nil {
+			saveErr = err
 			status = "partial"
 			results["storage:"+item.Symbol] = "failed"
 			if saveCtx.Err() != nil {
@@ -144,11 +162,17 @@ func runIPOImport(ctx context.Context, db *sql.DB, collect func(context.Context)
 		}
 		count++
 	}
+	finishOperation(save, saveErr)
 	if count == 0 {
 		status = "failed"
 	}
 	encoded, _ := json.Marshal(results)
-	finishCtx, finishCancel := context.WithTimeout(context.Background(), 8*time.Second)
+	span.SetData("import.outcome", status)
+	if status != "succeeded" {
+		span.Status = sentry.SpanStatusInternalError
+	}
+	span.SetData("import.count", count)
+	finishCtx, finishCancel := context.WithTimeout(context.WithoutCancel(ctx), 8*time.Second)
 	defer finishCancel()
 	_, err = conn.ExecContext(finishCtx, `UPDATE ipo_pos.ipo_import_runs SET status=$2,finished_at=clock_timestamp(),
 	 next_attempt_at=clock_timestamp()+interval '5 minutes',source_results=$3,imported_count=$4 WHERE id=$1`, id, status, string(encoded), count)

@@ -7,22 +7,34 @@ business/admin or copy local WhatsApp sessions.
 
 ## Current deployment
 
-Deployed and verified on 19 October 2026 in `kavya's Workspace`:
+Deployed and verified on 21 October 2026 in `kavya's Workspace`:
 
 - API base URL: [whatsapp-pos-dev](https://whatsapp-pos-dev.onrender.com).
 - [Live health endpoint](https://whatsapp-pos-dev.onrender.com/health).
 - [Render dashboard](https://dashboard.render.com/web/srv-db5nundckfvc73arsvkg).
-- Deployed commit: `038317029b7bf5ae42774baceb37c49a5b98f1e5` on `main`.
-- Deployment: `dep-dbb3o7jl550s7387akgg`; service: `srv-db5nundckfvc73arsvkg`.
+- Deployed commit: `0571bfbd7e93cddf6f8088ac37aca78418c00fd1` on `main`.
+- Deployment: `dep-dbccd28473hc73fq69eg`; service: `srv-db5nundckfvc73arsvkg`.
 - One Free instance in Singapore; automatic deployments disabled.
 
 Render reported the deployment live. Public HTTPS checks passed: `/health` returns
-200 with `{"status":"ok"}`, unauthenticated `/api/me` returns 401, and password
-login returns 403. Responses carry `Cache-Control: no-store`. The server started
+200 with `{"status":"ok"}`; unauthenticated `/api/me` and business transaction-list
+requests return 401. Responses carry `Cache-Control: no-store`. The server started
 on `0.0.0.0:10000` using the two private Supabase role connections and bundled CA.
 
+The **venweb** linked-device name was deployed on 21 October 2026 at
+14:06:19 UTC (19:36:19 IST). Render built the exact commit above with its existing
+cache, started the server on `0.0.0.0:10000` and reported `live`. Public health
+returned 200/ok; unauthenticated me and business transaction-list requests returned
+401, all with `no-store`. Deployment-window error logs were empty. Reused the
+passing backend/viewer tests because their inputs were unchanged. No migration,
+environment or scheduler change was needed. New links advertise **venweb**;
+existing links need unlinking and fresh pairing to adopt the name. Phone-code
+approval can still show **Chrome (Windows)**. No real pairing or customer message
+was performed; the phone's displayed name remains unverified.
+
 The concise transaction confirmations were deployed on 19 October 2026 at
-15:50:34 UTC (21:20:34 IST). Render built the exact commit above using its existing
+15:50:34 UTC (21:20:34 IST), using commit
+`038317029b7bf5ae42774baceb37c49a5b98f1e5`. Render built that commit using its existing
 cache, started the server and reported `live`. Health returned 200 with
 `{"status":"ok"}`; unauthenticated me and transaction-list requests returned 401,
 all with `no-store`. Deployment-window error logs were empty. New confirmations

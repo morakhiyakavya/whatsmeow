@@ -5,6 +5,8 @@ import (
 	"encoding/json"
 	"errors"
 	"net/http"
+
+	"github.com/getsentry/sentry-go"
 )
 
 // Keep protocol session bindings private; return only POS confirmation details.
@@ -62,6 +64,10 @@ func queueConfirmation(w http.ResponseWriter, r *http.Request, tx *sql.Tx, user 
 	if n != 1 {
 		fail(w, 409, "recipient_missing", "Save an international phone number on the selected customer first")
 		return false
+	}
+	if span := sentry.SpanFromContext(r.Context()); span != nil {
+		span.SetTag("job.key", performanceKey(id))
+		span.SetTag("worker.key", performanceKey(user.BusinessID+"/"+account))
 	}
 	return true
 }

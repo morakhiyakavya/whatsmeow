@@ -41,7 +41,11 @@ func recoveryMessageHash(device *store.Device, event *events.Message) ([]byte, b
 	return secretHash(token)
 }
 
-func (s *whatsAppService) approveRecovery(ctx context.Context, device *store.Device, user actor, account, binding string, event *events.Message) error {
+func (s *whatsAppService) approveRecovery(ctx context.Context, device *store.Device, user actor, account, binding string, event *events.Message) (resultErr error) {
+	span := startOperation(ctx, "whatsapp.lifecycle", "whatsapp.recovery")
+	span.SetTag("worker.key", performanceKey(user.BusinessID+"/"+account))
+	defer func() { finishOperation(span, resultErr) }()
+	ctx = span.Context()
 	hash, ok := recoveryMessageHash(device, event)
 	if !ok {
 		return nil

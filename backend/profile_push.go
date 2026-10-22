@@ -9,6 +9,8 @@ import (
 	"strconv"
 	"sync"
 	"time"
+
+	"github.com/getsentry/sentry-go"
 )
 
 type profilePushJob struct {
@@ -52,7 +54,10 @@ func startProfilePush(ctx context.Context, db *sql.DB, sender pushSender) func()
 	return func() { cancel(); wg.Wait() }
 }
 
-func deliverProfilePush(ctx context.Context, db *sql.DB, sender pushSender) (bool, error) {
+func deliverProfilePush(ctx context.Context, db *sql.DB, sender pushSender) (worked bool, resultErr error) {
+	span := startOperation(ctx, "queue.process", "profile_push.deliver")
+	defer func() { finishPoll(span, worked, resultErr) }()
+	ctx = span.Context()
 	// Remove terminal work, even across worker restarts.
 	_, err := db.ExecContext(ctx, `DELETE FROM ipo_pos.profile_push_outbox WHERE expires_at<=now() OR
 		(attempts>=5 AND next_attempt_at<=now())`)
@@ -60,14 +65,15 @@ func deliverProfilePush(ctx context.Context, db *sql.DB, sender pushSender) (boo
 		return false, err
 	}
 	var job profilePushJob
+	var due time.Time
 	err = db.QueryRowContext(ctx, `WITH due AS (
-		SELECT id FROM ipo_pos.profile_push_outbox WHERE next_attempt_at<=now() AND attempts<5 AND expires_at>now()
+		SELECT id,next_attempt_at FROM ipo_pos.profile_push_outbox WHERE next_attempt_at<=now() AND attempts<5 AND expires_at>now()
 		ORDER BY next_attempt_at,id LIMIT 1 FOR UPDATE SKIP LOCKED
 	) UPDATE ipo_pos.profile_push_outbox q SET attempts=q.attempts+1,next_attempt_at=clock_timestamp()+interval '1 minute'
 	FROM due WHERE q.id=due.id RETURNING q.id,q.installation_id,q.device_generation,q.user_id,q.business_id,
-	q.whatsapp_account_id,q.phone_number,q.profile_revision,q.auth_generation,q.attempts`).Scan(
+		q.whatsapp_account_id,q.phone_number,q.profile_revision,q.auth_generation,q.attempts,due.next_attempt_at`).Scan(
 		&job.id, &job.installation, &job.deviceGeneration, &job.user, &job.business, &job.account, &job.phone,
-		&job.revision, &job.authGeneration, &job.attempts)
+		&job.revision, &job.authGeneration, &job.attempts, &due)
 	if errors.Is(err, sql.ErrNoRows) {
 		return false, nil
 	}
@@ -75,6 +81,9 @@ func deliverProfilePush(ctx context.Context, db *sql.DB, sender pushSender) (boo
 		return false, err
 	}
 	var token string
+	span.SetTag("job.key", performanceKey(job.id))
+	span.SetTag("worker.key", performanceKey(job.business+"/"+job.account))
+	recordQueueAge(ctx, "profile_push", due)
 	// Recheck session, installation generation, link ownership and business access immediately before sending.
 	err = db.QueryRowContext(ctx, `SELECT p.fcm_token FROM ipo_pos.push_devices p
 		JOIN ipo_pos.login_sessions s ON s.id=p.session_id `+sessionJoins+`
@@ -91,12 +100,26 @@ func deliverProfilePush(ctx context.Context, db *sql.DB, sender pushSender) (boo
 	}
 	outcome := pushOutcome{}
 	if err == nil {
-		outcome = sender.send(ctx, token, map[string]string{
+		send := startOperation(ctx, "http.client", "profile_push.send")
+		outcome = sender.send(send.Context(), token, map[string]string{
 			"type": "contact_profile_changed", "user_id": job.user, "business_id": job.business,
 			"whatsapp_account_id": job.account, "phone_number": job.phone,
 			"profile_revision": strconv.FormatInt(job.revision, 10),
 		})
+		var sendErr error
+		if outcome.failed {
+			sendErr = errors.New("push send failed")
+		}
+		if ctx.Err() != nil {
+			sendErr = ctx.Err()
+		}
+		finishOperation(send, sendErr)
+		if outcome.failed {
+			span.Status = sentry.SpanStatusInternalError
+		}
 	}
+	span.SetData("push.retry", outcome.retry)
+	span.SetData("push.unregistered", outcome.unregistered)
 	if outcome.unregistered {
 		// Do not remove a new registration installed while this request was in flight.
 		_, err = db.ExecContext(ctx, `DELETE FROM ipo_pos.push_devices WHERE installation_id=$1 AND generation=$2 AND fcm_token=$3`,

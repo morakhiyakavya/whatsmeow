@@ -178,15 +178,31 @@ func (s *whatsAppService) start(user actor, id, method, phone string, proof ...[
 	go func() {
 		defer s.wg.Done()
 		defer close(c.done)
+		restoring := method == ""
+		retryDelay := time.Second
 		for {
-			state := s.run(user, id, c)
-			if state != "busy" || c.Method != "" {
+			state := s.run(user, id, c, restoring)
+			if state == "connection_rejected" {
+				c.update("connection_failed", "", time.Time{})
+				return
+			}
+			if current := c.state().State; current == "connected" || (!restoring && current == "reconnecting") {
+				restoring = true
+				retryDelay = time.Second
+			}
+			if !restoring || (state != "busy" && state != "storage_unavailable" && state != "connection_failed" && state != "binding_failed") {
 				c.update(state, "", time.Time{})
 				return
 			}
-			// A replacement worker waits for the previous deployment to release its locks.
-			c.update("waiting_for_worker", "", time.Time{})
-			retry := time.NewTimer(time.Second)
+			delay := retryDelay
+			if state == "busy" {
+				c.update("waiting_for_worker", "", time.Time{})
+				delay = time.Second
+			} else {
+				c.update("reconnecting", "", time.Time{})
+				retryDelay = min(2*retryDelay, 30*time.Second)
+			}
+			retry := time.NewTimer(delay)
 			select {
 			case <-s.ctx.Done():
 				retry.Stop()
@@ -226,7 +242,7 @@ const pendingSignupAccount = `SELECT NULL::text FROM ipo_pos.login_attempts a
     AND a.state='pending' AND a.expires_at>now() AND a.consumed_at IS NULL
     AND NOT EXISTS (SELECT 1 FROM ipo_pos.users WHERE phone_number=a.phone_number)`
 
-func (s *whatsAppService) run(user actor, id string, c *accountConnection) string {
+func (s *whatsAppService) run(user actor, id string, c *accountConnection, restoring bool) string {
 	ctx, cancel := context.WithCancel(s.ctx)
 	defer cancel()
 	acquire := startOperation(ctx, "db.pool.acquire", "whatsapp.account.acquire")
@@ -266,14 +282,17 @@ func (s *whatsAppService) run(user actor, id string, c *accountConnection) strin
 		accountArgs = append(accountArgs, c.proof)
 	}
 	if err = conn.QueryRowContext(ctx, accountQuery, accountArgs...).Scan(&saved); err != nil {
-		return "account_unavailable"
+		if errors.Is(err, sql.ErrNoRows) {
+			return "account_unavailable"
+		}
+		return "storage_unavailable"
 	}
 	if err = recoverConfirmations(ctx, conn, user.BusinessID, id); err != nil {
 		return "storage_unavailable"
 	}
 	device := s.store.NewDevice()
 	if saved.Valid {
-		if c.Method != "" {
+		if !restoring {
 			return "already_paired"
 		}
 		jid, parseErr := types.ParseJID(saved.String)
@@ -290,7 +309,7 @@ func (s *whatsAppService) run(user actor, id string, c *accountConnection) strin
 			}
 			return "needs_relink"
 		}
-	} else if c.Method == "" {
+	} else if restoring {
 		return "needs_relink"
 	}
 	client := s.newClient(device)
@@ -420,6 +439,9 @@ func (s *whatsAppService) run(user actor, id string, c *accountConnection) strin
 			err = conn.QueryRowContext(guard.Context(), accountQuery, accountArgs...).Scan(&current)
 			finishOperation(guard, err)
 			stop()
+			if err != nil && !errors.Is(err, sql.ErrNoRows) {
+				return "storage_unavailable"
+			}
 			if err != nil || current != saved {
 				return "account_unavailable"
 			}
@@ -521,7 +543,7 @@ func (s *whatsAppService) run(user actor, id string, c *accountConnection) strin
 				}
 				return "needs_relink"
 			case events.PermanentDisconnect:
-				return "connection_failed"
+				return "connection_rejected"
 			}
 		}
 	}

@@ -28,6 +28,7 @@ type fakePairingClient struct {
 	numberCheck func(context.Context, []string) ([]types.IsOnWhatsAppResponse, error)
 	userInfo    func(context.Context, []types.JID) (map[types.JID]types.UserInfo, error)
 	pictureInfo func(context.Context, types.JID, *whatsmeow.GetProfilePictureParams) (*types.ProfilePictureInfo, error)
+	connect     func(context.Context) error
 }
 
 func (f *fakePairingClient) GetUserInfo(ctx context.Context, jids []types.JID) (map[types.JID]types.UserInfo, error) {
@@ -69,7 +70,10 @@ func (f *fakePairingClient) SendMessage(ctx context.Context, jid types.JID, msg 
 func (f *fakePairingClient) GetQRChannel(context.Context) (<-chan whatsmeow.QRChannelItem, error) {
 	return f.qr, nil
 }
-func (f *fakePairingClient) ConnectContext(context.Context) error {
+func (f *fakePairingClient) ConnectContext(ctx context.Context) error {
+	if f.connect != nil {
+		return f.connect(ctx)
+	}
 	if f.device.ID == nil {
 		f.qr <- whatsmeow.QRChannelItem{Event: whatsmeow.QRChannelEventCode, Code: "synthetic-qr", Timeout: time.Minute}
 	} else {
@@ -223,6 +227,19 @@ func testWhatsAppPairing(t *testing.T, dsn string, db *sql.DB, app *api, admin, 
 	fake.qr <- whatsmeow.QRChannelSuccess
 	fake.handler(&events.ManualLoginReconnect{})
 	awaitConnection(t, s, businessID, id, "connected")
+	// A newly paired account must restore its saved keys after a storage outage.
+	if _, err = s.db.Exec(`SELECT pg_terminate_backend(pid) FROM pg_locks
+        WHERE locktype='advisory' AND granted AND objsubid=1
+        AND classid::bigint=((hashtextextended($1,0)>>32)&4294967295)
+        AND objid::bigint=(hashtextextended($1,0)&4294967295)`, "ipo-whatsapp/"+businessID+"/"+id); err != nil {
+		t.Fatal(err)
+	}
+	select {
+	case fake = <-created:
+	case <-time.After(6 * time.Second):
+		t.Fatal("paired account did not recover its lost database connection")
+	}
+	awaitConnection(t, s, businessID, id, "connected")
 	testWhatsAppNumbers(t, db, cashier, other, s, fake, upperPath)
 	testWhatsAppProfiles(t, cashier, other, s, fake, upperPath)
 	testPictureEvents(t, s, fake, cashier, upperPath)
@@ -297,6 +314,25 @@ func testWhatsAppPairing(t *testing.T, dsn string, db *sql.DB, app *api, admin, 
 		t.Fatal("restart loaded another device")
 	}
 	app.whatsapp = restored
+	connection, err := restored.start(actor{UserID: cashierID, BusinessID: businessID}, id, "", "")
+	if err != nil {
+		t.Fatal(err)
+	}
+	resumed.handler(&events.StreamReplaced{})
+	select {
+	case <-connection.done:
+	case <-time.After(5 * time.Second):
+		t.Fatal("server rejection must stop automatic reconnects")
+	}
+	awaitConnection(t, restored, businessID, id, "connection_failed")
+	if len(created) != 0 {
+		t.Fatal("a rejected session reconnected automatically")
+	}
+	if _, err = restored.start(actor{UserID: cashierID, BusinessID: businessID}, id, "", ""); err != nil {
+		t.Fatal(err)
+	}
+	awaitConnection(t, restored, businessID, id, "connected")
+	resumed = <-created
 	if err = resumed.device.Delete(ctx); err != nil {
 		t.Fatal(err)
 	}

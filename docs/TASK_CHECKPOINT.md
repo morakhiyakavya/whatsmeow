@@ -8,6 +8,16 @@ None.
 
 ## Checkpoints
 
+### Batch 36 — Recover stopped WhatsApp account workers
+
+Checkpointed below the three-task threshold because the user explicitly approved
+publishing and deploying the tested fix, including the committed diagnostic tracing.
+
+1. Recover stopped saved-account WhatsApp workers after transient connection/storage failures.
+   - Verification: backend unit tests, vet and the Linux amd64 Render build passed. Disposable PostgreSQL schema assertions and `TestManualLedgerIntegration` passed, including actual worker ticks after two simulated connection failures, recovery of a newly paired account after terminating its fixture database connection, permanent connection-rejection handling, revoked credentials, account ownership, deployment lock takeover, confirmation persistence and duplicate-send protection. Reviewed code, documentation and diff whitespace; the isolated cluster was stopped and removed by the existing runner.
+   - Paths: `backend/whatsapp_service.go`, `backend/whatsapp_service_test.go`, `backend/confirmation_delivery_test.go`, `backend/README.md`, `docs/TASK_CHECKPOINT.md`.
+   - Limits: implementation checks did not push, deploy, change schema, send a live customer message or write hosted data. Read-only hosted inspection found the 22 October 12:12:54 UTC transaction confirmed in the ledger but its receipt still pending with no attempt/message ID, and no matching account advisory lock while HTTP health succeeded. The prior worker's precise exit reason is unavailable from current logs. Restore retries back off from one to thirty seconds and recheck existing locks/eligibility; incomplete pairing and rejected/revoked sessions remain terminal. Uncertain sends are not repeated. The approved rollout will be recorded separately; Pending returns to 0.
+
 ### Batch 35 — Server performance review and instrumentation
 
 1. Deploy and record the venweb linked-device name on the existing Render API.

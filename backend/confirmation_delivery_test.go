@@ -6,6 +6,7 @@ import (
 	"errors"
 	"fmt"
 	"sync"
+	"sync/atomic"
 	"testing"
 	"time"
 
@@ -14,6 +15,7 @@ import (
 	"go.mau.fi/whatsmeow/proto/waE2E"
 	"go.mau.fi/whatsmeow/store"
 	"go.mau.fi/whatsmeow/types"
+	"go.mau.fi/whatsmeow/types/events"
 )
 
 type fakeConfirmationSender struct {
@@ -44,7 +46,7 @@ func (f *fakeConfirmationSender) SendMessage(_ context.Context, to types.JID, ms
 
 func awaitConfirmation(t *testing.T, db *sql.DB, business, id, want string) {
 	t.Helper()
-	deadline := time.Now().Add(6 * time.Second)
+	deadline := time.Now().Add(10 * time.Second)
 	for time.Now().Before(deadline) {
 		var status string
 		if err := db.QueryRow(`SELECT status FROM ipo_pos.transaction_confirmations WHERE business_id=$1 AND transaction_id=$2`, business, id).Scan(&status); err != nil {
@@ -88,6 +90,18 @@ func testConfirmationDelivery(t *testing.T, dsn string, db *sql.DB, cashier test
 		return s
 	}
 	s := open()
+	var connections atomic.Int32
+	s.newClient = func(device *store.Device) pairingClient {
+		client := &fakePairingClient{device: device, sender: sender}
+		client.connect = func(context.Context) error {
+			if connections.Add(1) <= 2 {
+				return errors.New("temporary connection failure")
+			}
+			client.handler(&events.Connected{})
+			return nil
+		}
+		return client
+	}
 	device := s.store.NewDevice()
 	device.ID = &jid
 	device.Account = &waAdv.ADVSignedDeviceIdentity{Details: []byte{}, AccountSignature: make([]byte, 64), AccountSignatureKey: make([]byte, 32), DeviceSignature: make([]byte, 64)}
@@ -98,6 +112,9 @@ func testConfirmationDelivery(t *testing.T, dsn string, db *sql.DB, cashier test
 		t.Fatal(err)
 	}
 	awaitConfirmation(t, db, business, id, "sent")
+	if connections.Load() != 3 {
+		t.Fatal("saved account did not recover its transient connection failures")
+	}
 	sender.mu.Lock()
 	if sender.calls != 1 || sender.phone != "919000001010" || sender.body == "" || len(sender.IDs) != 1 {
 		t.Error("worker sent the wrong receipt or more than once")

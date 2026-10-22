@@ -531,6 +531,13 @@ Saved mapped sessions reconnect on API startup. Owners can also `POST .../{id}/c
 retries reuse an existing connected client. Temporary interruptions reconnect through
 whatsmeow. If the primary phone revokes the device, the worker clears the binding and
 reports `needs_relink`; the application account ID and business records remain intact.
+After a saved-account worker exits on a transient storage, connection or binding
+error, it restores the same saved account with exponential backoff from one to
+thirty seconds. Newly paired accounts use the same recovery after connecting.
+Every retry reacquires the account/user locks and rechecks eligibility. Revoked
+credentials, missing membership, rejected connections and incomplete pairing are
+terminal; pending confirmations remain durable, and uncertain sends are never
+automatically repeated. Closing the Android app does not cancel queued messages.
 Missing saved credentials also require relinking. Use the same account UUID for a new
 pairing. To explicitly unlink, revoke the device in WhatsApp's Linked devices screen.
 

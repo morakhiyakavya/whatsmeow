@@ -13,6 +13,12 @@
   [final delivery plan](PROJECT_VISION.md#final-delivery-plan-19-october-2026).
 - [ ] Add business-shared, user-maintained GMP with attribution/history and
   business isolation; agree write permissions and quote types before implementation.
+- [ ] Implement the agreed [application rate guidance](PROJECT_VISION.md#application-rate-guidance-agreed-implementation-pending)
+  with the workbook's Subject 1 probability-based rate and Subject 2 GMP-value
+  factor. Give users an adjustable Subject 2 factor starting at 80%; changes affect
+  suggestions, not saved transaction rates, amounts or share quantities. Include
+  the input controls and business-isolated GMP/forecast settings when delivering
+  this feature; its API and screens remain unimplemented.
 
 ## Production business onboarding
 

@@ -7,13 +7,13 @@ business/admin or copy local WhatsApp sessions.
 
 ## Current deployment
 
-Deployed and verified on 21 October 2026 in `kavya's Workspace`:
+Deployed and verified on 22 October 2026 in `kavya's Workspace`:
 
 - API base URL: [whatsapp-pos-dev](https://whatsapp-pos-dev.onrender.com).
 - [Live health endpoint](https://whatsapp-pos-dev.onrender.com/health).
 - [Render dashboard](https://dashboard.render.com/web/srv-db5nundckfvc73arsvkg).
-- Deployed commit: `0571bfbd7e93cddf6f8088ac37aca78418c00fd1` on `main`.
-- Deployment: `dep-dbccd28473hc73fq69eg`; service: `srv-db5nundckfvc73arsvkg`.
+- Deployed commit: `55cf1732a7325c7bf835080c00a18e3c73fbb247` on `main`.
+- Deployment: `dep-dbd0em3l550s73db5410`; service: `srv-db5nundckfvc73arsvkg`.
 - One Free instance in Singapore; automatic deployments disabled.
 
 Render reported the deployment live. Public HTTPS checks passed: `/health` returns
@@ -21,8 +21,27 @@ Render reported the deployment live. Public HTTPS checks passed: `/health` retur
 requests return 401. Responses carry `Cache-Control: no-store`. The server started
 on `0.0.0.0:10000` using the two private Supabase role connections and bundled CA.
 
+The worker recovery fix and committed performance instrumentation went live on
+22 October 2026 at 12:54:35 UTC (18:24:35 IST). One cached manual deployment built
+the exact published commit. Local unit tests, vet, Linux amd64 build and disposable
+schema/API tests passed, including connection/storage recovery, pairing and
+duplicate-send protection. Public health/authentication/no-store checks passed,
+and deployment-window error logs were empty. No schema, environment, resource or
+scheduler change was made.
+
+The existing transaction created at 12:12:54 UTC had remained pending with no
+send attempt while no account processing lock was held. The restored worker
+attempted its original confirmation at 12:54:32.924 UTC and persisted `sent` at
+12:54:33.557 UTC (18:24:33 IST). Read-only verification found exactly one original
+confirmation record. No replacement transaction or manual resend was created.
+[Sentry recorded the successful delivery operation](https://vanitilabs.sentry.io/explore/traces/trace/2189dde848bf0fef33b3f2d2f2ef6496)
+under the deployed release. This confirms WhatsApp acknowledgement, not
+recipient-phone delivery, reading or payment. The previous worker's precise exit
+reason remains unavailable from its older telemetry.
+
 The **venweb** linked-device name was deployed on 21 October 2026 at
-14:06:19 UTC (19:36:19 IST). Render built the exact commit above with its existing
+14:06:19 UTC (19:36:19 IST). Render built commit
+`0571bfbd7e93cddf6f8088ac37aca78418c00fd1` with its existing
 cache, started the server on `0.0.0.0:10000` and reported `live`. Public health
 returned 200/ok; unauthenticated me and business transaction-list requests returned
 401, all with `no-store`. Deployment-window error logs were empty. Reused the
@@ -288,6 +307,11 @@ always-running service plan. It is suitable for development and manual API tests
 POS migrations 001–013 are already applied in the current Supabase project
 and local database. Do not run migrations in the build command, the
 start command or every deploy.
+Before deploying the Shareholder form-type change, apply
+[migration 014](../database/014_shareholder_form_type.sql) once as the migration
+owner. This additive catalogue entry is compatible with the currently deployed
+API; the new API requires it on startup. Migration 014 has only been verified in
+disposable databases and has not been applied to the existing installations.
 For subsequent changes, follow the
 [Supabase table and migration instructions](SUPABASE_SETUP.md#inspect-tables-and-apply-future-migrations).
 
@@ -306,5 +330,6 @@ against Supabase using environment-only configuration, hosted port binding and t
 bundled CA; health and authentication boundary checks passed, then the temporary
 server stopped. The public CA matches the official HTTPS download. Live Render
 deployment and public health/authentication checks also passed for the commit
-listed above. Live WhatsApp pairing, saved-session restoration and a customer
-confirmation send from Render remain unchecked.
+listed above. Saved-session restoration and the original queued confirmation's
+WhatsApp acknowledgement were verified during the 22 October recovery rollout.
+Fresh live pairing and recipient delivery/read receipts remain unchecked.

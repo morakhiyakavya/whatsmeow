@@ -42,6 +42,57 @@ func TestSignedTransactionValidation(t *testing.T) {
 	}
 }
 
+func TestFormTypeValidation(t *testing.T) {
+	for _, code := range []string{"RETAIL", "RETAIL_199", "SHNI", "BHNI", "SHAREHOLDER", "SHARES", "CE", "PE", "UNKNOWN"} {
+		t.Run(code, func(t *testing.T) {
+			input := transactionFields{
+				IPOID: "00000000-0000-0000-0000-000000000001", CustomerID: "00000000-0000-0000-0000-000000000002",
+				OccurredAt: time.Now(), FormType: code, Quantity: "2.5", Rate: "250",
+			}
+			if code == "CE" || code == "PE" {
+				input.CEPE = new("20")
+			}
+			w := httptest.NewRecorder()
+			if got := input.validate(w); got != (code != "UNKNOWN") {
+				t.Fatalf("validate()=%v response=%s", got, w.Body)
+			}
+			if code == "SHAREHOLDER" {
+				input.CEPE = new("20")
+				if input.validate(w) || w.Code != 400 {
+					t.Fatal("shareholder must reject CE/PE values")
+				}
+			}
+		})
+	}
+}
+
+func testShareholderTransactionAPI(t *testing.T, client testClient, base string, request map[string]any) {
+	client.t = t
+	body := cloneMap(request)
+	body["form_type_code"], body["ce_pe_value"] = "SHAREHOLDER", nil
+	status, obj, _ := client.request("POST", base+"/transactions", body, "shareholder-order")
+	expectStatus(t, 201, status, obj)
+	id := field(t, obj, "id")
+	if field(t, obj, "form_type_code") != "SHAREHOLDER" || field(t, obj, "total_amount") != "625.00" || obj["ce_pe_value"] != nil {
+		t.Fatal("shareholder creation lost its type, amount or null CE/PE value")
+	}
+	body["form_type_code"], body["expected_version"], body["change_reason"] = "RETAIL", 1, "Corrected form type"
+	status, obj, _ = client.request("PUT", base+"/transactions/"+id, body, "")
+	expectStatus(t, 200, status, obj)
+	body["form_type_code"], body["expected_version"] = "SHAREHOLDER", 2
+	status, obj, _ = client.request("PUT", base+"/transactions/"+id, body, "")
+	expectStatus(t, 200, status, obj)
+	if field(t, obj, "form_type_code") != "SHAREHOLDER" || field(t, obj, "total_amount") != "625.00" || obj["version"] != float64(3) {
+		t.Fatal("shareholder edit lost its type, amount or version")
+	}
+	status, obj, _ = client.request("GET", base+"/transactions/"+id+"/history", nil, "")
+	expectStatus(t, 200, status, obj)
+	history := obj["items"].([]any)
+	if len(history) != 3 || field(t, history[1].(map[string]any), "form_type_code") != "RETAIL" || field(t, history[2].(map[string]any), "form_type_code") != "SHAREHOLDER" {
+		t.Fatal("form type edits rewrote transaction history")
+	}
+}
+
 func testSignedTransactionAPI(t *testing.T, client testClient, base string, request map[string]any) {
 	client.t = t
 	body := cloneMap(request)

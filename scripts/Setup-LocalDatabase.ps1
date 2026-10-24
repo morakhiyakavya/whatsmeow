@@ -50,7 +50,7 @@ $taskAcl.SetOwner($taskIdentity)
 $taskAcl.AddAccessRule([Security.AccessControl.FileSystemAccessRule]::new($taskIdentity, 'FullControl', 'Allow'))
 $taskAcl.AddAccessRule([Security.AccessControl.FileSystemAccessRule]::new([Security.Principal.SecurityIdentifier]::new('S-1-5-18'), 'FullControl', 'Allow'))
 Set-Acl -LiteralPath $taskEnvPath -AclObject $taskAcl
-foreach ($taskMigration in @('001_initial.sql', '002_api.sql', '003_whatsapp_accounts.sql', '004_contact_names.sql', '005_transaction_confirmations.sql', '006_passwordless_sessions.sql', '007_whatsapp_number_checks.sql', '008_signed_transaction_quantity.sql', '009_signed_transaction_rate.sql', '010_development_signup.sql', '011_contact_profile_push.sql', '012_account_recovery.sql', '013_ipo_catalogue.sql')) {
+foreach ($taskMigration in @('001_initial.sql', '002_api.sql', '003_whatsapp_accounts.sql', '004_contact_names.sql', '005_transaction_confirmations.sql', '006_passwordless_sessions.sql', '007_whatsapp_number_checks.sql', '008_signed_transaction_quantity.sql', '009_signed_transaction_rate.sql', '010_development_signup.sql', '011_contact_profile_push.sql', '012_account_recovery.sql', '013_ipo_catalogue.sql', '014_shareholder_form_type.sql')) {
     $taskSql = Get-Content -Raw -LiteralPath (Join-Path $taskRoot "database/$taskMigration")
     Invoke-LocalSql 'ipo_platform' ("SET ROLE ipo_platform_owner;`n" + $taskSql)
 }

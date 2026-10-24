@@ -256,6 +256,12 @@ specific new table/column/constraint and record the result. Never edit an alread
 applied migration to change existing databases. A Render redeploy alone does not
 apply new POS SQL.
 
+The Shareholder form-type change adds
+[migration 014](../database/014_shareholder_form_type.sql). Apply it once through
+the migration-owner connection before deploying that API version; it increases
+the form catalogue to eight entries without changing tables or runtime grants.
+It has been tested in disposable databases, but is not yet installed on this project.
+
 From the repository root, this is the command template for a future migration;
 `NEXT_MIGRATION.sql` is a placeholder and does not currently exist:
 

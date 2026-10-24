@@ -8,6 +8,23 @@ None.
 
 ## Checkpoints
 
+### Batch 37 — Shareholder form type, rate guidance and recovery rollout record
+
+1. Publish and deploy automatic WhatsApp account-worker recovery and the committed performance instrumentation.
+   - Verification: published and verified `main` at `55cf1732a7325c7bf835080c00a18e3c73fbb247`. Confirmed the approved workspace, service, repository, branch, disabled auto-deploys and previous live version. One cached manual deploy `dep-dbd0em3l550s73db5410` built the exact commit and reached live on 22 October 2026 at 12:54:35 UTC. Startup/listening, health 200, unauthenticated me/transaction-list 401 and no-store passed; deployment-window error logs were empty. Read-only verified-TLS SQL confirmed the original queued receipt was attempted at 12:54:32.924 UTC and persisted sent at 12:54:33.557 UTC, with one original confirmation row. Sentry confirmed successful hosted `confirmation.deliver` under the deployed release. Reviewed rollout/telemetry documentation and diff; reused unchanged passing source checks from Batch 36.
+   - Paths: `docs/RENDER_DEPLOYMENT.md`, `docs/SERVER_PERFORMANCE_TELEMETRY.md`, `docs/TASK_CHECKPOINT.md`. External changes: explicitly approved Git publication and deployment on the existing service, allowing its original queued message to send.
+   - Limits: no replacement transaction, manual resend, migration, environment, resource or scheduler change. Sent means WhatsApp acknowledged the original message; recipient-phone delivery, reading and payment remain unverified. Prior worker exit reason remains unknown. Rollout documentation is local pending the next checkpoint. Pending is now 1.
+
+2. Record the agreed workbook-based application rate guidance and adjustable Subject 2 pricing factor.
+   - Verification: reviewed the current transaction validator, amount contract, catalogue calculations and all existing analytics/GMP references. Reused the unchanged workbook's traced pricing dependencies; checked exact whole-rupee examples for Subject 1 and 60%/80%/100% Subject 2 factors. Reviewed documentation content, local link/anchor targets and scoped diff whitespace.
+   - Paths: `docs/PROJECT_VISION.md`, `docs/TODO.md`, `docs/TASK_CHECKPOINT.md`.
+   - Limits: specification only; GMP/forecast storage, pricing API, user controls and analytics remain unimplemented. No code, database, workbook, deployment, live lookup or customer message changed. No runtime tests/builds needed for documentation. Preserved the existing rollout/telemetry changes and Pending task 1. Pending is now 2.
+
+3. Add Shareholder as a distinct supported transaction form type.
+   - Verification: targeted Go form-type/signed-transaction validation tests and backend vet passed. Disposable PostgreSQL hosted/local setup, schema assertions and `TestManualLedgerIntegration` passed, including the eight-entry catalogue, separate Shares/Shareholder labels, Shareholder creation, edits to/from Retail, immutable history, unchanged amount calculations and all three confirmation categories. Reviewed source, migration, setup scripts, documentation and batch diffs; PowerShell parser and whitespace checks passed. Reused the prior two tasks' unchanged passing checks and recorded rollout evidence.
+   - Paths: `backend/main.go`, `backend/transactions.go`, `backend/transactions_test.go`, `backend/integration_test.go`, `backend/confirmations_test.go`, `backend/README.md`, `database/014_shareholder_form_type.sql`, `database/Setup-Supabase.psql`, `database/Test-Schema.ps1`, `database/schema_test.sql`, `scripts/Setup-LocalDatabase.ps1`, `docs/PROJECT_VISION.md`, `docs/POS_AND_CONTACTS_GUIDE.md`, `docs/SUPABASE_SETUP.md`, `docs/RENDER_DEPLOYMENT.md`, `docs/TASK_CHECKPOINT.md`.
+   - Limits: existing local/hosted databases remain unchanged; migration 014 must precede the new API startup. No push, deployment, real WhatsApp message, pricing analytics, dependency or new runtime grant. Unrelated suites and release builds were unnecessary for this additive catalogue change; relevant integration checks compiled and exercised the backend. This third task triggers the local Git checkpoint; Pending returns to 0.
+
 ### Batch 36 — Recover stopped WhatsApp account workers
 
 Checkpointed below the three-task threshold because the user explicitly approved

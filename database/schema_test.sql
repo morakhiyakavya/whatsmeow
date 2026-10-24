@@ -42,6 +42,7 @@ DECLARE
     base_insert text;
     auto_insert text;
 BEGIN
+    PERFORM pg_temp.assert_true((SELECT name='Shareholder' FROM form_types WHERE code='SHAREHOLDER'), 'shareholder form type installed');
     INSERT INTO users(name, phone_number) VALUES ('Test cashier', '+919000000001') RETURNING id INTO staff;
     INSERT INTO businesses(name) VALUES ('Test business') RETURNING id INTO shop;
     INSERT INTO businesses(name) VALUES ('Other business') RETURNING id INTO other_shop;

@@ -86,6 +86,7 @@ func run(envPath string, bootstrap bool) error {
 		AND to_regclass('ipo_pos.push_devices') IS NOT NULL
 		AND to_regclass('ipo_pos.auth_events') IS NOT NULL
 		AND to_regclass('ipo_pos.ipo_import_runs') IS NOT NULL
+		AND EXISTS (SELECT 1 FROM ipo_pos.form_types WHERE code='SHAREHOLDER')
 		AND EXISTS (SELECT 1 FROM information_schema.columns WHERE table_schema='ipo_pos' AND table_name='login_attempts' AND column_name='recovery_hash')
         AND to_regclass('ipo_pos.device_login_tokens') IS NOT NULL AND to_regclass('ipo_pos.whatsapp_number_checks') IS NOT NULL
 		AND EXISTS (SELECT 1 FROM information_schema.columns WHERE table_schema='ipo_pos' AND table_name='login_attempts' AND column_name='signup_account_id')
@@ -93,7 +94,7 @@ func run(envPath string, bootstrap bool) error {
         AND EXISTS (SELECT 1 FROM pg_constraint WHERE conrelid=to_regclass('ipo_pos.transaction_versions') AND conname='transaction_versions_nonzero_quantity_check')
         AND EXISTS (SELECT 1 FROM pg_constraint WHERE conrelid=to_regclass('ipo_pos.transactions') AND conname='transactions_signed_rate_check')
         AND EXISTS (SELECT 1 FROM pg_constraint WHERE conrelid=to_regclass('ipo_pos.transaction_versions') AND conname='transaction_versions_signed_rate_check')`).Scan(&schemaReady); err != nil || !schemaReady {
-		return errors.New("apply application migrations through database/013_ipo_catalogue.sql before starting the API")
+		return errors.New("apply application migrations through database/014_shareholder_form_type.sql before starting the API")
 	}
 	app, err := newAPI(db)
 	if err != nil {

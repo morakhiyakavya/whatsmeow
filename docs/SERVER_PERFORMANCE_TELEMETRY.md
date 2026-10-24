@@ -1,8 +1,10 @@
 # Go server performance telemetry
 
 Implemented on 22 October 2026 using the existing Sentry Go and pgx dependencies.
-The implementation is verified locally; the hosted service needs deployment of
-this commit before it emits the added instrumentation. Existing sampling remains
+The implementation is verified locally and was deployed with worker recovery in
+commit `55cf1732a7325c7bf835080c00a18e3c73fbb247` on 22 October 2026. Sentry
+[confirmed a successful hosted confirmation-delivery trace](https://vanitilabs.sentry.io/explore/traces/trace/2189dde848bf0fef33b3f2d2f2ef6496)
+under that release. See the [rollout record](RENDER_DEPLOYMENT.md). Existing sampling remains
 100% for development and 10% for production. Standalone metrics are independent
 of that trace sampling, subject to Sentry ingestion limits.
 

@@ -682,7 +682,8 @@ A saved `confirmed`
 transaction is a ledger entry, not proof that payment was received.
 
 Read the catalogue using `GET .../ipos` and `GET .../form-types`. Supported form
-codes are `RETAIL`, `RETAIL_199`, `SHNI`, `BHNI`, `SHARES`, `CE` and `PE`.
+codes are `RETAIL`, `RETAIL_199`, `SHNI`, `BHNI`, `SHAREHOLDER`, `SHARES`, `CE` and `PE`.
+`SHAREHOLDER` is labelled Shareholder and is separate from `SHARES` (Shares).
 Customer and IPO lists default to 50 records, maximum 100 per page; follow
 `next_cursor` until the required selection is available.
 The IPO picker includes tentative/upcoming products through their listing day in
@@ -809,7 +810,7 @@ Example IPO ipo Buy 2.5 CE (20) at 250
 The format is `{ipo} ipo {Buy|Sell} {forms} {form} {optional category} at {rate}`.
 Positive quantity means Buy and negative quantity means Sell; the form count is
 always the absolute quantity. CE, PE and SHARES always omit the category; CE/PE
-retain their bracketed value. RETAIL, RETAIL_199, SHNI and BHNI show `alloted` for
+retain their bracketed value. RETAIL, RETAIL_199, SHNI, BHNI and SHAREHOLDER show `alloted` for
 category `none`; `subject_1` and `subject_2` appear as `subject 1` and `subject 2`.
 Numeric values omit trailing decimal zeroes and retain the rate's sign, including
 negative and zero rates. The amount after `at` is the per-form rate.

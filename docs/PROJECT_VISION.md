@@ -188,6 +188,7 @@ The initial form types are:
 - Retail 199
 - SHNI
 - BHNI
+- Shareholder
 - Shares
 - CE
 - PE
@@ -214,6 +215,67 @@ Each transaction has one category:
 - Subject 2
 
 Subject 1 and Subject 2 will have different calculations in a future analytics module. Those calculations do not belong in the initial transaction-entry or amount-calculation workflow. For now, the categories are stored as classifications for later use.
+
+### Application rate guidance (agreed; implementation pending)
+
+Follow the reviewed workbook's rate formulas. These are suggested application
+rates, separate from an entered transaction's agreed rate or amount. Users must
+be able to increase or decrease the Subject 2 pricing factor; its initial value
+is 80%. Do not reinterpret that input as an allotment probability or guaranteed
+profit margin, or introduce a separate rupee-profit deduction into these formulas.
+
+Let `Q` be shares per successful application, `G` the applicable GMP in INR per
+share, `p` the category's forecast allotment probability and `f` the Subject 2
+pricing factor expressed as a fraction (80% means 0.8):
+
+```text
+Subject 1 suggested rate = ROUND(Q * G * p, 0)
+Subject 2 suggested rate = ROUND(Q * G * f, 0)
+```
+
+In the workbook, `p = required applications / expected applications`. The inputs
+must represent comparable counts for that category and a valid probability;
+missing inputs or an invalid denominator must remain unavailable, not become
+zero. The probability model still needs issue/category-specific validation before
+implementation. The Subject 2 rate is conditional on successful allotment, so its
+formula does not additionally multiply by `p`. Keep whole-rupee rounding as in the
+workbook; preserve signed GMP and rate values without converting them to absolutes.
+
+For the workbook's retail buy example, `Q = 12`, `G = 240` and
+`p = 7086444 / 9000000`: Subject 1 is INR 2268 and Subject 2 at 80% is INR 2304.
+Changing only the Subject 2 factor gives:
+
+| Subject 2 pricing factor | Suggested rate (INR per successful application) |
+|---|---:|
+| 60% | 1728 |
+| 80% | 2304 |
+| 100% | 2880 |
+
+Label the control **Subject 2 pricing factor (% of GMP value)**. For positive GMP,
+explain that a lower factor quotes a lower application rate and leaves more of the
+modeled premium with the business; a higher factor does the opposite. At 80%, the
+remaining 20% is a share of modeled premium value before costs and price changes,
+not an 80% profit margin or a guaranteed return. Do not describe negative-GMP
+results using the same positive-premium profit claim.
+
+Changing this control updates Subject 2 rate suggestions only. It must not change
+Subject 1 suggestions, forecast or confirmed share quantities, previously agreed
+transaction rates, transaction amounts, or historical settlements. Market-data
+refreshes must not overwrite the user's pricing factor. Keep business-specific
+assumptions isolated; setting persistence and write permissions belong with the
+planned business GMP/forecast workflow.
+
+Apply the shared calculation consistently to each supported category and applicable
+buy/sell quote. Reuse the mathematical pattern for Shareholder rather than copying
+the workbook's blank-cell references. Retail 199 and Shareholder share quantities
+must be defined from the actual issue/allotment model, not borrowed from another
+category. The workbook's existing totals do not depend on its pricing-factor cells;
+the app must preserve that separation between guidance and contracted amounts.
+
+Before implementation is complete, verify workbook parity, lower/default/higher
+factors, whole-rupee rounding, zero/negative GMP, missing/invalid forecast inputs,
+business isolation, and preservation of saved transaction amounts. User controls,
+GMP/forecast storage and the pricing API are not implemented by this specification.
 
 ## Transaction details and amount calculation
 
@@ -396,7 +458,8 @@ Still to implement or connect:
 - AI integration, transaction extraction, reconciliation, and business-rule execution.
 - Web and mobile interfaces for linking accounts, viewing conversations, entering transactions, and inspecting history/evidence.
 - Phone-number pairing screens in the application UI; the backend and local helper now support phone codes.
-- Subject 1/Subject 2 analytics and their business formulas.
+- Subject 1/Subject 2 analytics, including the agreed [application rate guidance](#application-rate-guidance-agreed-implementation-pending)
+  and user-adjustable Subject 2 pricing factor.
 
 The previous SQLite `session.db` has been preserved. Its real account data has not been migrated to PostgreSQL. A PostgreSQL-backed first login currently requires fresh pairing.
 
@@ -410,7 +473,9 @@ Keep each milestone in a separate local commit after its relevant checks pass:
 4. **Transaction detection context:** reuse the viewer's private-text filtering and identity normalization when connecting the detector; assemble the potential transaction message and five immediately preceding texts from the same account/conversation. Retain the evidence needed for POS decisions rather than prioritising a general conversation browser.
 5. **AI extraction and reconciliation:** determine whether a transaction actually happened and when, retain exact evidence, validate versioned business rules, and reconcile follow-up messages before automatic transaction writes. A manual confirmation must never produce another transaction for its existing transaction.
 
-The web/mobile screens can then build on these contracts. Subject analytics follow once their formulas are agreed.
+The web/mobile screens can then build on these contracts. Subject analytics remain
+planned; application rate guidance is agreed above, while the complete forecast,
+manual allotment reconciliation and settlement contracts still need definition.
 
 ### Mobile POS and WhatsApp confirmations
 
@@ -432,7 +497,7 @@ tests. The delivered increments are:
    transaction data as `{ipo} ipo {Buy|Sell} {forms} {form} {optional category} at {rate}`;
    use the absolute quantity for forms and preserve the rate's sign. Resolve the
    recipient from the selected customer. CE, PE and SHARES omit category; RETAIL,
-   RETAIL_199, SHNI and BHNI display `alloted` for category `none`. Repeated mobile requests
+   RETAIL_199, SHNI, BHNI and SHAREHOLDER display `alloted` for category `none`. Repeated mobile requests
    with the same idempotency key must reuse the transaction and confirmation intent.
 3. **Delivery and status.** Use the existing account worker and whatsmeow sender to
    send after database commit. Check sender ownership and eligibility, record the

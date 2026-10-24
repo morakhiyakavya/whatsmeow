@@ -200,8 +200,16 @@ func TestManualLedgerIntegration(t *testing.T) {
 	}
 	status, object, _ = cashier.request("GET", base+"/form-types", nil, "")
 	expectStatus(t, 200, status, object)
-	if len(object["items"].([]any)) != 7 {
+	if len(object["items"].([]any)) != 8 {
 		t.Fatal("form catalogue incomplete")
+	}
+	forms := make(map[string]string)
+	for _, item := range object["items"].([]any) {
+		form := item.(map[string]any)
+		forms[field(t, form, "code")] = field(t, form, "name")
+	}
+	if forms["SHAREHOLDER"] != "Shareholder" || forms["SHARES"] != "Shares" {
+		t.Fatal("shareholder and shares must be distinct form types")
 	}
 	status, object, _ = cashier.request("POST", base+"/customers", map[string]any{"name": "Same name", "phone_number": "+919000001010", "referral_note": "Neighbour"}, "")
 	expectStatus(t, 201, status, object)
@@ -356,6 +364,9 @@ func TestManualLedgerIntegration(t *testing.T) {
 	other.Token = field(t, object, "access_token")
 	t.Run("Signed transactions", func(t *testing.T) {
 		testSignedTransactionAPI(t, cashier, base, request)
+	})
+	t.Run("Shareholder transactions", func(t *testing.T) {
+		testShareholderTransactionAPI(t, cashier, base, request)
 	})
 	t.Run("WhatsApp account ownership", func(t *testing.T) {
 		testWhatsAppAccounts(t, db, admin, client, cashier, other, businessID, otherBusiness, cashierID)

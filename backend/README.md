@@ -143,7 +143,7 @@ For a new database, apply `database/001_initial.sql`, `002_api.sql` and
 `007_whatsapp_number_checks.sql`, `008_signed_transaction_quantity.sql`,
 `009_signed_transaction_rate.sql`, `010_development_signup.sql` and
 `011_contact_profile_push.sql`, `012_account_recovery.sql` and
-`013_ipo_catalogue.sql` once,
+`013_ipo_catalogue.sql` and `014_shareholder_form_type.sql` once,
 in that order, as its migration owner. The API
 does not execute migrations on startup. Apply only missing migrations to an
 existing database. For the local installation that already has migrations 001/002:
@@ -206,6 +206,13 @@ not only a Git revert. Stop/revert its callers, revoke the newly linked app sess
 then remove the added token/attempt tables, triggers, indexes and session/account
 columns in dependency order. Preserve users, business history and WhatsApp account
 IDs; never drop the application or WhatsApp session schemas as a rollback shortcut.
+
+After migration 013, apply `014_shareholder_form_type.sql` as the migration owner
+before starting this API version. It adds `SHAREHOLDER` (Shareholder), separately
+from `SHARES` (Shares), to the existing catalogue; no new runtime grants are needed.
+Shareholder supports `none`, `subject_1` and `subject_2` categories and requires a
+null/omitted `ce_pe_value`. Amounts still use quantity times rate. Retain this
+catalogue row if any current transactions or historical versions reference it.
 
 The runtime grants are in `database/api_grants.sql`, reused by the local setup,
 Supabase setup and API integration fixture. Set its psql `api_role` and
@@ -651,7 +658,7 @@ The transaction, initial immutable version, retry fingerprint and confirmation i
 saved in one transaction. The server composes one line from saved data:
 `{ipo} ipo {Buy|Sell} {forms} {form} {optional category} at {rate}`.
 The form includes its CE/PE value when applicable. CE, PE and SHARES always omit
-the category. RETAIL, RETAIL_199, SHNI and BHNI show `alloted` for category `none`;
+the category. RETAIL, RETAIL_199, SHNI, BHNI and SHAREHOLDER show `alloted` for category `none`;
 other category labels use spaces. Forms are the absolute quantity, and numeric
 values omit trailing decimal zeroes while preserving the rate's sign;
 clients cannot supply an arbitrary message body. The receipt is a snapshot of the

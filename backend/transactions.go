@@ -49,7 +49,7 @@ func (f *transactionFields) validate(w http.ResponseWriter) bool {
 		}
 	}
 	switch f.FormType {
-	case "RETAIL", "RETAIL_199", "SHNI", "BHNI", "SHARES", "CE", "PE":
+	case "RETAIL", "RETAIL_199", "SHNI", "BHNI", "SHAREHOLDER", "SHARES", "CE", "PE":
 	default:
 		fail(w, 400, "invalid_form_type", "Unknown form type")
 		return false

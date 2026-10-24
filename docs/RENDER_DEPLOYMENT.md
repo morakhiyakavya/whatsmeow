@@ -7,19 +7,34 @@ business/admin or copy local WhatsApp sessions.
 
 ## Current deployment
 
-Deployed and verified on 22 October 2026 in `kavya's Workspace`:
+Deployed and verified on 25 October 2026 (IST) in `kavya's Workspace`:
 
 - API base URL: [whatsapp-pos-dev](https://whatsapp-pos-dev.onrender.com).
 - [Live health endpoint](https://whatsapp-pos-dev.onrender.com/health).
 - [Render dashboard](https://dashboard.render.com/web/srv-db5nundckfvc73arsvkg).
-- Deployed commit: `55cf1732a7325c7bf835080c00a18e3c73fbb247` on `main`.
-- Deployment: `dep-dbd0em3l550s73db5410`; service: `srv-db5nundckfvc73arsvkg`.
+- Deployed commit: `7c39e0bcab68fcd2168942321ec484b25c019080` on `main`.
+- Deployment: `dep-dbegbvnb9u1s739knmf0`; service: `srv-db5nundckfvc73arsvkg`.
 - One Free instance in Singapore; automatic deployments disabled.
 
 Render reported the deployment live. Public HTTPS checks passed: `/health` returns
 200 with `{"status":"ok"}`; unauthenticated `/api/me` and business transaction-list
 requests return 401. Responses carry `Cache-Control: no-store`. The server started
 on `0.0.0.0:10000` using the two private Supabase role connections and bundled CA.
+
+The Shareholder form type went live on 24 October 2026 at 19:25:28 UTC
+(25 October at 00:55:28 IST). Verified the existing workspace, service, repository,
+branch, disabled automatic deployments and previous live revision before rollout.
+Applied migration 014 once to Supabase and the existing local database as their
+migration owner, with catalogue snapshots and verified TLS for hosted access.
+Both runtime roles read eight entries with distinct Shareholder and Shares labels.
+Published and verified the commit above on remote `main`; one manual deployment
+reused the build cache and built that exact revision. Build/startup/listening
+succeeded, `/health` returned 200/ok, and unauthenticated me, form-type and
+transaction-list requests returned 401, all with `Cache-Control: no-store`.
+Deployment-window error logs were empty. Reused the unchanged passing validation,
+vet, disposable schema/setup and ledger/API checks from Batch 37. No environment,
+resource, scheduler or runtime-grant change was made. No authenticated hosted
+transaction or real WhatsApp message was created for verification.
 
 The worker recovery fix and committed performance instrumentation went live on
 22 October 2026 at 12:54:35 UTC (18:24:35 IST). One cached manual deployment built
@@ -304,14 +319,13 @@ always-running service plan. It is suitable for development and manual API tests
 
 ## Database changes and rollback
 
-POS migrations 001–013 are already applied in the current Supabase project
+POS migrations 001–014 are already applied in the current Supabase project
 and local database. Do not run migrations in the build command, the
 start command or every deploy.
-Before deploying the Shareholder form-type change, apply
-[migration 014](../database/014_shareholder_form_type.sql) once as the migration
-owner. This additive catalogue entry is compatible with the currently deployed
-API; the new API requires it on startup. Migration 014 has only been verified in
-disposable databases and has not been applied to the existing installations.
+[Migration 014](../database/014_shareholder_form_type.sql) added the Shareholder
+catalogue entry before the rollout recorded above; this API requires it on startup.
+The previous API remains compatible with the additive row. Preserve the row if
+current transactions or immutable history reference it.
 For subsequent changes, follow the
 [Supabase table and migration instructions](SUPABASE_SETUP.md#inspect-tables-and-apply-future-migrations).
 

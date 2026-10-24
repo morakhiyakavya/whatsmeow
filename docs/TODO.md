@@ -12,13 +12,37 @@
   Mainboard/SME differences. Follow the
   [final delivery plan](PROJECT_VISION.md#final-delivery-plan-19-october-2026).
 - [ ] Add business-shared, user-maintained GMP with attribution/history and
-  business isolation; agree write permissions and quote types before implementation.
+  business isolation; shared GMP/forecast/pricing changes are admin-only, with
+  cashier read/use access. Agree quote types and implement server-side enforcement.
 - [ ] Implement the agreed [application rate guidance](PROJECT_VISION.md#application-rate-guidance-agreed-implementation-pending)
   with the workbook's Subject 1 probability-based rate and Subject 2 GMP-value
   factor. Give users an adjustable Subject 2 factor starting at 80%; changes affect
   suggestions, not saved transaction rates, amounts or share quantities. Include
   the input controls and business-isolated GMP/forecast settings when delivering
   this feature; its API and screens remain unimplemented.
+
+## IPO positions and history
+
+- [x] Document the [current dashboard requirements](IPO_POSITION_REPORTING.md),
+  business management controls, expected application-count inputs, daily closing
+  preservation and NSE-first/BSE-fallback reference without payment tracking.
+- [x] Draft the [additive database and API design](IPO_ANALYTICS_DESIGN.md), reusing
+  the ledger/versioning and distinguishing unknown actual costs from bank payments.
+- [ ] Implement the [position and reporting contract](IPO_POSITION_REPORTING.md):
+  cumulative net position first; buy/sell details and Retail, Retail 199, SHNI,
+  BHNI and Shareholder expected-share contributions on request, all reconciling.
+- [ ] Add daily trading activity and historical closing positions using transaction
+  versions and dated assumptions/IPO inputs. Lock closing GMP, expected application
+  counts and other calculation inputs with the day's position, average cost and
+  estimated profit/loss; compare today's trades/current average without rewriting
+  yesterday's record or adding its estimated profit to today's result.
+- [ ] Add manual confirmed-allotment reconciliation, already-allotted application
+  share conversion and an automatic/manual first-trade listing reference: NSE first,
+  BSE fallback. Collect category forecasts as expected total application counts.
+  Payment/collection tracking and after-listing settlement are outside this scope.
+- [ ] Deliver the design incrementally: assumptions/source history and admin API;
+  shared exact calculations and dashboard/category/detail reads; allotted-share
+  capture/reconciliation; daily closes/history; verified listing reference/result.
 
 ## Production business onboarding
 

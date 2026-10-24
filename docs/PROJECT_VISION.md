@@ -173,8 +173,9 @@ investment reports, allotment checking, or a replacement web/mobile dashboard.
 GMP is normally entered or updated by users and **shared within their business**.
 It is separate from the global IPO catalogue: one business's value must not change
 another business's value. Keep the supplying user, effective/recorded time and
-change history with each update, with business-authorised writes. The exact staff
-permission and whether one or multiple quote types are needed remain to be agreed.
+change history with each update. Business admins manage shared GMP and forecasting
+inputs; cashiers use/read them without changing them. Whether one or multiple GMP
+quote types are needed remains to be agreed. These settings endpoints are planned.
 External GMP collection is outside the initial importer scope. A catalogue refresh
 must never overwrite user GMP or an agreed transaction rate. IPO price band, GMP
 and transaction rate remain distinct values, and neither lot size nor market-data
@@ -214,7 +215,11 @@ Each transaction has one category:
 - Subject 1
 - Subject 2
 
-Subject 1 and Subject 2 will have different calculations in a future analytics module. Those calculations do not belong in the initial transaction-entry or amount-calculation workflow. For now, the categories are stored as classifications for later use.
+Subject 1 and Subject 2 will have different calculations in a future analytics module.
+For application types, None means already allotted and contributes known shares
+without a forecast probability reduction. These share/settlement calculations do
+not change the existing quantity-times-rate transaction amount contract. See the
+[position and reporting specification](IPO_POSITION_REPORTING.md).
 
 ### Application rate guidance (agreed; implementation pending)
 
@@ -276,6 +281,25 @@ Before implementation is complete, verify workbook parity, lower/default/higher
 factors, whole-rupee rounding, zero/negative GMP, missing/invalid forecast inputs,
 business isolation, and preservation of saved transaction amounts. User controls,
 GMP/forecast storage and the pricing API are not implemented by this specification.
+
+### Position and historical reporting (agreed; implementation pending)
+
+Show cumulative net positions per IPO first, with purchases/sales and category-level
+expected shares available on request. Business admins enter expected application
+counts by category; the app derives the forecast probability and shares. Preserve
+daily closing GMP, other calculation inputs, quantities, average cost and estimated
+profit/loss so new trades and forecasts do not overwrite yesterday's record. Support
+daily activity and comparisons with the previous closing position. Use NSE's first
+trade as the listing reference and BSE's first trade as fallback, with automatic
+collection or attributed manual entry. Shared assumptions and pricing factors are
+admin-controlled within each business. The [position and reporting specification](IPO_POSITION_REPORTING.md)
+defines these views and allotted trades. Payments, outstanding balances and after-
+listing settlement are handled separately by the user and are outside this scope;
+the reporting/settings APIs and screens remain planned.
+
+The [database and API design](IPO_ANALYTICS_DESIGN.md) proposes additive versioned
+inputs, manual coverage, daily closes and authenticated contracts for this dashboard;
+it is not an applied migration or implemented API.
 
 ## Transaction details and amount calculation
 
@@ -342,7 +366,7 @@ their own contributions. Permission collection remains the mobile app's responsi
 
 The platform supports businesses with multiple staff rather than only one independent shop per user.
 
-Staff records include a name and contact number. The initial roles are **admin** and **cashier**, assigned within each business. The manual API now implements a baseline permission matrix: both roles can create/view customers and create/view/edit/cancel transactions; admins also create/view staff and create IPO catalogue entries. Further permissions remain open as workflows expand.
+Staff records include a name and contact number. The initial roles are **admin** and **cashier**, assigned within each business. The manual API now implements a baseline permission matrix: both roles can create/view customers and create/view/edit/cancel transactions; admins also create/view staff and create IPO catalogue entries. Shared GMP, forecast and pricing-factor edits are agreed as admin-only for the planned analytics workflow; cashiers use/read those values. The related settings endpoints are not implemented yet.
 
 Passwordless first-device login now approves WhatsApp phone-number linking for a
 provisioned staff user. In `APP_ENV=development`, new numbers can sign up through
@@ -475,7 +499,7 @@ Keep each milestone in a separate local commit after its relevant checks pass:
 
 The web/mobile screens can then build on these contracts. Subject analytics remain
 planned; application rate guidance is agreed above, while the complete forecast,
-manual allotment reconciliation and settlement contracts still need definition.
+manual allotment reconciliation and listing-result calculation still need implementation.
 
 ### Mobile POS and WhatsApp confirmations
 
@@ -526,11 +550,16 @@ historical backfill, attachments and unrelated viewer refactoring are deferred.
 - Expansion of the implemented phone/password authentication and baseline role permissions for deployment and additional workflows.
 - Frontend technologies for web and mobile.
 - Final numeric precision, currency, and rounding requirements.
-- Final catalogue source/coverage contracts, optional IPO fields, GMP write
-  permissions/quote types and analytical formulas; the required IPO fields and
-  30-minute collection cadence are specified above.
+- Final catalogue source/coverage contracts, optional IPO fields and GMP quote
+  types. Expected application counts, NSE-first/BSE-fallback listing references
+  and admin-only business assumption edits are agreed; required IPO fields,
+  30-minute collection cadence, rate guidance and reporting behaviour are specified
+  above. Payment/collection handling is outside the app's current scope.
 
-Inventory, payment settlement, and media processing are not part of the agreed initial scope. Their requirements should be established separately before implementation.
+Net positions, historical reporting and manual allotment reconciliation are agreed
+future analytics requirements, not implemented ledger features; see [the reporting
+specification](IPO_POSITION_REPORTING.md). Payment tracking, collections, after-
+listing settlement and media processing remain outside the current app scope.
 
 ## Related project files
 

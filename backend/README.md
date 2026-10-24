@@ -18,6 +18,11 @@ and the distinction between implemented APIs and remaining mobile work.
 For linked-account sign-in recovery, Android approval/expiry/retry behaviour and
 private session diagnostics, see the [Android recovery contract](../docs/ANDROID_ACCOUNT_RECOVERY.md).
 
+The [dashboard requirements](../docs/IPO_POSITION_REPORTING.md) and
+[proposed analytics database/API design](../docs/IPO_ANALYTICS_DESIGN.md) describe
+net-first reporting, forecasts, manual allotment inputs and locked daily history.
+Their routes and tables are not implemented by the current manual ledger API.
+
 ## Local setup and start
 
 From the repository root in PowerShell:

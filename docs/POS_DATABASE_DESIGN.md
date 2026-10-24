@@ -219,6 +219,17 @@ references; leaving the active list or a source failing never deletes history.
 
 IPO price metadata is not a transaction rate source unless an explicit later rule says so. No extra units column, numbered-form combinations, inventory tables, payment assumptions, or Subject 1/2 formulas are included.
 
+## Planned dashboard extension
+
+The [dashboard requirements](IPO_POSITION_REPORTING.md) and
+[database/API design](IPO_ANALYTICS_DESIGN.md) define the next analytics increment.
+Reuse the ledger and its immutable versions; keep transaction quantity-times-rate
+amounts unchanged. Proposed additive storage covers business assumption revisions,
+frozen source basis, manual share reconciliation/coverage, listing references and
+original daily closes, plus versioned share conversion for allotted applications.
+These are design documents, not installed tables, migrations or working endpoints.
+Payments/collections and post-listing settlement remain outside this scope.
+
 ## Validation and application
 
 From the workspace root:

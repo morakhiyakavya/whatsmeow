@@ -1,7 +1,10 @@
 # IPO dashboard database and API design
 
-Status: proposed implementation design, not an applied migration or implemented
-API. The [dashboard requirements](IPO_POSITION_REPORTING.md) own product behaviour;
+Status: assumptions/history API and source-fact snapshots are implemented
+in migration 015 and the existing Go backend, tested in disposable databases. They
+are installed in the existing local/hosted databases; API rollout is pending. Remaining
+dashboard/reconciliation/closing/listing contracts are proposed.
+The [dashboard requirements](IPO_POSITION_REPORTING.md) own product behaviour;
 the [rate guidance](PROJECT_VISION.md#application-rate-guidance-agreed-implementation-pending)
 owns pricing formulas. This document defines how to deliver those requirements
 through the existing Go/PostgreSQL application.
@@ -66,8 +69,23 @@ the affected result unavailable. Do not silently cap or reinterpret the forecast
 Retail and Retail 199 remain separate trading buckets but normally share one
 published retail allocation pool and one expected retail application count. Their
 share-conversion basis is resolved separately. The initial independent forecast
-pools are Retail, SHNI, BHNI and Shareholder; the Retail 199 input displays its
+pools are Retail, SHNI, BHNI and, only where offered, Shareholder; the Retail 199 input displays its
 shared Retail forecast, not a duplicate editable assumption.
+
+Shareholder is a supported global form type, not a mandatory allocation category
+for every IPO. The basis and read APIs expose its per-IPO `availability` as
+`available`, `not_offered` or `unknown`, with source evidence/time. Only validated
+allocation evidence can establish `not_offered`; an empty reservations array,
+failed enrichment or missing quota row alone leaves availability unknown.
+
+For `not_offered`, the current assumptions use a null Shareholder forecast; it is
+not a missing required input. The dashboard omits its normal forecast/pricing row
+and new-entry choice. Assumption writes reject a new non-null Shareholder forecast
+for that confirmed state. Existing Shareholder transactions, former forecasts and
+daily closes remain readable: expose their source inconsistency rather than
+deleting them or silently omitting their financial contribution. If availability
+is unknown and no Shareholder exposure exists, do not force a forecast or block
+unrelated categories. Relevant existing exposure retains its unknown-basis reason.
 
 Aggregate contributions once per active transaction/source version. Cancelled
 transactions do not contribute to current results. After reconciliation, replace
@@ -112,8 +130,8 @@ measures option exposure.
 
 ## Proposed additive storage
 
-Use the existing `ipo_pos` schema. Names below are reserved by the design, not
-existing tables. All business-owned rows carry `business_id` and `ipo_id`; use
+Use the existing `ipo_pos` schema. Tables 1 and 2 are implemented in migration 015;
+tables 3 through 6 remain proposed. Business-owned rows carry `business_id` and `ipo_id`; use
 composite ownership keys and session-derived actors. Every revision is append-only.
 
 ### 1. `ipo_dashboard_assumption_versions`
@@ -125,14 +143,16 @@ One complete business/IPO assumption revision per write:
 | `business_id`, `ipo_id`, `version` | Composite primary key; positive increasing integer version |
 | `gmp` | Nullable signed `numeric(18,6)` in INR per share |
 | `subject2_pricing_factor` | `numeric(9,6)`, default 0.8; initial control range 0 through 1 inclusive |
-| `retail_expected_applications`, `shni_expected_applications`, `bhni_expected_applications`, `shareholder_expected_applications` | Nullable positive integer `numeric(24,0)` counts, one per allocation pool |
+| `retail_expected_applications`, `shni_expected_applications`, `bhni_expected_applications`, `shareholder_expected_applications` | Nullable numeric counts constrained to positive integers below 1e24; unscaled numeric prevents silent fractional rounding |
 | `recorded_at` | Server database timestamp; no client backdating |
 | `changed_by_user_id`, `change_reason` | Active business-admin membership reference and nonempty reason |
 
 There is no separate mutable settings table. Latest version is the current state;
 older versions provide GMP/forecast history. No stored row means API version 0,
 unknown GMP/counts and a displayed default factor of 0.8; a GET does not insert it.
-Null means unknown, not zero or an inherited value from another business.
+Null means unknown or explicitly not applicable as identified by category
+availability, not zero or an inherited value from another business. In particular,
+the nullable Shareholder field does not make shareholder eligibility universal.
 
 Serialize writes for the business/IPO using a transaction-scoped lock and compare
 `expected_version`. Append the complete new version atomically. Do not implement
@@ -141,12 +161,19 @@ or out-of-range counts/factors before PostgreSQL can silently round them.
 
 ### 2. `ipo_dashboard_basis_versions`
 
+The initial implementation stores immutable `snapshot` data and typed IPO/version/
+recorded-at fields and Shareholder availability. It captures supported public terms,
+reservations and subscriptions, excluding volatile fetch times from fact equality.
+The model capacities/conversions and confirmed issue/first-trade fields described
+below still require verified collection and calculation support.
+
 Shared immutable snapshots of source-owned calculation facts, keyed by
 `(ipo_id, version)`: server `recorded_at`, provider observation times, source/import
 references, base lot size, price basis, nullable confirmed final issue price,
 nullable NSE/BSE first-trade price/time pairs, and a validated `category_basis`
-snapshot. Each category basis identifies its pool, units, capacity, share conversion,
-supported model and provenance, or explicitly records why it is unavailable.
+snapshot. Each category basis identifies availability, its pool, units, capacity,
+share conversion, supported model and provenance, or explicitly records why it is
+unavailable. Keep source availability separate from an incomplete forecast/model.
 
 Existing catalogue tables remain the current operational source. This table
 preserves the exact inputs needed to reproduce prior calculations; its JSON is
@@ -168,7 +195,7 @@ Immutable manual share reconciliation: `(business_id, ipo_id, version)`, signed
 server `recorded_at`, actor and reason. Zero confirmed net shares is valid. An
 optional category split is accepted only if it sums exactly to the aggregate.
 Without that split, show confirmed shares as unassigned rather than fabricating
-five category quantities. GMP and expected-application inputs are not overwritten.
+category quantities. GMP and expected-application inputs are not overwritten.
 Also store the manual POST's idempotency key and canonical request hash, unique
 within the business/IPO reconciliation route, with the creating actor for replay
 validation. These do not belong in `manual_transaction_requests`, which references
@@ -293,8 +320,9 @@ active transaction-picker list. All business queries filter the authorized busin
 | GET `/dashboard/ipos/{ipoID}` | Admin/cashier | Same summary for one book; optional `include=categories,activity,pricing` loads detail only when requested |
 | GET `/dashboard/ipos/{ipoID}/transactions` | Admin/cashier | Bounded source-version drill-down for the selected live/date view; current transaction listing alone cannot reconstruct old state |
 | GET `/dashboard/ipos/{ipoID}/history` | Admin/cashier | Original closing records with `from`, `to` local dates and a date cursor |
-| GET `/ipos/{ipoID}/analytics-assumptions` | Admin/cashier | Latest version and input/source context; optional `before_version` history pagination |
-| PUT `/ipos/{ipoID}/analytics-assumptions` | Admin | Complete assumption revision with expected version and reason |
+| GET `/ipos/{ipoID}/analytics-assumptions` | Admin/cashier | Implemented: latest version, read-only defaults and source context |
+| GET `/ipos/{ipoID}/analytics-assumptions/history` | Admin/cashier | Implemented: immutable revisions with before_version pagination |
+| PUT `/ipos/{ipoID}/analytics-assumptions` | Admin | Implemented: complete revision with expected version and reason |
 | GET `/ipos/{ipoID}/allotment-reconciliations` | Admin/cashier | Current/history of confirmed share coverage and unresolved actual-cost inputs |
 | POST `/ipos/{ipoID}/allotment-reconciliations` | Admin | Append an idempotent manual reconciliation/outcome revision |
 | GET `/ipos/{ipoID}/listing-reference` | Admin/cashier | Recorded first-trade reference and correction/source history |
@@ -391,7 +419,7 @@ consistent read; no source HTTP request runs inside that database transaction.
 
 Current aggregation is O(N) over relevant indexed source rows and O(C) calculation
 state for the fixed category/subject buckets. Source-version drill-down is bounded
-keyset pagination. An original close is a keyed row read; its five-category detail
+keyset pagination. An original close is a keyed row read; its applicable-category detail
 does not require recalculating the ledger. Full source manifests are server-only.
 Historical snapshots intentionally store derived output once for reproducibility;
 live output remains derived, not a second editable ledger.
@@ -408,7 +436,8 @@ API checks and relevant user controls are complete.
 - Workbook Subject 1/Subject 2 rates, 60/80/100% factors, rounding and signed GMP;
   ten-buy/eight-sell totals, zero net shares with residual cost/credit, shorts and
   mixed subjects; category and summary/detail reconciliation.
-- Missing data versus zero, unsupported models, parent/subcategory pool mapping,
+- Missing data versus zero/not applicable, offered/absent/unknown Shareholder quotas,
+  preservation of existing Shareholder trades/history, unsupported models and parent/subcategory pool mapping,
   stale sources, legacy allotted trades and unresolved CE/PE contribution.
 - Admin/cashier/cross-business access, concurrent versions, idempotent replay and
   atomic rollback, numeric precision and forged ownership/source manifests.

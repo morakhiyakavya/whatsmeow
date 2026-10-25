@@ -227,7 +227,10 @@ Reuse the ledger and its immutable versions; keep transaction quantity-times-rat
 amounts unchanged. Proposed additive storage covers business assumption revisions,
 frozen source basis, manual share reconciliation/coverage, listing references and
 original daily closes, plus versioned share conversion for allotted applications.
-These are design documents, not installed tables, migrations or working endpoints.
+Migration 015 now implements assumption revisions and frozen source-fact snapshots,
+with the corresponding authenticated settings/history API. It is verified in
+disposable databases but not installed in existing application databases. The
+remaining reconciliation/listing/closing tables and dashboard routes are planned.
 Payments/collections and post-listing settlement remain outside this scope.
 
 ## Validation and application

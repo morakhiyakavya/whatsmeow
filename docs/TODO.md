@@ -11,9 +11,11 @@
   migrations and the existing catalogue API; verify category boundaries and
   Mainboard/SME differences. Follow the
   [final delivery plan](PROJECT_VISION.md#final-delivery-plan-19-october-2026).
-- [ ] Add business-shared, user-maintained GMP with attribution/history and
-  business isolation; shared GMP/forecast/pricing changes are admin-only, with
-  cashier read/use access. Agree quote types and implement server-side enforcement.
+- [x] Add the backend business-shared GMP, expected application-count and Subject 2
+  factor/history API, with migration 015, source-fact snapshots, admin-only writes,
+  cashier reads, business isolation and concurrent-version checks.
+- [ ] Deploy the tested backend, then build settings user controls. Migration 015
+  and runtime grants are installed in both existing application databases.
 - [ ] Implement the agreed [application rate guidance](PROJECT_VISION.md#application-rate-guidance-agreed-implementation-pending)
   with the workbook's Subject 1 probability-based rate and Subject 2 GMP-value
   factor. Give users an adjustable Subject 2 factor starting at 80%; changes affect
@@ -31,6 +33,8 @@
 - [ ] Implement the [position and reporting contract](IPO_POSITION_REPORTING.md):
   cumulative net position first; buy/sell details and Retail, Retail 199, SHNI,
   BHNI and Shareholder expected-share contributions on request, all reconciling.
+  Shareholder is conditional on the IPO's quota; distinguish offered/not offered/
+  unknown, do not require an inapplicable forecast, and retain existing history.
 - [ ] Add daily trading activity and historical closing positions using transaction
   versions and dated assumptions/IPO inputs. Lock closing GMP, expected application
   counts and other calculation inputs with the day's position, average cost and

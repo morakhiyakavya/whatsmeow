@@ -13,6 +13,13 @@ owner, then reapply [runtime grants](../database/api_grants.sql) with the existi
 `database_name` and `api_role` variables. Fresh setup/tests include 013; startup
 requires it even with ingestion disabled. It adds product fields and five related
 tables without deleting products, users, sessions, transactions or history.
+Current source also requires migrations 014 and
+[015](../database/015_dashboard_assumptions.sql) before startup. Migration 015 adds
+immutable calculation-fact snapshots and separate business assumption history.
+Successful catalogue saves capture changed facts atomically; unchanged fetches do
+not duplicate them. Business GMP/counts/factors are never changed by ingestion.
+Existing installations require an explicit migration; rollout notes below describe
+their last deployed version.
 
 Set `IPO_JOB_TOKEN` privately using at least 32 random bytes (43 URL-safe base64
 characters). The setting accepts 43–128 non-whitespace characters. The existing

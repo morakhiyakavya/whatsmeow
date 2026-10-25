@@ -1,6 +1,7 @@
 # IPO positions and historical reporting
 
-Agreed behaviour; these reporting/settings APIs and screens remain unimplemented.
+Agreed behaviour. Settings/history API and source-fact snapshots are implemented
+locally in migration 015; reporting APIs and screens remain planned.
 Reuse the transaction ledger, immutable versions, shared IPO catalogue and business
 memberships. Pricing follows the [agreed workbook formulas](PROJECT_VISION.md#application-rate-guidance-agreed-implementation-pending).
 The [database and API design](IPO_ANALYTICS_DESIGN.md) translates these requirements
@@ -63,7 +64,19 @@ a nonzero cost/credit; retain the amount without dividing by zero or hiding it.
 ## Category breakdown
 
 Maintain separate expected-share contributions for Retail, Retail 199, SHNI, BHNI
-and Shareholder. Show the total first and the category breakdown when requested,
+and Shareholder where applicable. Shareholder is optional per IPO: show its forecast
+input, pricing suggestion and category row only when that IPO offers a shareholder
+reservation, or when an existing position/history needs to remain visible. It is
+not a permanently required field on every IPO. For a confirmed absent quota, do not
+require a Shareholder forecast or treat its absence as an incomplete calculation.
+
+Missing source data is not proof that the quota does not exist. Distinguish offered,
+not offered and availability unconfirmed; explain unconfirmed availability when
+relevant rather than inventing a quota or forcing a zero. Keep the global
+Shareholder form type and previous transactions/snapshots intact even if the
+category is unavailable for another IPO or later source information changes.
+
+Show the total first and the category breakdown when requested,
 including buy, sell and net figures. Category net contributions reconcile to the
 IPO's application-derived expected shares; direct shares and confirmed allotments
 remain separately identifiable without counting a replaced forecast twice.

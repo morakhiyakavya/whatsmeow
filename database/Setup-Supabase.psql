@@ -33,6 +33,7 @@ SET ROLE ipo_platform_owner;
 \ir 012_account_recovery.sql
 \ir 013_ipo_catalogue.sql
 \ir 014_shareholder_form_type.sql
+\ir 015_dashboard_assumptions.sql
 REVOKE ALL ON SCHEMA ipo_pos, whatsapp FROM PUBLIC;
 RESET ROLE;
 \set api_role ipo_platform_api

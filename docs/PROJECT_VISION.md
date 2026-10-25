@@ -168,14 +168,19 @@ and stale results are identifiable, and existing transactions and business GMP
 remain intact. This increment does not implement user GMP-entry screens/API,
 investment reports, allotment checking, or a replacement web/mobile dashboard.
 
-### User-maintained GMP (planned)
+### User-maintained GMP (backend implemented; rollout/screens pending)
 
 GMP is normally entered or updated by users and **shared within their business**.
 It is separate from the global IPO catalogue: one business's value must not change
 another business's value. Keep the supplying user, effective/recorded time and
 change history with each update. Business admins manage shared GMP and forecasting
 inputs; cashiers use/read them without changing them. Whether one or multiple GMP
-quote types are needed remains to be agreed. These settings endpoints are planned.
+quote types are needed remains to be agreed beyond the initial single GMP value.
+Migration 015 and the backend assumptions GET/PUT/history endpoints implement these
+business-isolated settings, with database-enforced admin writes, exact validation
+and immutable revisions. They passed disposable database checks; migration 015
+and runtime grants are installed locally and on Supabase. API rollout and user
+screens remain pending.
 External GMP collection is outside the initial importer scope. A catalogue refresh
 must never overwrite user GMP or an agreed transaction rate. IPO price band, GMP
 and transaction rate remain distinct values, and neither lot size nor market-data
@@ -195,6 +200,10 @@ The initial form types are:
 - PE
 
 These are catalogue entries. Transaction-specific numbers are not separate catalogue combinations.
+Shareholder availability is IPO-specific: the form type remains in the shared
+catalogue, but its forecast/pricing fields are applicable only when the IPO offers
+a shareholder quota. Missing source data leaves availability unconfirmed, not
+automatically absent. Preserve previous Shareholder transactions and history.
 
 ### CE and PE values
 
@@ -280,7 +289,8 @@ the app must preserve that separation between guidance and contracted amounts.
 Before implementation is complete, verify workbook parity, lower/default/higher
 factors, whole-rupee rounding, zero/negative GMP, missing/invalid forecast inputs,
 business isolation, and preservation of saved transaction amounts. User controls,
-GMP/forecast storage and the pricing API are not implemented by this specification.
+GMP/forecast storage and its settings API are now implemented locally in migration
+015; the calculation/pricing API and user controls remain planned.
 
 ### Position and historical reporting (agreed; implementation pending)
 
@@ -294,8 +304,9 @@ trade as the listing reference and BSE's first trade as fallback, with automatic
 collection or attributed manual entry. Shared assumptions and pricing factors are
 admin-controlled within each business. The [position and reporting specification](IPO_POSITION_REPORTING.md)
 defines these views and allotted trades. Payments, outstanding balances and after-
-listing settlement are handled separately by the user and are outside this scope;
-the reporting/settings APIs and screens remain planned.
+listing settlement are handled separately by the user and are outside this scope.
+The assumptions/history API and source-basis storage are implemented locally;
+reporting, reconciliation, closing and listing APIs/screens remain planned.
 
 The [database and API design](IPO_ANALYTICS_DESIGN.md) proposes additive versioned
 inputs, manual coverage, daily closes and authenticated contracts for this dashboard;
@@ -366,7 +377,7 @@ their own contributions. Permission collection remains the mobile app's responsi
 
 The platform supports businesses with multiple staff rather than only one independent shop per user.
 
-Staff records include a name and contact number. The initial roles are **admin** and **cashier**, assigned within each business. The manual API now implements a baseline permission matrix: both roles can create/view customers and create/view/edit/cancel transactions; admins also create/view staff and create IPO catalogue entries. Shared GMP, forecast and pricing-factor edits are agreed as admin-only for the planned analytics workflow; cashiers use/read those values. The related settings endpoints are not implemented yet.
+Staff records include a name and contact number. The initial roles are **admin** and **cashier**, assigned within each business. The manual API implements a baseline permission matrix: both roles can create/view customers and create/view/edit/cancel transactions; admins also create/view staff and create IPO catalogue entries. The assumptions settings endpoints now enforce admin-only GMP, forecast and pricing-factor edits, with cashier read/history access. Their rollout and user screens remain pending.
 
 Passwordless first-device login now approves WhatsApp phone-number linking for a
 provisioned staff user. In `APP_ENV=development`, new numbers can sign up through
@@ -473,7 +484,8 @@ Implemented and tested:
 
 Still to implement or connect:
 
-- Business-shared user GMP entry and history, separate from the implemented global catalogue importer.
+- User screens and rollout for implemented business-shared GMP, application forecasts
+  and pricing-factor/history API, separate from catalogue ingestion.
 - Remote deployment configuration. Local PostgreSQL-backed WhatsApp pairing and saved-session restoration are configured and verified.
 - Password reset, master-admin-controlled production business onboarding, staff membership management, and expansion of the baseline admin/cashier permissions; see [TODO.md](TODO.md).
 - Web/mobile pairing screens on the implemented QR/phone API and deployment hardening of the trusted worker credentials/capacity.

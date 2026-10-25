@@ -8,7 +8,7 @@ WhatsApp credentials are not copied by this setup.
 
 Project `tqfwoudoxundtrhogmwa` was installed and verified on 11 October 2026 using
 the Singapore session pooler on port `5432`. PostgreSQL reports version 17.11.
-Application migrations 001–014 are installed: `ipo_pos` has 31 tables, and the
+Application migrations 001–015 are installed: `ipo_pos` has 33 tables, and the
 backend initialized 17 WhatsApp credential tables at library schema version 16.
 One existing user and business were observed and preserved during migration 011.
 Do not rerun the fresh-install script for this project.
@@ -238,7 +238,7 @@ ORDER BY schemaname, tablename;
 SELECT code, name FROM ipo_pos.form_types ORDER BY code;
 ```
 
-Currently expect 31 POS tables, 17 WhatsApp tables and eight form types seeded by
+Currently expect 33 POS tables, 17 WhatsApp tables and eight form types seeded by
 migrations 001 and 014. In Table Editor, select schema `ipo_pos` to browse the application
 tables. Many tables are empty until you create a business, staff or sales.
 The `whatsapp` schema contains private linked-device credentials; inspect its
@@ -246,7 +246,7 @@ structure without sharing credential rows. You do not need to expose either
 schema in the Data API to inspect it in the dashboard.
 
 A migration is a versioned SQL file that changes the database structure or seed
-data. Migrations 001–014 already ran on this project. The API does not apply
+data. Migrations 001–015 already ran on this project. The API does not apply
 them on startup, and these files are not tracked by Supabase CLI's migration
 history. Do not run `supabase db push` expecting it to recognise this installation.
 
@@ -263,6 +263,18 @@ rollout. Verified the intended migration owner and database and saved each exist
 catalogue before applying the insert. Hosted access used certificate and hostname
 verification. Both runtime roles then read eight entries, including distinct
 `SHAREHOLDER` (Shareholder) and `SHARES` (Shares). No tables or runtime grants changed.
+
+[Migration 015](../database/015_dashboard_assumptions.sql) and the shared runtime
+grants were applied once to this project and the existing local database on
+25 October 2026 (IST), before deploying the dashboard-assumptions backend.
+Both databases have 33 POS tables, six new guards/capture triggers and unchanged
+business, transaction, immutable-history and form-catalogue checksums. Hosted
+access verified the TLS certificate and hostname. The runtime roles can read both
+new tables and insert assumption versions, but cannot update assumptions, insert
+source versions or execute the source-capture function. The hosted migration
+captured a baseline for all 122 retained IPOs; local storage had no IPOs.
+This baseline records migration-time facts, not reconstructed past observations.
+Do not rerun fresh setup or migration 015 on these existing databases.
 
 From the repository root, this is the command template for a future migration;
 `NEXT_MIGRATION.sql` is a placeholder and does not currently exist:

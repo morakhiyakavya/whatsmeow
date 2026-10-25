@@ -30,6 +30,21 @@ Authorization: Bearer {{token}}
 GET {{base}}/api/businesses/{{business}}/ipos/import-status
 Authorization: Bearer {{token}}
 
+### Business assumptions and source context (admin or cashier)
+GET {{base}}/api/businesses/{{business}}/ipos/{{ipo}}/analytics-assumptions
+Authorization: Bearer {{token}}
+
+### Replace assumptions (admin; use the latest expected_version)
+PUT {{base}}/api/businesses/{{business}}/ipos/{{ipo}}/analytics-assumptions
+Authorization: Bearer {{token}}
+Content-Type: application/json
+
+{"expected_version":0,"gmp":"240","subject2_pricing_factor":"0.8","expected_applications":{"RETAIL":"800000","SHNI":null,"BHNI":null,"SHAREHOLDER":null},"change_reason":"Initial business forecast"}
+
+### Immutable assumption history (next_before_version selects the next page)
+GET {{base}}/api/businesses/{{business}}/ipos/{{ipo}}/analytics-assumptions/history?limit=50
+Authorization: Bearer {{token}}
+
 ### Register my Android installation after POS login and FCM token changes
 PUT {{base}}/api/push-devices/{{installation}}
 Authorization: Bearer {{token}}

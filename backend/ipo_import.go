@@ -264,5 +264,8 @@ func saveSourceIPO(ctx context.Context, db *sql.DB, item ipoSourceIssue) error {
 			}
 		}
 	}
+	if _, err = tx.ExecContext(ctx, `SELECT ipo_pos.capture_ipo_dashboard_basis($1)`, id); err != nil {
+		return err
+	}
 	return tx.Commit()
 }

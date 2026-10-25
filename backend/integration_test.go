@@ -198,6 +198,7 @@ func TestManualLedgerIntegration(t *testing.T) {
 	if field(t, object, "price_low") != "250.500000" {
 		t.Fatal("IPO decimal response lost precision")
 	}
+	testAnalyticsAssumptions(t, admin, db, client, cashier, base, otherBusiness, ipoID, cashierID)
 	status, object, _ = cashier.request("GET", base+"/form-types", nil, "")
 	expectStatus(t, 200, status, object)
 	if len(object["items"].([]any)) != 8 {

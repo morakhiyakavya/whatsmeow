@@ -8,6 +8,26 @@ None.
 
 ## Checkpoints
 
+### Batch 39 — Versioned IPO dashboard assumptions and source history
+
+Checkpointed below the three-task threshold because the user explicitly requested
+publishing, deployment and migrations for these completed changes.
+
+Source checks below were completed before rollout. Migration 015 and runtime
+grants were subsequently applied and verified locally/on Supabase before this
+checkpoint; the completed rollout will be recorded separately. Pending returns
+to 0 after the commit succeeds.
+
+1. Clarify IPO-specific Shareholder availability in dashboard and database/API requirements.
+   - Verification: reviewed the global Shareholder seed and catalogue unknown-versus-absent semantics. Reviewed the requirements, basis/assumptions/API design and TODO for conditional Shareholder inputs, quota availability, irrelevant missing-data handling and preservation of existing trades/closes. Documentation content, unchanged JSON examples and scoped diff whitespace checks passed.
+   - Paths: `docs/IPO_POSITION_REPORTING.md`, `docs/IPO_ANALYTICS_DESIGN.md`, `docs/PROJECT_VISION.md`, `docs/TODO.md`, `docs/TASK_CHECKPOINT.md`.
+   - Limits: specification only; the global form type and runtime transaction/catalogue APIs remain unchanged. No migration, deletion, live source lookup or deployment. No builds/runtime tests needed for documentation. Pending is now 1.
+
+2. Implement business-owned IPO forecast/GMP/pricing-factor inputs, immutable history and source-basis snapshots.
+   - Verification: targeted assumption validation tests, full backend unit/API/integration suite against the disposable schema_test cluster, and backend vet passed. Migrations 001-015 and schema assertions passed; non-superuser hosted fresh setup/schema checks passed and repeat installation was rejected. Coverage includes eight concurrent edits with one winning revision, cashier/cross-business restrictions, server-derived actor/time, exact 24-digit counts, negative/null GMP and zero factors, database numeric/actor/append-only guards, source-function/runtime restrictions, optional Shareholder unknown/absent/available states, history pagination and source deduplication. Reviewed setup wiring, startup checks, API examples, documentation, Go formatting and diff whitespace; PowerShell setup scripts parsed. Reused the runner's exact verified disposable cluster after its Windows pg_ctl invocation stalled, executed the checks directly and verified the cluster stopped afterwards; the synthetic fixture directory was retained.
+   - Paths: `backend/analytics_assumptions.go`, `backend/analytics_assumptions_test.go`, `backend/integration_test.go`, `backend/ipo_import.go`, `backend/main.go`, `backend/README.md`, `backend/requests.http`, `database/015_dashboard_assumptions.sql`, `database/api_grants.sql`, `database/Setup-Supabase.psql`, `database/Test-Schema.ps1`, `scripts/Setup-LocalDatabase.ps1`, `docs/IPO_ANALYTICS_DESIGN.md`, `docs/IPO_CATALOGUE.md`, `docs/IPO_POSITION_REPORTING.md`, `docs/POS_DATABASE_DESIGN.md`, `docs/PROJECT_VISION.md`, `docs/RENDER_DEPLOYMENT.md`, `docs/SUPABASE_SETUP.md`, `docs/TODO.md`, `docs/TASK_CHECKPOINT.md`.
+   - Limits: existing local/hosted application databases, deployed service, configuration and customer messaging remain unchanged. Startup now requires migration 015 followed by runtime grants. Source snapshots preserve supported facts, not verified allotment models or first-trade prices. Position/pricing calculations, reconciliation, daily-close API/worker and user screens remain future increments. Release builds and live source/customer tests were unnecessary for this backend storage/API increment. Preserved Pending task 1; Pending is now 2.
+
 ### Batch 38 — IPO dashboard requirements, analytics design and Shareholder rollout
 
 1. Migrate, publish and deploy the Shareholder form type.

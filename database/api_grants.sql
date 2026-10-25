@@ -12,6 +12,7 @@ GRANT INSERT (scheduled_for) ON ipo_pos.ipo_import_runs TO :"api_role";
 GRANT INSERT, UPDATE ON ipo_pos.customers, ipo_pos.transactions TO :"api_role";
 GRANT INSERT, UPDATE, DELETE ON ipo_pos.contact_names TO :"api_role";
 GRANT INSERT ON ipo_pos.transaction_confirmations TO :"api_role";
+GRANT INSERT ON ipo_pos.ipo_dashboard_assumption_versions TO :"api_role";
 GRANT INSERT, UPDATE, DELETE ON ipo_pos.login_sessions TO :"api_role";
 GRANT INSERT, UPDATE, DELETE ON ipo_pos.device_login_tokens TO :"api_role";
 GRANT INSERT, UPDATE, DELETE ON ipo_pos.push_devices TO :"api_role";

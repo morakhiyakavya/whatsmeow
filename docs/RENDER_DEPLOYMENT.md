@@ -319,9 +319,14 @@ always-running service plan. It is suitable for development and manual API tests
 
 ## Database changes and rollback
 
-POS migrations 001–014 are already applied in the current Supabase project
+POS migrations 001–015 are already applied in the current Supabase project
 and local database. Do not run migrations in the build command, the
 start command or every deploy.
+The dashboard-assumptions backend requires
+[migration 015](../database/015_dashboard_assumptions.sql) and refreshed runtime
+grants. Both were applied to the existing databases before its rollout; migration
+015 adds immutable source-basis and business-assumption histories. A code rollback
+does not reverse these additive tables or erase their history.
 [Migration 014](../database/014_shareholder_form_type.sql) added the Shareholder
 catalogue entry before the rollout recorded above; this API requires it on startup.
 The previous API remains compatible with the additive row. Preserve the row if

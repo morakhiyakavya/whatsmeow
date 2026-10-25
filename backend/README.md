@@ -9,6 +9,9 @@ The [IPO catalogue importer](../docs/IPO_CATALOGUE.md) adds source-owned IPO ter
 subscriptions, reservations, promoter shareholding, anchor lock-ins and category
 application amounts. A protected Sentry uptime POST queues a durable refresh job.
 Apply migration 013 and runtime grants before starting this version.
+The dashboard assumptions increment additionally requires
+[migration 015](../database/015_dashboard_assumptions.sql) after 014 and refreshed
+runtime grants. This repository's startup check now requires migrations through 015.
 
 For the complete staff and mobile workflow, read the
 [POS transactions and shared contacts guide](../docs/POS_AND_CONTACTS_GUIDE.md). It covers
@@ -21,7 +24,9 @@ private session diagnostics, see the [Android recovery contract](../docs/ANDROID
 The [dashboard requirements](../docs/IPO_POSITION_REPORTING.md) and
 [proposed analytics database/API design](../docs/IPO_ANALYTICS_DESIGN.md) describe
 net-first reporting, forecasts, manual allotment inputs and locked daily history.
-Their routes and tables are not implemented by the current manual ledger API.
+The assumptions/history API and source-basis storage below are implemented locally;
+dashboard position calculations, reconciliation, daily closes and listing results
+remain subsequent increments.
 
 ## Local setup and start
 
@@ -303,6 +308,8 @@ IDs from `/api/me`. Supplying another business ID never confers access.
 | GET, POST | `/customers` | List/create customers, including referrals |
 | GET, POST | `/ipos` | List IPOs through their listing day/create shared catalogue entries |
 | GET | `/ipos/import-status` | Source coverage, refresh runs and freshness |
+| GET, PUT | `/ipos/{ipoID}/analytics-assumptions` | Business GMP, expected application counts and Subject 2 factor; admin writes, member reads |
+| GET | `/ipos/{ipoID}/analytics-assumptions/history` | Immutable business/IPO revisions, paginated with before_version |
 | GET | `/form-types` | Supported form catalogue |
 | GET, POST | `/whatsapp-accounts` | List/register business-owned WhatsApp accounts |
 | GET | `/whatsapp-accounts/{id}` | Read one business-owned account |
@@ -351,6 +358,67 @@ pagination uses indexed keys rather than offsets.
 Requests reject unknown JSON fields, multiple JSON values and bodies over 64 KiB.
 Errors use `{"error":{"code":"...","message":"..."}}`. Database errors do
 not disclose SQL, connection credentials or customer data.
+
+## Dashboard assumption inputs
+
+Apply migration 015 once as the migration owner, then reapply `api_grants.sql`.
+Existing installations are not migrated by startup or by the importer. New tables
+are `ipo_dashboard_assumption_versions` and `ipo_dashboard_basis_versions`.
+
+GET `/ipos/{ipoID}/analytics-assumptions` resolves retained IPOs, including those
+outside the current picker. Before the first write it returns version 0, null GMP
+and counts, factor `"0.8"` and no actor/time. It does not create a row. It also
+returns `source_basis` and `catalogue_last_seen_at`; basis recorded time is when
+facts were saved, not evidence of a fresh fetch on each read.
+
+An admin PUT replaces the complete settings revision:
+
+```json
+{
+  "expected_version": 0,
+  "gmp": "240",
+  "subject2_pricing_factor": "0.8",
+  "expected_applications": {
+    "RETAIL": "800000",
+    "SHNI": null,
+    "BHNI": null,
+    "SHAREHOLDER": null
+  },
+  "change_reason": "Initial business forecast"
+}
+```
+
+GMP is a nullable signed decimal string with at most 12 integer and six fractional
+digits. Factor is required, between 0 and 1 inclusive, with up to six fractional
+digits. Counts are nullable positive integer strings of at most 24 digits. Use
+null for unknown, not zero. Retail 199 shares the Retail forecast. Missing/null
+category counts in this full replacement become unknown; omitted GMP also clears
+it. The applications object, factor, version and reason are required. Returned
+financial/count values remain strings. PUT returns the saved revision; GET adds
+current source context. A stale expected version returns 409 `version_conflict`.
+Unknown/forged fields are rejected; API and database require an active admin actor.
+Cashiers read but receive 403 on PUT.
+
+GET `/ipos/{ipoID}/analytics-assumptions/history?limit=50&before_version=3`
+returns `items` and `next_before_version`; omit before_version for the first page.
+Default limit is 50, maximum 100; the generic date/ID cursor is not used here.
+Successful writes append one immutable revision with a server timestamp. Different
+businesses' settings for the same IPO remain independent.
+
+Source snapshots contain whitelisted IPO terms, reservations and subscriptions,
+not business GMP, transaction rates or arbitrary metadata. New IPOs get an initial
+basis; successful import saves capture changed facts atomically. Unchanged facts
+do not add versions. Migration-time baselines are not historical backfills. The
+API role cannot write/delete source history or execute the capture function; the
+trusted importer owns subsequent capture. Settings requests make no source HTTP
+request and queue no customer message.
+
+`source_basis.shareholder_availability` is `available` for a positive published
+Shareholder reservation, `not_offered` for an explicitly zero reservation, otherwise
+`unknown`. Missing rows/failed feeds never imply absence. A non-null Shareholder
+forecast is rejected for confirmed `not_offered`; prior history is retained. This
+increment does not yet restrict transaction form choices per IPO or calculate
+allotment odds/rate suggestions.
 
 ## Verification
 

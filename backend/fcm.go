@@ -65,7 +65,7 @@ func newFCMSender(ctx context.Context, project, credentialsFile string) (*fcmSen
 		return nil, errors.New("incomplete FCM service-account credentials")
 	}
 	ctx = context.WithValue(ctx, oauth2.HTTPClient, &http.Client{Timeout: 10 * time.Second})
-	credentials, err := google.CredentialsFromJSON(ctx, data, "https://www.googleapis.com/auth/firebase.messaging")
+	credentials, err := google.CredentialsFromJSONWithType(ctx, data, google.CredentialsType(identity.Type), "https://www.googleapis.com/auth/firebase.messaging")
 	if err != nil {
 		return nil, errors.New("invalid FCM server credentials")
 	}

@@ -53,6 +53,20 @@ jobs:
             go.sum
             backend/go.sum
             examples/login/go.sum
+      - name: Check imports and static analysis
+        run: |
+          set -euo pipefail
+          go install golang.org/x/tools/cmd/goimports@v0.52.0
+          go install honnef.co/go/tools/cmd/staticcheck@v0.8.2
+          export PATH="$(go env GOPATH)/bin:$PATH"
+          unformatted=$(goimports -local go.mau.fi/whatsmeow -l $(git ls-files '*.go'))
+          if [[ -n "$unformatted" ]]; then
+            printf 'Go import formatting required:\n%s\n' "$unformatted"
+            exit 1
+          fi
+          staticcheck ./...
+          (cd backend && staticcheck ./...)
+          (cd examples/login && staticcheck ./...)
       - name: Validate schema and application
         run: |
           set -euo pipefail

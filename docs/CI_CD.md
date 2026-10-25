@@ -15,7 +15,8 @@ Changing a file locally does not deploy it; it must be committed and pushed.
 
 ## Checks and rollout
 
-CI applies every numbered migration to a disposable PostgreSQL 17 service and
+CI checks import formatting and static analysis across all three modules, then
+applies every numbered migration to a disposable PostgreSQL 17 service and
 runs the existing schema assertions, root library tests/vet, backend tests/vet
 including database integration, and viewer/session tests/vet. It also tests the
 deployment helpers against simulated endpoints/services. It never connects to
@@ -109,9 +110,19 @@ stalled after starting PostgreSQL; completed the same checks directly against it
 verified fresh `schema_test` cluster and stopped it afterwards. Automatic approval
 review blocked removal of that stopped temporary fixture; it was retained.
 
-The workflow is ready locally but has not been published or run on GitHub. Render
-still runs `c4bc1a3`; Azure still runs `azure-enrichment-6321943f2f4b` (binary
-SHA-256 `6321943f2f4b6560ed554a132e0014b78455351f210bba3eed9c78a61481a569`).
-The first published workflow run must be observed through both live deployments
-before claiming that the two hosts are synchronized. Its application changes
-include the separately tested batching and enrichment fixes in the checkpoint.
+The user subsequently authorized publication and activation. The first
+[workflow run](https://github.com/morakhiyakavya/whatsmeow/actions/runs/40208806200)
+passed its checks and both deployments at `6f7cadb93cb93a3ada57f1fc630c08059e46a248`.
+Render deployment `dep-dbf2bgfb9u1s73bchfo0` became live at 15:53:27 UTC
+(21:23:27 IST); Azure's revision file, Sentry release and public health confirmed
+the same SHA. Azure still omits WhatsApp credentials and keeps its IPO token.
+This shipped the batching and enrichment fixes to both hosts.
+
+The separate existing Go workflow exposed earlier import formatting, error-casing,
+redundant event-assertion and deprecated Google credential-loader warnings. The
+follow-up corrects those and adds import/static-analysis checks to the deployment
+gate. The typed Google loader retains the existing service-account/workload
+identity allowlist; synthetic credential-construction tests cover both supported
+types without requesting a token or contacting Google. No dependency or schema
+change is required. Subsequent runs publish the tested SHA to both hosts; inspect
+the latest Actions run, Render deployment and Azure revision for the current SHA.

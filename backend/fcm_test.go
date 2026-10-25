@@ -2,7 +2,11 @@ package main
 
 import (
 	"context"
+	"crypto/rand"
+	"crypto/rsa"
+	"crypto/x509"
 	"encoding/json"
+	"encoding/pem"
 	"net/http"
 	"net/http/httptest"
 	"os"
@@ -110,6 +114,43 @@ func TestFCMConfiguration(t *testing.T) {
 	t.Setenv("WHATSAPP_DATABASE_URL", "postgres://worker")
 	if _, err := loadConfig(filepath.Join(t.TempDir(), "missing.env")); err != nil {
 		t.Fatal("valid FCM settings rejected")
+	}
+}
+
+func TestFCMServerCredentialTypes(t *testing.T) {
+	key, err := rsa.GenerateKey(rand.Reader, 2048)
+	if err != nil {
+		t.Fatal(err)
+	}
+	tokenFile := filepath.Join(t.TempDir(), "subject-token")
+	if err := os.WriteFile(tokenFile, []byte("fixture-token"), 0600); err != nil {
+		t.Fatal(err)
+	}
+	for _, credentials := range []map[string]any{
+		{"type": "service_account", "client_email": "fixture@fixture.iam.gserviceaccount.com",
+			"private_key": string(pem.EncodeToMemory(&pem.Block{Type: "RSA PRIVATE KEY", Bytes: x509.MarshalPKCS1PrivateKey(key)})),
+			"token_uri":   "https://oauth2.googleapis.com/token"},
+		{"type": "external_account", "audience": "//iam.googleapis.com/projects/123/locations/global/workloadIdentityPools/fixture/providers/fixture",
+			"subject_token_type": "urn:ietf:params:oauth:token-type:jwt", "token_url": "https://sts.googleapis.com/v1/token",
+			"credential_source": map[string]string{"file": tokenFile}},
+	} {
+		t.Run(credentials["type"].(string), func(t *testing.T) {
+			data, err := json.Marshal(credentials)
+			if err != nil {
+				t.Fatal(err)
+			}
+			path := filepath.Join(t.TempDir(), "credentials.json")
+			if err := os.WriteFile(path, data, 0600); err != nil {
+				t.Fatal(err)
+			}
+			sender, err := newFCMSender(context.Background(), "vanitilabs", path)
+			if err != nil || sender == nil {
+				t.Fatal("supported server credentials rejected", err)
+			}
+			if sender.client.Timeout != 10*time.Second || sender.client.CheckRedirect(nil, nil) != http.ErrUseLastResponse {
+				t.Fatal("FCM timeout or redirect restriction lost")
+			}
+		})
 	}
 }
 

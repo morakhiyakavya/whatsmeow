@@ -22,8 +22,9 @@ import (
 	"github.com/jackc/pgx/v5"
 	"github.com/jackc/pgx/v5/pgconn"
 	"github.com/jackc/pgx/v5/stdlib"
-	"go.mau.fi/whatsmeow/store"
 	"google.golang.org/protobuf/proto"
+
+	"go.mau.fi/whatsmeow/store"
 )
 
 type api struct {
@@ -288,7 +289,7 @@ func dbFailure(w http.ResponseWriter, err error) {
 	} else {
 		log.Printf("database request failed (%T)", err)
 	}
-	sentry.CaptureException(errors.New("Unexpected database failure"))
+	sentry.CaptureException(errors.New("unexpected database failure"))
 	sentry.NewLogger(context.Background()).Error().Emit("Unexpected database failure")
 	fail(w, 500, "internal_error", "The request could not be completed")
 }

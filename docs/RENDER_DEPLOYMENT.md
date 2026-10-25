@@ -12,16 +12,23 @@ Deployed and verified on 25 October 2026 (IST) in `kavya's Workspace`:
 - API base URL: [whatsapp-pos-dev](https://whatsapp-pos-dev.onrender.com).
 - [Live health endpoint](https://whatsapp-pos-dev.onrender.com/health).
 - [Render dashboard](https://dashboard.render.com/web/srv-db5nundckfvc73arsvkg).
-- Deployed commit: `c4bc1a3379db34e729c7e8a7ff8dffb95d85f5b7` on `main`.
-- Deployment: `dep-dbf0a5navr4c73cc3j80`; service: `srv-db5nundckfvc73arsvkg`.
-- One Free instance in Singapore; automatic deployments disabled.
+- Source: the tested `main` SHA from the latest successful [CI/CD run](CI_CD.md).
+- Service: `srv-db5nundckfvc73arsvkg`; the exact live deploy/SHA is in the dashboard.
+- One Free instance in Singapore; native auto-deploy is disabled and GitHub Actions triggers verified deployments.
 
-On 25 October at 13:34:02 UTC (19:04:02 IST), the configuration-only deployment
-above kept the same source/WhatsApp settings and set only `IPO_JOB_TOKEN` empty.
+On 25 October at 13:34:02 UTC (19:04:02 IST), configuration-only deployment
+`dep-dbf0a5navr4c73cc3j80` retained source `c4bc1a3` and the WhatsApp settings,
+and set only `IPO_JOB_TOKEN` empty.
 IPO collection now runs independently on the Indian-region
 [Azure VM](AZURE_VM_DEPLOYMENT.md); its Sentry trigger targets Azure. Render must
 not run a competing importer against the same queue. The hosted health and
 unauthenticated boundaries remain available; WhatsApp processing stays on Render.
+
+The first automatic deployment `dep-dbf2bgfb9u1s73bchfo0` became live at
+15:53:27 UTC (21:23:27 IST), running `6f7cadb93cb93a3ada57f1fc630c08059e46a248`
+after GitHub's database/application checks. The workflow confirmed the exact
+commit and public health; Azure deployed the same revision as an IPO-only worker.
+Subsequent pushes to `main` use this workflow while preserving the split roles.
 
 Render reported the deployment live. Public HTTPS checks passed: `/health` returns
 200 with `{"status":"ok"}`; unauthenticated `/api/me` and assumptions/history

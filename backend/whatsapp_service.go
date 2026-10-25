@@ -13,6 +13,7 @@ import (
 	"github.com/getsentry/sentry-go"
 	"github.com/jackc/pgx/v5"
 	"github.com/jackc/pgx/v5/stdlib"
+
 	"go.mau.fi/whatsmeow"
 	"go.mau.fi/whatsmeow/store"
 	"go.mau.fi/whatsmeow/store/sqlstore"
@@ -478,11 +479,11 @@ func (s *whatsAppService) run(user actor, id string, c *accountConnection, resto
 				return "pairing_failed"
 			}
 		case evt := <-lifecycle:
-			switch evt.(type) {
+			switch evt := evt.(type) {
 			case *events.Message:
 				if saved.Valid && c.state().State == "connected" {
 					eventCtx, stop := context.WithTimeout(ctx, 5*time.Second)
-					err = s.approveRecovery(eventCtx, device, user, id, saved.String, evt.(*events.Message))
+					err = s.approveRecovery(eventCtx, device, user, id, saved.String, evt)
 					stop()
 					if err != nil {
 						return "storage_unavailable"
@@ -491,7 +492,7 @@ func (s *whatsAppService) run(user actor, id string, c *accountConnection, resto
 			case *events.Picture:
 				if saved.Valid && c.state().State == "connected" {
 					eventCtx, stop := context.WithTimeout(ctx, 5*time.Second)
-					err = s.pictureChanged(eventCtx, device, user, id, saved.String, evt.(*events.Picture))
+					err = s.pictureChanged(eventCtx, device, user, id, saved.String, evt)
 					stop()
 					if err != nil {
 						return "storage_unavailable"

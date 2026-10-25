@@ -31,7 +31,7 @@ var applicationCountPattern = regexp.MustCompile(`^[0-9]{1,24}$`)
 
 func (in *assumptionInput) normalize() error {
 	if in.ExpectedVersion == nil || *in.ExpectedVersion < 0 || *in.ExpectedVersion >= 2147483647 {
-		return errors.New("Supply expected_version between 0 and 2147483646")
+		return errors.New("supply expected_version between 0 and 2147483646")
 	}
 	if in.GMP != nil {
 		value, ok := decimal(*in.GMP, true)
@@ -41,36 +41,36 @@ func (in *assumptionInput) normalize() error {
 		in.GMP = &value
 	}
 	if in.Factor == nil {
-		return errors.New("Supply subject2_pricing_factor as a decimal string between 0 and 1")
+		return errors.New("supply subject2_pricing_factor as a decimal string between 0 and 1")
 	}
 	value, ok := decimal(*in.Factor, true)
 	if !ok {
-		return errors.New("Subject 2 pricing factor must have at most six fractional digits")
+		return errors.New("subject 2 pricing factor must have at most six fractional digits")
 	}
 	factor, _ := new(big.Rat).SetString(value)
 	if factor.Sign() < 0 || factor.Cmp(big.NewRat(1, 1)) > 0 {
-		return errors.New("Subject 2 pricing factor must be between 0 and 1")
+		return errors.New("subject 2 pricing factor must be between 0 and 1")
 	}
 	in.Factor = &value
 	if in.Applications == nil {
-		return errors.New("Supply expected_applications; unknown category counts may be null")
+		return errors.New("supply expected_applications; unknown category counts may be null")
 	}
 	for _, count := range []*string{in.Applications.Retail, in.Applications.SHNI, in.Applications.BHNI, in.Applications.Shareholder} {
 		if count == nil {
 			continue
 		}
 		if !applicationCountPattern.MatchString(*count) {
-			return errors.New("Expected application counts must be positive integer strings of at most 24 digits")
+			return errors.New("expected application counts must be positive integer strings of at most 24 digits")
 		}
 		normal := strings.TrimLeft(*count, "0")
 		if normal == "" {
-			return errors.New("Use null for unknown application counts, not zero")
+			return errors.New("use null for unknown application counts, not zero")
 		}
 		*count = normal
 	}
 	in.Reason = strings.TrimSpace(in.Reason)
 	if !validText(in.Reason, 2048) {
-		return errors.New("Supply a nonempty change_reason of at most 2048 bytes")
+		return errors.New("supply a nonempty change_reason of at most 2048 bytes")
 	}
 	return nil
 }

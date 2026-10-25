@@ -18,9 +18,9 @@ existing Supabase database; no WhatsApp-worker handover has occurred.
 | Health | `https://172-198-153-142.sslip.io/health` |
 | Application service | `venweb-api.service`, enabled at boot |
 | HTTPS proxy | Caddy 2.11.7 from its official stable APT repository |
-| Source | `e410eb6395777908b30a1b34ba60eb4c1776132f` plus the verified enrichment/source-discovery change recorded in the task ledger |
-| Sentry release | `azure-enrichment-6321943f2f4b` |
-| Linux binary SHA-256 | `6321943f2f4b6560ed554a132e0014b78455351f210bba3eed9c78a61481a569` |
+| Source | Tested `main` revision recorded in `/opt/venweb/REVISION` by CI/CD |
+| Sentry release | The same Git SHA, read by systemd from `/etc/venweb/release.env` |
+| Linux binary SHA-256 | Verified against the workflow artifact manifest before installation |
 
 Clients continue using Render for sign-in, pairing, messaging and application
 APIs. Sentry's refresh monitor `10687890` targets Azure's
@@ -192,8 +192,10 @@ source-access limitation. Never leave two intended import owners enabled.
 The [backend CI/CD workflow](CI_CD.md) can deploy the tested `main` revision to
 both hosts while preserving Render's application/WhatsApp role and Azure's
 IPO-only role. Its Azure helper verifies the binary checksum and rolls back on
-startup/local health failure. Activation requires GitHub Actions secrets and
-publication of the workflow; it does not restart an evicted Spot VM.
+startup/local health failure. All three GitHub Actions secrets are configured and
+the first automatic rollout passed on 25 October 2026; it does not restart an
+evicted Spot VM. Read the revision with `sudo cat /opt/venweb/REVISION` and compare
+it with the Render live deployment and the successful workflow's commit.
 
 Build from the repository root on the development machine. Keep the root module
 available: `backend/go.mod` replaces `go.mau.fi/whatsmeow` with `../`.

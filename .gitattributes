@@ -1,3 +1,5 @@
 *.pb.go linguist-generated=true
 *.pb.raw binary linguist-generated=true
 internals.go linguist-generated=true
+*.sh text eol=lf
+.github/workflows/*.yml text eol=lf

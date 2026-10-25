@@ -53,6 +53,12 @@ There is no independent half-hour timer: a missed Sentry request is reflected by
 freshness; the next trigger imports current data. Acceptance is not completion.
 Actual failures reach the existing privacy-filtered Sentry SDK and generic logs.
 
+Persistence uses batches of at most 100 IPOs, with set-based writes for catalogue
+rows, subscriptions and enrichments, followed by dashboard-basis capture in the
+same transaction. Database calls remain fixed per successful batch. A rejected
+batch rolls back and splits into smaller batches to isolate failed issues while
+retaining valid ones; only committed issues contribute to the import count.
+
 ## Read API
 
 `GET /api/businesses/{businessID}/ipos` retains authentication, membership checks
@@ -113,6 +119,23 @@ IPO Watch candidates are issuer-verified; later recognised tables supersede
 template duplicates. Unknown placeholders and unpublished anchor dates stay
 unknown; lock-ins are never inferred from listing dates. Source-data rights are
 excluded from upstream's code licence and require the operator's arrangements.
+
+Each refresh reads the published [IPO calendar](https://ipowatch.in/upcoming-ipo-list/)
+once and extracts only issuer names and IPO page links. It does not import GMP.
+Link discovery ignores foreign hosts, non-HTTPS URLs, credentials, queries, encoded
+paths and GMP pages. Conflicting URLs for the same normalized name are rejected;
+candidate discovery never bypasses the page's separate issuer verification.
+Verified symbol/legal-name/URL mappings handle TONBO's shortened title, MKSONS's
+punctuation-dependent URL and ZETWERK's shorter name/URL. An alias works only for
+that exact issuer and source page. Other issues use a discovered link first and
+the existing generated URLs as fallback, with duplicate requests removed.
+
+Import results retain specific errors such as `source HTTP 403`, `source HTTP 404`,
+`enrichment page missing` (including HTTP-200 not-found pages),
+`enrichment issuer unverified` and `enrichment fields unavailable`. Transport
+details remain private. Failed refreshes continue preserving prior observations.
+`IPO_LIVE_SOURCE_TEST=1` also enables read-only `TestIPOEnrichmentLiveMappings` for
+the three verified mappings; it requires reservation and promoter rows from each.
 
 ## Rollout and verification
 

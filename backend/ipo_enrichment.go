@@ -5,12 +5,24 @@ import (
 	"errors"
 	"io"
 	"math/big"
+	"net/url"
 	"regexp"
 	"strings"
 	"unicode"
 
 	"golang.org/x/net/html"
 )
+
+const ipoEnrichmentIndex = "https://ipowatch.in/upcoming-ipo-list/"
+
+var errIPOEnrichmentPageMissing = errors.New("enrichment page missing")
+
+// Verified source titles are aliases only for this NSE issuer and source URL.
+var ipoEnrichmentMappings = map[string]struct{ name, title, url string }{
+	"TONBO":   {"Tonbo Imaging India Limited", "Tonbo Imaging", "https://ipowatch.in/tonbo-imaging-india-ipo/"},
+	"MKSONS":  {"M. K. Sons Fine Jewels Limited", "M.K.Sons Fine Jewels", "https://ipowatch.in/mksons-fine-jewels-ipo/"},
+	"ZETWERK": {"Zetwerk Manufacturing Businesses Limited", "Zetwerk Manufacturing", "https://ipowatch.in/zetwerk-ipo/"},
+}
 
 func htmlText(n *html.Node) string {
 	if n.Type == html.TextNode {
@@ -75,6 +87,52 @@ func issuerKey(text string) string {
 	}, text)
 }
 
+func enrichmentLinkKey(name string) string {
+	name = regexp.MustCompile(`(?i)\bipo\b.*$`).ReplaceAllString(name, "")
+	name = regexp.MustCompile(`(?i)\b(india|indian|the|company|co)\b`).ReplaceAllString(name, "")
+	return issuerKey(name)
+}
+
+func parseIPOEnrichmentLinks(reader io.Reader) (map[string]string, error) {
+	doc, err := html.Parse(reader)
+	if err != nil {
+		return nil, errors.New("invalid enrichment index HTML")
+	}
+	base, _ := url.Parse(ipoEnrichmentIndex)
+	pagePath := regexp.MustCompile(`^/[a-z0-9-]+-ipo/?$`)
+	links := map[string]string{}
+	var visit func(*html.Node)
+	visit = func(n *html.Node) {
+		if n.Type == html.ElementNode && n.Data == "a" {
+			for _, attr := range n.Attr {
+				if attr.Key != "href" {
+					continue
+				}
+				target, err := base.Parse(attr.Val)
+				if err != nil || target.Scheme != "https" || target.Host != "ipowatch.in" || target.User != nil || target.RawQuery != "" || target.RawPath != "" || !pagePath.MatchString(target.Path) {
+					continue
+				}
+				target.Fragment = ""
+				target.Path = strings.TrimRight(target.Path, "/") + "/"
+				key := enrichmentLinkKey(htmlText(n))
+				if len(key) < 5 {
+					continue
+				}
+				if previous, exists := links[key]; exists && previous != target.String() {
+					links[key] = ""
+				} else if !exists {
+					links[key] = target.String()
+				}
+			}
+		}
+		for child := n.FirstChild; child != nil; child = child.NextSibling {
+			visit(child)
+		}
+	}
+	visit(doc)
+	return links, nil
+}
+
 func percentage(text string) *string {
 	if !strings.Contains(text, "%") || strings.ContainsAny(text, "-()") {
 		return nil
@@ -96,17 +154,32 @@ func parseIPOEnrichment(reader io.Reader, item *ipoSourceIssue, source string) e
 		return errors.New("invalid enrichment HTML")
 	}
 	key := issuerKey(item.Name)
-	verified := false
+	keys := []string{key}
+	if mapping, ok := ipoEnrichmentMappings[item.Symbol]; ok && issuerKey(mapping.name) == key && mapping.url == source {
+		keys = append(keys, issuerKey(mapping.title))
+	}
+	verified, missing := false, false
 	var identify func(*html.Node)
 	identify = func(n *html.Node) {
-		if n.Type == html.ElementNode && (n.Data == "h1" || n.Data == "title") && strings.HasPrefix(issuerKey(htmlText(n)), key+"ipo") {
-			verified = true
+		if n.Type == html.ElementNode && (n.Data == "h1" || n.Data == "title") {
+			heading := issuerKey(htmlText(n))
+			if strings.HasPrefix(heading, "pagenotfound") || strings.HasPrefix(heading, "404pagenotfound") {
+				missing = true
+			}
+			for _, candidate := range keys {
+				if strings.HasPrefix(heading, candidate+"ipo") {
+					verified = true
+				}
+			}
 		}
 		for child := n.FirstChild; child != nil; child = child.NextSibling {
 			identify(child)
 		}
 	}
 	identify(doc)
+	if missing {
+		return errIPOEnrichmentPageMissing
+	}
 	if len(key) < 5 || !verified {
 		return errors.New("enrichment issuer unverified")
 	}
@@ -225,23 +298,40 @@ func parseIPOEnrichment(reader io.Reader, item *ipoSourceIssue, source string) e
 	return nil
 }
 
-func (s *ipoSourceClient) enrich(ctx context.Context, item *ipoSourceIssue) error {
+func (s *ipoSourceClient) enrich(ctx context.Context, item *ipoSourceIssue, links map[string]string) error {
+	var targets []string
+	if mapping, ok := ipoEnrichmentMappings[item.Symbol]; ok && issuerKey(mapping.name) == issuerKey(item.Name) {
+		targets = append(targets, mapping.url)
+	}
+	if target := links[enrichmentLinkKey(item.Name)]; target != "" {
+		targets = append(targets, target)
+	}
 	name := regexp.MustCompile(`(?i)\b(limited|ltd|private|pvt)\b`).ReplaceAllString(item.Name, "")
 	for _, candidate := range []string{name, regexp.MustCompile(`(?i)\b(india|indian)\b`).ReplaceAllString(name, "")} {
 		slug := strings.Trim(regexp.MustCompile(`[^a-z0-9]+`).ReplaceAllString(strings.ToLower(candidate), "-"), "-")
-		target := "https://ipowatch.in/" + slug + "-ipo/"
+		targets = append(targets, "https://ipowatch.in/"+slug+"-ipo/")
+	}
+	seen := map[string]bool{}
+	resultErr := errIPOEnrichmentPageMissing
+	for _, target := range targets {
+		if seen[target] {
+			continue
+		}
+		seen[target] = true
 		data, err := s.get(ctx, target)
 		if err == nil {
 			if err = parseIPOEnrichment(strings.NewReader(string(data)), item, target); err == nil {
 				return nil
 			}
+			if err != errIPOEnrichmentPageMissing {
+				resultErr = err
+			}
+		} else if resultErr == errIPOEnrichmentPageMissing {
+			resultErr = err
 		}
 		if ctx.Err() != nil {
 			break
 		}
-		if candidate == name && candidate == regexp.MustCompile(`(?i)\b(india|indian)\b`).ReplaceAllString(name, "") {
-			break
-		}
 	}
-	return errors.New("enrichment unavailable")
+	return resultErr
 }

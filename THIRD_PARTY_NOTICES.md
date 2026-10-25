@@ -5,6 +5,9 @@ category application calculation in `backend/ipo_sources.go`,
 `backend/ipo_enrichment.go` and `backend/ipo_catalogue.go` are adapted from
 [hedaprateek/ipo-tracker](https://github.com/hedaprateek/ipo-tracker), reviewed at
 commit `ee6a54459d67384aa086f20dff668e9698e26637`.
+Published-link discovery and company-name normalization were additionally reviewed
+at `bde34dff35952ffd856375a384d430337e144f88`; this integration extracts names and
+source links without importing upstream GMP values.
 
 MIT License
 

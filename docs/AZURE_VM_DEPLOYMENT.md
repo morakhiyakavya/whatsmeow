@@ -18,9 +18,9 @@ existing Supabase database; no WhatsApp-worker handover has occurred.
 | Health | `https://172-198-153-142.sslip.io/health` |
 | Application service | `venweb-api.service`, enabled at boot |
 | HTTPS proxy | Caddy 2.11.7 from its official stable APT repository |
-| Source | `c4bc1a3379db34e729c7e8a7ff8dffb95d85f5b7` plus the independent-importer change checkpointed with this guide |
-| Sentry release | `azure-ipo-58d2639b563d` |
-| Linux binary SHA-256 | `58d2639b563dd842a7ed1db8711b7220a6e30965525099f514ef7fd7fe4f85ec` |
+| Source | `e410eb6395777908b30a1b34ba60eb4c1776132f` plus the verified enrichment/source-discovery change recorded in the task ledger |
+| Sentry release | `azure-enrichment-6321943f2f4b` |
+| Linux binary SHA-256 | `6321943f2f4b6560ed554a132e0014b78455351f210bba3eed9c78a61481a569` |
 
 Clients continue using Render for sign-in, pairing, messaging and application
 APIs. Sentry's refresh monitor `10687890` targets Azure's
@@ -50,6 +50,9 @@ The API port is not bound to the public interface.
   connection and IPO job token; same ownership/mode, **not active**. Review it
   against the current importer configuration before any future WhatsApp handover.
 - `/opt/venweb/ipo-api.previous`: previous API-only binary for rollback.
+- `/opt/venweb/ipo-api.before-enrichment` and
+  `/etc/venweb/api.before-enrichment.env`: the preceding standalone-importer
+  binary/configuration for rollback of source-resolution changes.
 - `/etc/systemd/system/venweb-api.service`: installed from
   [the service definition](../deploy/azure-vm/venweb-api.service).
 - `/etc/caddy/Caddyfile`: [the proxy template](../deploy/azure-vm/Caddyfile), with
@@ -92,7 +95,7 @@ the existing runner. No schema, customer transaction or WhatsApp session was
 changed for rollout; no customer message was sent. WhatsApp restoration,
 authenticated customer flows, load and reboot recovery remain untested on Azure.
 
-The first live Azure import (`fe5d4ef5-ca75-419d-96c2-483035fd5542`) ran from
+The original live Azure import (`fe5d4ef5-ca75-419d-96c2-483035fd5542`) ran from
 13:35:47 to 13:36:54 UTC (19:05:47–19:06:54 IST). Its authenticated trigger was
 accepted, all three NSE feeds and eight detail requests succeeded, and 115 issues
 were persisted without removing the catalogue's existing 122 products. Five
@@ -101,6 +104,17 @@ promoter rows. TONBO, MKSONS and ZETWERK enrichment remained unavailable; no fre
 anchor rows were available. The result is **partial**, not a claim of complete
 source coverage. The existing retry policy remains in force. See
 [the Azure collection trace](https://vanitilabs.sentry.io/explore/traces/trace/2e8966ad02acbfd27272dd61f31c58eb).
+
+The enrichment/source-discovery fix was deployed at 14:41 UTC (20:11 IST).
+It was built from an isolated export of `e410eb6` plus only
+`backend/ipo_enrichment.go`, `backend/ipo_sources.go` and the new enrichment tests;
+the independent pending persistence-batching changes were excluded. The exact
+snapshot passed the full disposable PostgreSQL/backend suite (25.663 seconds),
+vet and the Linux build. A read-only test on the Azure VM then confirmed all three
+verified mappings, each with three reservation and two promoter rows, plus real
+published-calendar link discovery (0.97 seconds). Public health and rejection of
+unauthenticated refresh requests passed after deployment. Runtime credentials,
+the 1800-second Sentry schedule and the Render/WhatsApp split were preserved.
 
 The initial uptime 401 was caused by pointing the monitor to API-only staging,
 where the job token/importer were intentionally absent. Azure now accepts the
@@ -112,6 +126,15 @@ reported successful scheduled HTTP 202 checks at 13:38:02, 13:39:02 and 13:40:02
 (19:08:02, 19:09:02 and 19:10:02 IST), confirming the monitor credential works.
 The direct authenticated trigger and completed collection were verified separately.
 No new monitor or scheduling service was created.
+
+The post-fix full refresh `3bc2e606-3139-4646-92ac-4883c3fc7d13` ran from
+14:42:22 to 14:43:28 UTC (20:12:22–20:13:28 IST) and finished **succeeded** on its
+first attempt, saving 115 IPOs. All three NSE feeds, eight detail requests and all
+eight targeted enrichments returned `ok`, including TONBO, MKSONS and ZETWERK.
+Read-only database checks confirmed three fresh reservation rows and two fresh
+promoter rows for each of those three issuers. This verifies the supported refresh
+scope; it does not establish complete BSE coverage or guarantee every optional
+field will be published in future source responses.
 
 Before a production cutover:
 
@@ -165,6 +188,12 @@ monitor URL if returning imports to Render. That restores the previous geographi
 source-access limitation. Never leave two intended import owners enabled.
 
 ## Subsequent releases
+
+The [backend CI/CD workflow](CI_CD.md) can deploy the tested `main` revision to
+both hosts while preserving Render's application/WhatsApp role and Azure's
+IPO-only role. Its Azure helper verifies the binary checksum and rolls back on
+startup/local health failure. Activation requires GitHub Actions secrets and
+publication of the workflow; it does not restart an evicted Spot VM.
 
 Build from the repository root on the development machine. Keep the root module
 available: `backend/go.mod` replaces `go.mau.fi/whatsmeow` with `../`.

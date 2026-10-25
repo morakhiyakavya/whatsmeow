@@ -172,17 +172,17 @@ func runIPOImport(ctx context.Context, db *sql.DB, collect func(context.Context)
 	defer saveCancel()
 	save := startOperation(saveCtx, "db.persist", "ipo.persist")
 	var saveErr error
-	for _, item := range items {
-		if err = saveSourceIPO(save.Context(), db, item); err != nil {
+	for first := 0; first < len(items); first += 100 {
+		var saved int
+		saved, err = persistSourceIPOs(save.Context(), db, items[first:min(first+100, len(items))], results)
+		count += saved
+		if err != nil {
 			saveErr = err
 			status = "partial"
-			results["storage:"+item.Symbol] = "failed"
 			if saveCtx.Err() != nil {
 				break
 			}
-			continue
 		}
-		count++
 	}
 	finishOperation(save, saveErr)
 	if count == 0 {
@@ -207,87 +207,120 @@ func runIPOImport(ctx context.Context, db *sql.DB, collect func(context.Context)
 	return true, err
 }
 
-func saveSourceIPO(ctx context.Context, db *sql.DB, item ipoSourceIssue) error {
-	if !sourceSymbolPattern.MatchString(item.Symbol) || !validText(item.Name, 256) || (item.Board != "SME" && item.Board != "Mainboard") {
-		return errors.New("invalid source identity")
+func persistSourceIPOs(ctx context.Context, db *sql.DB, items []ipoSourceIssue, results map[string]string) (int, error) {
+	err := saveSourceIPOs(ctx, db, items)
+	if err == nil {
+		return len(items), nil
+	}
+	if len(items) == 1 || ctx.Err() != nil {
+		for _, item := range items {
+			results["storage:"+item.Symbol] = "failed"
+		}
+		return 0, err
+	}
+	// Split a rolled-back batch so one rejected issue cannot block valid issues.
+	middle := len(items) / 2
+	left, leftErr := persistSourceIPOs(ctx, db, items[:middle], results)
+	right, rightErr := persistSourceIPOs(ctx, db, items[middle:], results)
+	return left + right, errors.Join(leftErr, rightErr)
+}
+
+const sourceIPORows = `WITH source AS (
+ SELECT s.*,i.id FROM jsonb_to_recordset($1::jsonb) AS s(
+ "Symbol" text,"Name" text,"Board" text,"SourceURL" text,"SourceStatus" text,
+ "Open" text,"Close" text,"Listing" text,"Low" text,"High" text,"Lot" bigint,
+ "Registrar" text,"IssueText" text,"IssueShares" text,"IssueAmount" text,
+ "DetailOK" boolean,"EnrichmentOK" boolean,"EnrichmentURL" text,"Timeline" jsonb,
+ "Subscriptions" jsonb,"Reservations" jsonb,"Shareholdings" jsonb,"Lockins" jsonb)
+ LEFT JOIN ipo_pos.ipos i ON i.catalogue_source='nse' AND i.source_issue_id=s."Symbol") `
+
+func saveSourceIPOs(ctx context.Context, db *sql.DB, items []ipoSourceIssue) error {
+	if len(items) == 0 {
+		return nil
+	}
+	type sourceRow struct {
+		ipoSourceIssue
+		SourceURL string
+	}
+	rows := make([]sourceRow, len(items))
+	for n, item := range items {
+		if !sourceSymbolPattern.MatchString(item.Symbol) || !validText(item.Name, 256) || (item.Board != "SME" && item.Board != "Mainboard") {
+			return errors.New("invalid source identity")
+		}
+		rows[n] = sourceRow{item, "https://www.nseindia.com/market-data/issue-information?symbol=" + url.QueryEscape(item.Symbol)}
+	}
+	encoded, err := json.Marshal(rows)
+	if err != nil {
+		return err
 	}
 	tx, err := db.BeginTx(ctx, nil)
 	if err != nil {
 		return err
 	}
 	defer tx.Rollback()
-	sourceURL := "https://www.nseindia.com/market-data/issue-information?symbol=" + url.QueryEscape(item.Symbol)
-	var id string
 	// Only provider-owned rows match this key. Manual products are never joined by name.
-	err = tx.QueryRowContext(ctx, `INSERT INTO ipo_pos.ipos AS i(code,name,issuer_name,opens_on,closes_on,listing_on,price_low,price_high,
+	result, err := tx.ExecContext(ctx, sourceIPORows+`INSERT INTO ipo_pos.ipos AS i(code,name,issuer_name,opens_on,closes_on,listing_on,price_low,price_high,
 	 catalogue_source,source_issue_id,symbol,exchange,board,source_url,last_seen_at,source_status,issue_size_text)
-	 VALUES($1,$2,$2,$3,$4,$5,$6,$7,'nse',$8,$8,'NSE',$9,$10,clock_timestamp(),$11,NULLIF($12,''))
+	 SELECT 'NSE:'||"Symbol","Name","Name","Open"::date,"Close"::date,"Listing"::date,"Low"::numeric,"High"::numeric,
+	 'nse',"Symbol","Symbol",'NSE',"Board","SourceURL",clock_timestamp(),"SourceStatus",NULLIF("IssueText",'') FROM source WHERE true
 	 ON CONFLICT(catalogue_source,source_issue_id) DO UPDATE SET name=excluded.name,issuer_name=excluded.issuer_name,
 	 opens_on=COALESCE(excluded.opens_on,i.opens_on),closes_on=COALESCE(excluded.closes_on,i.closes_on),
 	 listing_on=COALESCE(excluded.listing_on,i.listing_on),price_low=COALESCE(excluded.price_low,i.price_low),
 	 price_high=COALESCE(excluded.price_high,i.price_high),board=excluded.board,last_seen_at=excluded.last_seen_at,
 	 source_status=COALESCE(excluded.source_status,i.source_status),issue_size_text=COALESCE(i.issue_size_text,excluded.issue_size_text)
 	 WHERE i.name=excluded.name AND (i.closes_on IS NULL OR excluded.opens_on IS NULL OR excluded.opens_on<=i.closes_on+interval '90 days')
-	 RETURNING id`, "NSE:"+item.Symbol, item.Name, item.Open, item.Close, item.Listing, item.Low, item.High, item.Symbol, item.Board, sourceURL, item.SourceStatus, item.IssueText).Scan(&id)
+	 `, string(encoded))
 	if err != nil {
 		return err
 	}
-	if item.DetailOK {
-		_, err = tx.ExecContext(ctx, `UPDATE ipo_pos.ipos SET lot_size=COALESCE(NULLIF($2::bigint,0),lot_size),
-		 registrar=COALESCE(NULLIF($3::text,''),registrar),issue_size_text=COALESCE(NULLIF($4::text,''),issue_size_text),
-		 issue_size_shares=COALESCE($5::numeric,issue_size_shares),terms_observed_at=clock_timestamp() WHERE id=$1`, id, item.Lot, item.Registrar, item.IssueText, item.IssueShares)
-		if err != nil {
-			return err
-		}
+	if affected, err := result.RowsAffected(); err != nil {
+		return err
+	} else if affected != int64(len(items)) {
+		return sql.ErrNoRows
 	}
-	for _, s := range item.Subscriptions {
-		_, err = tx.ExecContext(ctx, `INSERT INTO ipo_pos.ipo_subscriptions(ipo_id,category,label,source,offered_shares,bid_shares,applications,multiple,observed_at)
-		 VALUES($1,$2,$3,'nse',$4,$5,$6,$7,clock_timestamp()) ON CONFLICT(ipo_id,category) DO UPDATE SET label=excluded.label,
+	for _, query := range []string{
+		`UPDATE ipo_pos.ipos i SET lot_size=COALESCE(NULLIF(s."Lot",0),i.lot_size),
+		 registrar=COALESCE(NULLIF(s."Registrar",''),i.registrar),issue_size_text=COALESCE(NULLIF(s."IssueText",''),i.issue_size_text),
+		 issue_size_shares=COALESCE(s."IssueShares"::numeric,i.issue_size_shares),terms_observed_at=clock_timestamp()
+		 FROM source s WHERE i.id=s.id AND s."DetailOK"`,
+		`INSERT INTO ipo_pos.ipo_subscriptions(ipo_id,category,label,source,offered_shares,bid_shares,applications,multiple,observed_at)
+		 SELECT s.id,x."Category",x."Label",'nse',x."Offered",x."Bid",x."Applications",x."Multiple",clock_timestamp()
+		 FROM source s CROSS JOIN LATERAL jsonb_to_recordset(s."Subscriptions") AS x(
+		 "Category" text,"Label" text,"Offered" numeric,"Bid" numeric,"Applications" numeric,"Multiple" numeric)
+		 ON CONFLICT(ipo_id,category) DO UPDATE SET label=excluded.label,
 		 offered_shares=COALESCE(excluded.offered_shares,ipo_subscriptions.offered_shares),
 		 bid_shares=COALESCE(excluded.bid_shares,ipo_subscriptions.bid_shares),applications=COALESCE(excluded.applications,ipo_subscriptions.applications),
-		 multiple=COALESCE(excluded.multiple,ipo_subscriptions.multiple),observed_at=excluded.observed_at`, id, s.Category, s.Label, s.Offered, s.Bid, s.Applications, s.Multiple)
-		if err != nil {
+		 multiple=COALESCE(excluded.multiple,ipo_subscriptions.multiple),observed_at=excluded.observed_at`,
+		`UPDATE ipo_pos.ipos i SET timeline=i.timeline||s."Timeline" FROM source s
+		 WHERE i.id=s.id AND s."Timeline"<>'{}'::jsonb`,
+		`UPDATE ipo_pos.ipos i SET issue_size_amount=COALESCE(s."IssueAmount"::numeric,i.issue_size_amount)
+		 FROM source s WHERE i.id=s.id AND s."EnrichmentOK"`,
+		`INSERT INTO ipo_pos.ipo_reservations(ipo_id,category,reserved_shares,percentage,basis,source_url,observed_at)
+		 SELECT DISTINCT ON (s.id,x."Category") s.id,x."Category",x."Shares",x."Percentage",x."Basis",s."EnrichmentURL",clock_timestamp()
+		 FROM source s CROSS JOIN LATERAL jsonb_array_elements(s."Reservations") WITH ORDINALITY AS entry(value,position)
+		 CROSS JOIN LATERAL jsonb_to_record(entry.value) AS x("Category" text,"Shares" numeric,"Percentage" numeric,"Basis" text)
+		 WHERE s."EnrichmentOK" ORDER BY s.id,x."Category",entry.position DESC
+		 ON CONFLICT(ipo_id,category) DO UPDATE SET reserved_shares=excluded.reserved_shares,
+		 percentage=excluded.percentage,basis=excluded.basis,source_url=excluded.source_url,observed_at=excluded.observed_at`,
+		`INSERT INTO ipo_pos.ipo_promoter_shareholdings(ipo_id,holder,pre_percentage,post_percentage,source_url,observed_at)
+		 SELECT DISTINCT ON (s.id,x."Holder") s.id,x."Holder",x."Pre",x."Post",s."EnrichmentURL",clock_timestamp()
+		 FROM source s CROSS JOIN LATERAL jsonb_array_elements(s."Shareholdings") WITH ORDINALITY AS entry(value,position)
+		 CROSS JOIN LATERAL jsonb_to_record(entry.value) AS x("Holder" text,"Pre" numeric,"Post" numeric)
+		 WHERE s."EnrichmentOK" ORDER BY s.id,x."Holder",entry.position DESC
+		 ON CONFLICT(ipo_id,holder) DO UPDATE SET pre_percentage=excluded.pre_percentage,
+		 post_percentage=excluded.post_percentage,source_url=excluded.source_url,observed_at=excluded.observed_at`,
+		`INSERT INTO ipo_pos.ipo_anchor_lockins(ipo_id,label,expires_on,source_url,observed_at)
+		 SELECT DISTINCT ON (s.id,x."Label") s.id,x."Label",x."Date",s."EnrichmentURL",clock_timestamp()
+		 FROM source s CROSS JOIN LATERAL jsonb_array_elements(s."Lockins") WITH ORDINALITY AS entry(value,position)
+		 CROSS JOIN LATERAL jsonb_to_record(entry.value) AS x("Label" text,"Date" date)
+		 WHERE s."EnrichmentOK" ORDER BY s.id,x."Label",entry.position DESC
+		 ON CONFLICT(ipo_id,label) DO UPDATE SET expires_on=excluded.expires_on,
+		 source_url=excluded.source_url,observed_at=excluded.observed_at`,
+		`SELECT ipo_pos.capture_ipo_dashboard_basis(id) FROM source ORDER BY id`,
+	} {
+		if _, err = tx.ExecContext(ctx, sourceIPORows+query, string(encoded)); err != nil {
 			return err
 		}
-	}
-	if len(item.Timeline) > 0 {
-		timeline, _ := json.Marshal(item.Timeline)
-		if _, err = tx.ExecContext(ctx, `UPDATE ipo_pos.ipos SET timeline=timeline||$2::jsonb WHERE id=$1`, id, string(timeline)); err != nil {
-			return err
-		}
-	}
-	if item.EnrichmentOK {
-		_, err = tx.ExecContext(ctx, `UPDATE ipo_pos.ipos SET issue_size_amount=COALESCE($2::numeric,issue_size_amount) WHERE id=$1`, id, item.IssueAmount)
-		if err != nil {
-			return err
-		}
-		for _, s := range item.Reservations {
-			_, err = tx.ExecContext(ctx, `INSERT INTO ipo_pos.ipo_reservations(ipo_id,category,reserved_shares,percentage,basis,source_url,observed_at)
-			 VALUES($1,$2,$3,$4,$5,$6,clock_timestamp()) ON CONFLICT(ipo_id,category) DO UPDATE SET reserved_shares=excluded.reserved_shares,
-			 percentage=excluded.percentage,basis=excluded.basis,source_url=excluded.source_url,observed_at=excluded.observed_at`, id, s.Category, s.Shares, s.Percentage, s.Basis, item.EnrichmentURL)
-			if err != nil {
-				return err
-			}
-		}
-		for _, s := range item.Shareholdings {
-			_, err = tx.ExecContext(ctx, `INSERT INTO ipo_pos.ipo_promoter_shareholdings(ipo_id,holder,pre_percentage,post_percentage,source_url,observed_at)
-			 VALUES($1,$2,$3,$4,$5,clock_timestamp()) ON CONFLICT(ipo_id,holder) DO UPDATE SET pre_percentage=excluded.pre_percentage,
-			 post_percentage=excluded.post_percentage,source_url=excluded.source_url,observed_at=excluded.observed_at`, id, s.Holder, s.Pre, s.Post, item.EnrichmentURL)
-			if err != nil {
-				return err
-			}
-		}
-		for _, s := range item.Lockins {
-			_, err = tx.ExecContext(ctx, `INSERT INTO ipo_pos.ipo_anchor_lockins(ipo_id,label,expires_on,source_url,observed_at)
-			 VALUES($1,$2,$3,$4,clock_timestamp()) ON CONFLICT(ipo_id,label) DO UPDATE SET expires_on=excluded.expires_on,
-			 source_url=excluded.source_url,observed_at=excluded.observed_at`, id, s.Label, s.Date, item.EnrichmentURL)
-			if err != nil {
-				return err
-			}
-		}
-	}
-	if _, err = tx.ExecContext(ctx, `SELECT ipo_pos.capture_ipo_dashboard_basis($1)`, id); err != nil {
-		return err
 	}
 	return tx.Commit()
 }

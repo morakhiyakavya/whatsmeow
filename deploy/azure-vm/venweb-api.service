@@ -10,6 +10,7 @@ Group=venweb
 WorkingDirectory=/opt/venweb
 ExecStart=/opt/venweb/ipo-api -env /etc/venweb/api.env
 Environment=API_ADDR=127.0.0.1:8180
+EnvironmentFile=-/etc/venweb/release.env
 Restart=on-failure
 RestartSec=5
 TimeoutStopSec=30

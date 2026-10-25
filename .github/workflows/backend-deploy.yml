@@ -1,0 +1,131 @@
+name: Backend CI and deployment
+
+on:
+  pull_request:
+    branches: [main]
+  push:
+    branches: [main]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+# Never interrupt a deployment while it is replacing a running binary.
+concurrency:
+  group: backend-${{ github.ref }}
+  cancel-in-progress: false
+
+env:
+  GOTOOLCHAIN: local
+
+jobs:
+  check:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 20
+    services:
+      postgres:
+        image: postgres:17
+        env:
+          POSTGRES_USER: schema_test
+          POSTGRES_PASSWORD: ci-fixture-only
+          POSTGRES_DB: postgres
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd "pg_isready -U schema_test -d postgres"
+          --health-interval 5s --health-timeout 5s --health-retries 10
+    env:
+      PGHOST: 127.0.0.1
+      PGPORT: '5432'
+      PGUSER: schema_test
+      PGPASSWORD: ci-fixture-only
+      PGDATABASE: postgres
+      IPO_TEST_DATABASE_URL: postgresql://schema_test:ci-fixture-only@127.0.0.1:5432/postgres?sslmode=disable
+      WHATSAPP_TEST_DATABASE_URL: postgresql://schema_test:ci-fixture-only@127.0.0.1:5432/postgres?sslmode=disable
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
+        with:
+          persist-credentials: false
+      - uses: actions/setup-go@b7ad1dad31e06c5925ef5d2fc7ad053ef454303e # v7
+        with:
+          go-version: '1.27.x'
+          cache-dependency-path: |
+            go.sum
+            backend/go.sum
+            examples/login/go.sum
+      - name: Validate schema and application
+        run: |
+          set -euo pipefail
+          for migration in database/[0-9][0-9][0-9]_*.sql; do
+            psql -X -v ON_ERROR_STOP=1 -f "$migration" > /dev/null
+          done
+          psql -X -v ON_ERROR_STOP=1 -f database/schema_test.sql > /dev/null
+          go test ./...
+          go vet ./...
+          go -C backend test ./...
+          go -C backend vet ./...
+          go -C examples/login test ./...
+          go -C examples/login vet ./...
+      - name: Check deployment rollback
+        run: |
+          sudo bash deploy/azure-vm/test-deploy.sh
+          bash deploy/render/test-deploy.sh
+      - name: Build the Azure artifact
+        run: |
+          mkdir -p dist
+          CGO_ENABLED=0 GOOS=linux GOARCH=amd64 go -C backend build -tags netgo -trimpath -ldflags '-s -w' -o ../dist/ipo-api .
+          cd dist
+          sha256sum ipo-api > ipo-api.sha256
+      - uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7
+        if: github.ref == 'refs/heads/main' && github.event_name != 'pull_request'
+        with:
+          name: ipo-api-${{ github.sha }}
+          path: dist/
+          retention-days: 7
+          if-no-files-found: error
+
+  render:
+    needs: check
+    if: github.ref == 'refs/heads/main' && github.event_name != 'pull_request'
+    runs-on: ubuntu-24.04
+    timeout-minutes: 25
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
+        with:
+          persist-credentials: false
+      - name: Deploy the tested commit and wait for Render
+        env:
+          RENDER_API_KEY: ${{ secrets.RENDER_API_KEY }}
+          RENDER_SERVICE_ID: srv-db5nundckfvc73arsvkg
+          RENDER_HEALTH_URL: https://whatsapp-pos-dev.onrender.com/health
+        run: bash deploy/render/deploy.sh
+
+  azure:
+    needs: check
+    if: github.ref == 'refs/heads/main' && github.event_name != 'pull_request'
+    runs-on: ubuntu-24.04
+    timeout-minutes: 5
+    steps:
+      - uses: actions/download-artifact@9000827ccba6bdab643e8b6fd33ac0654aef8333 # v8
+        with:
+          name: ipo-api-${{ github.sha }}
+          path: dist
+      - name: Deploy the tested binary over verified SSH
+        env:
+          AZURE_DEPLOY_KEY: ${{ secrets.AZURE_DEPLOY_KEY }}
+          AZURE_KNOWN_HOSTS: ${{ secrets.AZURE_KNOWN_HOSTS }}
+        run: |
+          set -euo pipefail
+          : "${AZURE_DEPLOY_KEY:?Set AZURE_DEPLOY_KEY in repository Actions secrets}"
+          : "${AZURE_KNOWN_HOSTS:?Set AZURE_KNOWN_HOSTS in repository Actions secrets}"
+          umask 077
+          mkdir -p ~/.ssh
+          printf '%s\n' "$AZURE_DEPLOY_KEY" > ~/.ssh/venweb
+          printf '%s\n' "$AZURE_KNOWN_HOSTS" > ~/.ssh/known_hosts
+          trap 'rm -f ~/.ssh/venweb' EXIT
+          cd dist
+          sha256sum --check ipo-api.sha256
+          digest=$(sha256sum ipo-api | cut -d ' ' -f 1)
+          ssh -i ~/.ssh/venweb -o BatchMode=yes -o IdentitiesOnly=yes -o StrictHostKeyChecking=yes -o ConnectTimeout=20 \
+            venweb-deploy@172.198.153.142 sudo -n /usr/local/sbin/deploy-venweb "$digest" "$GITHUB_SHA" < ipo-api
+          curl --fail --silent --show-error --max-time 15 https://172-198-153-142.sslip.io/health

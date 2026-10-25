@@ -270,6 +270,12 @@ func (s *ipoSourceClient) collect(ctx context.Context) ([]ipoSourceIssue, map[st
 		items = append(items, item)
 	}
 	sort.Slice(items, func(i, j int) bool { return items[i].Symbol < items[j].Symbol })
+	var enrichmentLinks map[string]string
+	if len(items) > 0 {
+		if data, err := s.get(ctx, ipoEnrichmentIndex); err == nil {
+			enrichmentLinks, _ = parseIPOEnrichmentLinks(strings.NewReader(string(data)))
+		}
+	}
 	today := time.Now().In(time.FixedZone("IST", 19800))
 	for i := range items {
 		item := &items[i]
@@ -288,8 +294,8 @@ func (s *ipoSourceClient) collect(ctx context.Context) ([]ipoSourceIssue, map[st
 		} else {
 			results["detail:"+item.Symbol] = "ok"
 		}
-		if err = s.enrich(ctx, item); err != nil {
-			results["enrichment:"+item.Symbol] = "unavailable"
+		if err = s.enrich(ctx, item, enrichmentLinks); err != nil {
+			results["enrichment:"+item.Symbol] = err.Error()
 		} else {
 			results["enrichment:"+item.Symbol] = "ok"
 		}

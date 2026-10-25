@@ -67,6 +67,7 @@ Without `API_ADDR`, a valid `PORT` binds the service to `0.0.0.0:PORT`.
 See the [Render deployment guide](../docs/RENDER_DEPLOYMENT.md) for the hosted configuration.
 The [Azure VM guide](../docs/AZURE_VM_DEPLOYMENT.md) records the separate Azure IPO
 importer and the deferred WhatsApp handover; Render remains the application host.
+See [backend CI/CD](../docs/CI_CD.md) for tested deployments to both hosts.
 
 In another terminal:
 

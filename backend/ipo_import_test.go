@@ -129,7 +129,7 @@ func TestIPOCatalogueIntegration(t *testing.T) {
 	if err = db.QueryRow(`SELECT id FROM ipo_pos.ipos WHERE source_issue_id='SOURCEFIXTURE'`).Scan(&importedID); err != nil || importedID == manualID {
 		t.Fatal("manual row was merged", err)
 	}
-	if err = saveSourceIPO(ctx, db, item); err != nil {
+	if err = saveSourceIPOs(ctx, db, []ipoSourceIssue{item}); err != nil {
 		t.Fatal(err)
 	}
 	var replayID, jobStatus string
@@ -171,7 +171,7 @@ func TestIPOCatalogueIntegration(t *testing.T) {
 		t.Fatal(err)
 	}
 	partial := ipoSourceIssue{Symbol: item.Symbol, Name: item.Name, Board: item.Board, Subscriptions: []ipoSubscription{{Category: "total", Label: "Total", Multiple: ptr("3")}}}
-	if err = saveSourceIPO(ctx, db, partial); err != nil {
+	if err = saveSourceIPOs(ctx, db, []ipoSourceIssue{partial}); err != nil {
 		t.Fatal(err)
 	}
 	var lot int64

@@ -65,6 +65,8 @@ or expand variables. Process environment variables override matching API setting
 On a host that provides `DATABASE_URL`, the environment file may be absent.
 Without `API_ADDR`, a valid `PORT` binds the service to `0.0.0.0:PORT`.
 See the [Render deployment guide](../docs/RENDER_DEPLOYMENT.md) for the hosted configuration.
+The [Azure VM guide](../docs/AZURE_VM_DEPLOYMENT.md) records the separate Azure IPO
+importer and the deferred WhatsApp handover; Render remains the application host.
 
 In another terminal:
 
@@ -138,6 +140,7 @@ The root `.env` contains randomly generated local credentials:
 | `DATABASE_URL` | `ipo_platform_api` runtime role; no schema ownership, transaction deletion or truncation |
 | `MIGRATION_DATABASE_URL` | `ipo_platform_owner`, which owns the application schemas |
 | `WHATSAPP_DATABASE_URL` | Trusted pairing worker/viewer connection for WhatsApp migrations, sessions and verified account bindings |
+| `IPO_DATABASE_URL` | Optional trusted importer connection; defaults to `WHATSAPP_DATABASE_URL`. Set this and `IPO_JOB_TOKEN` without WhatsApp configuration on an IPO-only host |
 | `APP_ENV` | `development` enables signup through the existing WhatsApp login flow; absent/`production` requires provisioned staff |
 | `BOOTSTRAP_ADMIN_PASSWORD` | Initial app password, hashed with bcrypt when bootstrapped |
 

@@ -162,8 +162,11 @@ func (a *api) recordPerformance(ctx context.Context, config configuration) {
 	if a.whatsapp != nil {
 		recordPoolStats(ctx, "whatsapp", a.whatsapp.db.Stats())
 	}
+	if a.ipoDatabase != nil {
+		recordPoolStats(ctx, "ipo_import", a.ipoDatabase.Stats())
+	}
 	meter := sentry.NewMeter(ctx)
-	for worker, enabled := range map[string]bool{"whatsapp": a.whatsapp != nil, "ipo_import": a.whatsapp != nil && config.IPOJobToken != "", "profile_push": a.whatsapp != nil && config.FCMProjectID != ""} {
+	for worker, enabled := range map[string]bool{"whatsapp": a.whatsapp != nil, "ipo_import": a.ipoDatabase != nil, "profile_push": a.whatsapp != nil && config.FCMProjectID != ""} {
 		value := 0.0
 		if enabled {
 			value = 1

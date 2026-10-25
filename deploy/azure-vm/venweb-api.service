@@ -1,0 +1,23 @@
+[Unit]
+Description=venweb IPO API and WhatsApp workers
+Wants=network-online.target
+After=network-online.target
+StartLimitIntervalSec=0
+
+[Service]
+User=venweb
+Group=venweb
+WorkingDirectory=/opt/venweb
+ExecStart=/opt/venweb/ipo-api -env /etc/venweb/api.env
+Environment=API_ADDR=127.0.0.1:8180
+Restart=on-failure
+RestartSec=5
+TimeoutStopSec=30
+NoNewPrivileges=true
+PrivateTmp=true
+ProtectSystem=strict
+ProtectHome=true
+UMask=0077
+
+[Install]
+WantedBy=multi-user.target

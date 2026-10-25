@@ -15,6 +15,8 @@ import (
 	"time"
 
 	"github.com/getsentry/sentry-go"
+	"github.com/jackc/pgx/v5"
+	"github.com/jackc/pgx/v5/stdlib"
 )
 
 func (a *api) triggerIPORefresh(w http.ResponseWriter, r *http.Request) {
@@ -51,6 +53,26 @@ func (a *api) ipoImportStatus(w http.ResponseWriter, r *http.Request, _ actor) {
 	 'last_partial_refresh',(SELECT max(finished_at) FROM ipo_pos.ipo_import_runs WHERE status='partial'),
 	 'coverage','NSE only; BSE-only coverage unverified',
 	 'stale',NOT EXISTS(SELECT 1 FROM ipo_pos.ipo_import_runs WHERE status IN ('succeeded','partial') AND finished_at>now()-interval '90 minutes'))`)
+}
+
+func openIPOImportDatabase(ctx context.Context, dsn string) (*sql.DB, error) {
+	config, err := pgx.ParseConfig(dsn)
+	if err != nil {
+		return nil, errors.New("invalid IPO_DATABASE_URL configuration")
+	}
+	config.Tracer = databaseTrace{pool: "ipo_import"}
+	config.ConnectTimeout = 10 * time.Second
+	db := stdlib.OpenDB(*config)
+	db.SetMaxOpenConns(4)
+	db.SetMaxIdleConns(2)
+	db.SetConnMaxLifetime(30 * time.Minute)
+	readyCtx, cancel := context.WithTimeout(ctx, 10*time.Second)
+	defer cancel()
+	if err = db.PingContext(readyCtx); err != nil {
+		_ = db.Close()
+		return nil, errors.New("cannot connect to PostgreSQL; check IPO_DATABASE_URL and server availability")
+	}
+	return db, nil
 }
 
 func startIPOImporter(ctx context.Context, db *sql.DB) func() {

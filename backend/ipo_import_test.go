@@ -2,7 +2,6 @@ package main
 
 import (
 	"context"
-	"database/sql"
 	"encoding/json"
 	"net/http"
 	"net/http/httptest"
@@ -16,12 +15,23 @@ import (
 	"github.com/jackc/pgx/v5/stdlib"
 )
 
+func TestIPOImportDatabaseErrors(t *testing.T) {
+	ctx, cancel := context.WithCancel(context.Background())
+	cancel()
+	for _, dsn := range []string{"postgres://user:private-import-secret@localhost:invalid/db", "postgres://user:private-import-secret@127.0.0.1:1/db?sslmode=disable"} {
+		db, err := openIPOImportDatabase(ctx, dsn)
+		if db != nil || err == nil || strings.Contains(err.Error(), "private-import-secret") {
+			t.Fatal("invalid/canceled importer connection did not fail safely")
+		}
+	}
+}
+
 func TestIPOCatalogueIntegration(t *testing.T) {
 	dsn := os.Getenv("IPO_TEST_DATABASE_URL")
 	if dsn == "" {
 		t.Skip("use database/Test-Schema.ps1 -WithApiTests")
 	}
-	db, err := sql.Open("pgx", dsn)
+	db, err := openIPOImportDatabase(context.Background(), dsn)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -29,6 +39,13 @@ func TestIPOCatalogueIntegration(t *testing.T) {
 	var role, database string
 	if err = db.QueryRow(`SELECT current_user,current_database()`).Scan(&role, &database); err != nil || role != "schema_test" {
 		t.Fatal("requires disposable schema_test cluster")
+	}
+	if db.Stats().MaxOpenConnections != 4 {
+		t.Fatal("importer connection pool is not bounded")
+	}
+	var searchPath string
+	if err = db.QueryRow(`SHOW search_path`).Scan(&searchPath); err != nil || searchPath == "whatsapp" {
+		t.Fatal("standalone importer selected WhatsApp storage", err)
 	}
 	grants, err := os.ReadFile("../database/api_grants.sql")
 	if err != nil {

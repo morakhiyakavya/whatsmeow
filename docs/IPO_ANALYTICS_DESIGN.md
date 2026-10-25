@@ -2,7 +2,7 @@
 
 Status: assumptions/history API and source-fact snapshots are implemented
 in migration 015 and the existing Go backend, tested in disposable databases. They
-are installed in the existing local/hosted databases; API rollout is pending. Remaining
+are installed in the existing local/hosted databases and deployed on Render. Remaining
 dashboard/reconciliation/closing/listing contracts are proposed.
 The [dashboard requirements](IPO_POSITION_REPORTING.md) own product behaviour;
 the [rate guidance](PROJECT_VISION.md#application-rate-guidance-agreed-implementation-pending)

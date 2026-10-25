@@ -9,24 +9,31 @@ import (
 
 func TestIPOJobConfiguration(t *testing.T) {
 	for _, test := range []struct {
-		token, worker string
-		valid         bool
+		token, worker, importer, wantDatabase string
+		valid                                 bool
 	}{
-		{"", "", true}, {"short", "postgres://worker", false},
-		{strings.Repeat("a", 43), "", false}, {strings.Repeat("a", 43), "postgres://worker", true},
-		{strings.Repeat("a", 43) + "\n", "postgres://worker", false},
+		{"", "", "", "", true}, {"short", "postgres://worker", "", "", false},
+		{strings.Repeat("a", 43), "", "", "", false},
+		{strings.Repeat("a", 43), "postgres://worker", "", "postgres://worker", true},
+		{strings.Repeat("a", 43), "", "postgres://importer", "postgres://importer", true},
+		{strings.Repeat("a", 43), "postgres://worker", "postgres://importer", "postgres://importer", true},
+		{strings.Repeat("a", 43) + "\n", "postgres://worker", "", "", false},
 	} {
 		t.Setenv("DATABASE_URL", "postgres://runtime")
 		t.Setenv("IPO_JOB_TOKEN", test.token)
 		t.Setenv("WHATSAPP_DATABASE_URL", test.worker)
+		t.Setenv("IPO_DATABASE_URL", test.importer)
 		t.Setenv("FCM_PROJECT_ID", "")
 		t.Setenv("APP_ENV", "")
-		_, err := loadConfig(filepath.Join(t.TempDir(), "missing.env"))
+		config, err := loadConfig(filepath.Join(t.TempDir(), "missing.env"))
 		if (err == nil) != test.valid {
 			t.Fatalf("valid=%v error=%v", test.valid, err)
 		}
 		if err != nil && strings.Contains(err.Error(), test.token) {
 			t.Fatal("credential exposed")
+		}
+		if err == nil && (config.IPODatabaseURL != test.wantDatabase || config.WhatsAppDatabaseURL != test.worker) {
+			t.Fatal("importer configuration changed WhatsApp settings or ignored database precedence")
 		}
 	}
 }

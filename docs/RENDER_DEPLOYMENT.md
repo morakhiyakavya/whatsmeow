@@ -12,14 +12,40 @@ Deployed and verified on 25 October 2026 (IST) in `kavya's Workspace`:
 - API base URL: [whatsapp-pos-dev](https://whatsapp-pos-dev.onrender.com).
 - [Live health endpoint](https://whatsapp-pos-dev.onrender.com/health).
 - [Render dashboard](https://dashboard.render.com/web/srv-db5nundckfvc73arsvkg).
-- Deployed commit: `7c39e0bcab68fcd2168942321ec484b25c019080` on `main`.
-- Deployment: `dep-dbegbvnb9u1s739knmf0`; service: `srv-db5nundckfvc73arsvkg`.
+- Deployed commit: `c4bc1a3379db34e729c7e8a7ff8dffb95d85f5b7` on `main`.
+- Deployment: `dep-dbf0a5navr4c73cc3j80`; service: `srv-db5nundckfvc73arsvkg`.
 - One Free instance in Singapore; automatic deployments disabled.
 
+On 25 October at 13:34:02 UTC (19:04:02 IST), the configuration-only deployment
+above kept the same source/WhatsApp settings and set only `IPO_JOB_TOKEN` empty.
+IPO collection now runs independently on the Indian-region
+[Azure VM](AZURE_VM_DEPLOYMENT.md); its Sentry trigger targets Azure. Render must
+not run a competing importer against the same queue. The hosted health and
+unauthenticated boundaries remain available; WhatsApp processing stays on Render.
+
 Render reported the deployment live. Public HTTPS checks passed: `/health` returns
-200 with `{"status":"ok"}`; unauthenticated `/api/me` and business transaction-list
+200 with `{"status":"ok"}`; unauthenticated `/api/me` and assumptions/history
 requests return 401. Responses carry `Cache-Control: no-store`. The server started
 on `0.0.0.0:10000` using the two private Supabase role connections and bundled CA.
+
+The dashboard assumptions/history API and source-basis capture went live on
+25 October 2026 at 09:49:14 UTC (15:19:14 IST). Applied migration 015 once and
+refreshed runtime grants on the existing local/Supabase databases before rollout.
+Both have 33 POS tables; existing business, ledger/history and form-catalogue
+checksums are unchanged. Supabase captured migration-time baselines for 122 IPOs.
+The runtime role's new read/assumption-insert permissions and restricted source
+access were verified. GitHub had newer upstream library/dependency commits;
+merged them without conflicts and synchronised the backend/viewer module files.
+The combined revision passed backend integration tests/vet, viewer/session
+tests/vet and root library tests/vet using installed Go 1.27.1. The optional root
+Go 1.27.2 download stalled; the installed compiler satisfies the module's required
+Go version. Render built with Go 1.27.3 and the retained build cache.
+Verified remote main and the exact deployed commit. Health returned 200/ok;
+unauthenticated me, assumptions/history reads and assumption writes returned 401.
+The GET responses carried no-store. Startup/listening passed; deployment-window
+error-level logs were empty. No environment, resource or scheduler setting changed.
+Authenticated hosted assumption writes and real customer messages were not used
+for verification. The position/pricing engine and user screens remain planned.
 
 The Shareholder form type went live on 24 October 2026 at 19:25:28 UTC
 (25 October at 00:55:28 IST). Verified the existing workspace, service, repository,
@@ -27,7 +53,8 @@ branch, disabled automatic deployments and previous live revision before rollout
 Applied migration 014 once to Supabase and the existing local database as their
 migration owner, with catalogue snapshots and verified TLS for hosted access.
 Both runtime roles read eight entries with distinct Shareholder and Shares labels.
-Published and verified the commit above on remote `main`; one manual deployment
+Published and verified `7c39e0bcab68fcd2168942321ec484b25c019080` on remote `main`;
+manual deployment `dep-dbegbvnb9u1s739knmf0`
 reused the build cache and built that exact revision. Build/startup/listening
 succeeded, `/health` returned 200/ok, and unauthenticated me, form-type and
 transaction-list requests returned 401, all with `Cache-Control: no-store`.
@@ -244,6 +271,7 @@ In Render's private Environment settings, set only:
 |---|---|
 | `DATABASE_URL` | Restricted API URL from `.env.supabase`, with `sslrootcert=database/supabase-ca.crt` |
 | `WHATSAPP_DATABASE_URL` | Worker URL from `.env.supabase`, with the same certificate path |
+| `IPO_JOB_TOKEN` | Empty on Render; Azure owns the shared catalogue import queue |
 | `ALLOW_PASSWORD_LOGIN` | `false` |
 | `APP_ENV` | `development` for this dev service; production/unset disables automatic signup |
 | `SENTRY_DSN` | DSN for `vanitilabs/whatsapp-pos-api`, supplied privately |

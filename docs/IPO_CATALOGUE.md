@@ -22,10 +22,13 @@ Existing installations require an explicit migration; rollout notes below descri
 their last deployed version.
 
 Set `IPO_JOB_TOKEN` privately using at least 32 random bytes (43 URL-safe base64
-characters). The setting accepts 43–128 non-whitespace characters. The existing
-trusted `WHATSAPP_DATABASE_URL` worker connection supplies catalogue writes;
-importing itself requires no WhatsApp account, approval or customer send. An empty
-token disables execution and rejects triggers. Never expose it in a URL/app/log.
+characters). The setting accepts 43–128 non-whitespace characters. Set
+`IPO_DATABASE_URL` to the trusted worker connection for catalogue writes; when
+omitted it falls back to `WHATSAPP_DATABASE_URL` for existing deployments. Importing
+uses its own bounded PostgreSQL pool and requires no WhatsApp account, approval or
+customer send. An IPO-only host sets `IPO_DATABASE_URL` and `IPO_JOB_TOKEN` while
+leaving `WHATSAPP_DATABASE_URL` unset. An empty token disables execution and rejects
+triggers. Never expose credentials in a URL/app/log.
 
 ## Trigger and worker
 
@@ -113,6 +116,13 @@ excluded from upstream's code licence and require the operator's arrangements.
 
 ## Rollout and verification
 
+The 25 October Azure importer rollout is recorded in
+[the Azure VM guide](AZURE_VM_DEPLOYMENT.md). The refresh monitor now targets the
+Azure Indian-region host; Render retains the application/WhatsApp workers with
+`IPO_JOB_TOKEN` empty, so it cannot claim catalogue jobs from the shared queue.
+The historical Render source-access results below remain relevant: a successful
+trigger is not evidence of a completed or fully enriched collection.
+
 Current development rollout (21 October 2026): migration 013 is installed locally
 and in Supabase; Render is live on `0571bfb` (linked-device branding update).
 The protected trigger/deduplication
@@ -142,8 +152,8 @@ reliable source access. A later failed scheduled run exhausted its three attempt
 without erasing the previously imported products. The manual refresh above is a
 temporary population, not a new local scheduler or a source-access resolution.
 
-The separate Sentry uptime monitor uses:
-`https://whatsapp-pos-dev.onrender.com/internal/jobs/ipo-refresh`, POST, 1800-second
+The separate Sentry uptime monitor now uses:
+`https://172-198-153-142.sslip.io/internal/jobs/ipo-refresh`, POST, 1800-second
 interval, protected Authorization header, empty body, response capture disabled.
 Keep the existing health monitor. The user approved the possible USD 1/month
 second-monitor charge. Additional monitors require PAYG, which Sentry only offers

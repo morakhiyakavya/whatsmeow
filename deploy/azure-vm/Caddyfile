@@ -1,0 +1,4 @@
+api.example.com {
+	# shortcut: auth throttling shares the proxy IP; add trusted-proxy handling before multi-user cutover.
+	reverse_proxy 127.0.0.1:8180
+}

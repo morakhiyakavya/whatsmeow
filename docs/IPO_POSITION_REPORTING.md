@@ -1,7 +1,7 @@
 # IPO positions and historical reporting
 
 Agreed behaviour. Settings/history API and source-fact snapshots are implemented
-locally in migration 015; reporting APIs and screens remain planned.
+in migration 015 and deployed on Render; reporting APIs and screens remain planned.
 Reuse the transaction ledger, immutable versions, shared IPO catalogue and business
 memberships. Pricing follows the [agreed workbook formulas](PROJECT_VISION.md#application-rate-guidance-agreed-implementation-pending).
 The [database and API design](IPO_ANALYTICS_DESIGN.md) translates these requirements

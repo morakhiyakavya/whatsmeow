@@ -31,6 +31,7 @@ type api struct {
 	limiter           loginLimiter
 	dummyHash         []byte
 	whatsapp          *whatsAppService
+	ipoDatabase       *sql.DB
 	passwordLogin     bool
 	developmentSignup bool
 	release           string
@@ -106,16 +107,21 @@ func run(envPath string, bootstrap bool) error {
 	app.developmentSignup = config.DevelopmentSignup
 	app.release = config.SentryRelease
 	app.ipoJobToken = config.IPOJobToken
+	if config.IPOJobToken != "" {
+		app.ipoDatabase, err = openIPOImportDatabase(ctx, config.IPODatabaseURL)
+		if err != nil {
+			return err
+		}
+		defer app.ipoDatabase.Close()
+		stopImporter := startIPOImporter(ctx, app.ipoDatabase)
+		defer stopImporter()
+	}
 	if config.WhatsAppDatabaseURL != "" {
 		app.whatsapp, err = openWhatsAppService(ctx, config.WhatsAppDatabaseURL)
 		if err != nil {
 			return err
 		}
 		defer app.whatsapp.close()
-		if config.IPOJobToken != "" {
-			stopImporter := startIPOImporter(ctx, app.whatsapp.db)
-			defer stopImporter()
-		}
 		if config.FCMProjectID != "" {
 			sender, err := newFCMSender(ctx, config.FCMProjectID, config.FCMCredentialsFile)
 			if err != nil {

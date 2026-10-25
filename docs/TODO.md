@@ -14,8 +14,9 @@
 - [x] Add the backend business-shared GMP, expected application-count and Subject 2
   factor/history API, with migration 015, source-fact snapshots, admin-only writes,
   cashier reads, business isolation and concurrent-version checks.
-- [ ] Deploy the tested backend, then build settings user controls. Migration 015
-  and runtime grants are installed in both existing application databases.
+- [x] Apply migration 015/runtime grants locally and on Supabase; deploy the tested
+  backend on the existing Render service and verify health/authentication boundaries.
+- [ ] Build user controls for GMP, expected application counts and Subject 2 factor.
 - [ ] Implement the agreed [application rate guidance](PROJECT_VISION.md#application-rate-guidance-agreed-implementation-pending)
   with the workbook's Subject 1 probability-based rate and Subject 2 GMP-value
   factor. Give users an adjustable Subject 2 factor starting at 80%; changes affect

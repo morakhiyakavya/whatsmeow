@@ -200,6 +200,7 @@ func TestPerformanceInstrumentationIntegration(t *testing.T) {
 	if db.Stats().WaitCount < 1 || db.Stats().WaitDuration <= 0 {
 		t.Fatal("pool acquisition wait was not measured")
 	}
+	app.ipoDatabase = db
 	app.recordPerformance(ctx, configuration{})
 	capture.Lock()
 	defer capture.Unlock()
@@ -216,13 +217,17 @@ func TestPerformanceInstrumentationIntegration(t *testing.T) {
 	if !found {
 		t.Fatal("real database query did not become a child of the HTTP trace")
 	}
-	metricFound := false
+	metricFound, importerEnabled := false, false
 	for _, metric := range capture.metrics {
 		if metric.Name == "server.queue.depth" {
 			metricFound = true
 		}
+		if metric.Name == "server.worker.enabled" && metric.Attributes["worker.name"].AsInterface() == "ipo_import" {
+			value, _ := metric.Value.Float64()
+			importerEnabled = value == 1
+		}
 	}
-	if !metricFound {
-		t.Fatal("runtime role queue inventory failed")
+	if !metricFound || !importerEnabled {
+		t.Fatal("queue inventory or standalone importer telemetry failed")
 	}
 }

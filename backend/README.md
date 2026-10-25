@@ -11,7 +11,19 @@ application amounts. A protected Sentry uptime POST queues a durable refresh job
 Apply migration 013 and runtime grants before starting this version.
 The dashboard assumptions increment additionally requires
 [migration 015](../database/015_dashboard_assumptions.sql) after 014 and refreshed
-runtime grants. This repository's startup check now requires migrations through 015.
+runtime grants. The current contact-notification increment below also requires 016.
+
+The contact-notification extension requires [migration 016](../database/016_contact_directory_push.sql)
+and refreshed runtime grants before starting this version. Shared names, customer
+details and WhatsApp registration changes notify eligible Android installations;
+WhatsApp name/About events also invalidate the existing profile cache. See the
+[FCM contract](../docs/FCM_ANDROID_HANDOVER.md) for payloads and rollout requirements.
+
+Android's local directory uses `GET /api/businesses/{businessID}/contacts/sync`.
+This authenticated, business-scoped feed returns customers, the requesting user's
+shared display names and saved registration observations in pages of up to 100
+records. See the [local synchronisation contract](../docs/FCM_ANDROID_HANDOVER.md#local-directory-synchronisation)
+for revisions/cursors and atomic client publication. No migration beyond 016 is added.
 
 For the complete staff and mobile workflow, read the
 [POS transactions and shared contacts guide](../docs/POS_AND_CONTACTS_GUIDE.md). It covers

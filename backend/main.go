@@ -86,6 +86,8 @@ func run(envPath string, bootstrap bool) error {
 	if err := db.QueryRowContext(ctx, `SELECT to_regclass('ipo_pos.login_attempts') IS NOT NULL
 		AND to_regclass('ipo_pos.contact_profile_revisions') IS NOT NULL AND to_regclass('ipo_pos.profile_push_outbox') IS NOT NULL
 		AND to_regclass('ipo_pos.push_devices') IS NOT NULL
+		AND to_regclass('ipo_pos.directory_push_outbox') IS NOT NULL
+		AND to_regclass('ipo_pos.contact_directory_revisions') IS NOT NULL
 		AND to_regclass('ipo_pos.auth_events') IS NOT NULL
 		AND to_regclass('ipo_pos.ipo_import_runs') IS NOT NULL
 		AND to_regclass('ipo_pos.ipo_dashboard_assumption_versions') IS NOT NULL
@@ -98,7 +100,7 @@ func run(envPath string, bootstrap bool) error {
         AND EXISTS (SELECT 1 FROM pg_constraint WHERE conrelid=to_regclass('ipo_pos.transaction_versions') AND conname='transaction_versions_nonzero_quantity_check')
         AND EXISTS (SELECT 1 FROM pg_constraint WHERE conrelid=to_regclass('ipo_pos.transactions') AND conname='transactions_signed_rate_check')
         AND EXISTS (SELECT 1 FROM pg_constraint WHERE conrelid=to_regclass('ipo_pos.transaction_versions') AND conname='transaction_versions_signed_rate_check')`).Scan(&schemaReady); err != nil || !schemaReady {
-		return errors.New("apply application migrations through database/015_dashboard_assumptions.sql before starting the API")
+		return errors.New("apply application migrations through database/016_contact_directory_push.sql before starting the API")
 	}
 	app, err := newAPI(db)
 	if err != nil {
@@ -188,6 +190,7 @@ func (a *api) routes() http.Handler {
 	mux.HandleFunc("POST /api/businesses/{businessID}/customers", a.protect(false, a.createCustomer))
 	mux.HandleFunc("POST /api/businesses/{businessID}/contacts", a.protect(false, a.importContacts))
 	mux.HandleFunc("GET /api/businesses/{businessID}/contacts", a.protect(false, a.lookupContact))
+	mux.HandleFunc("GET /api/businesses/{businessID}/contacts/sync", a.protect(false, a.syncContactDirectory))
 	mux.HandleFunc("DELETE /api/businesses/{businessID}/contacts", a.protect(false, a.removeContactName))
 	mux.HandleFunc("GET /api/businesses/{businessID}/ipos", a.protect(false, a.listIPOs))
 	mux.HandleFunc("GET /api/businesses/{businessID}/ipos/import-status", a.protect(false, a.ipoImportStatus))

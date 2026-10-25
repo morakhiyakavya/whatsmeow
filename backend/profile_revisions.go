@@ -15,6 +15,10 @@ import (
 
 // A revision and its outbox entries become visible in the same commit.
 func saveProfileObservation(ctx context.Context, db *sql.DB, user actor, account, binding, phone, state, pictureID string, eventAt time.Time) (string, error) {
+	return saveProfileChange(ctx, db, user, account, binding, phone, state, pictureID, eventAt, false)
+}
+
+func saveProfileChange(ctx context.Context, db *sql.DB, user actor, account, binding, phone, state, pictureID string, eventAt time.Time, metadata bool) (string, error) {
 	tx, err := db.BeginTx(ctx, nil)
 	if err != nil {
 		return "", err
@@ -48,6 +52,12 @@ func saveProfileObservation(ctx context.Context, db *sql.DB, user actor, account
 	if err != nil && !initial {
 		return "", err
 	}
+	if metadata {
+		state, pictureID = previousState, previousID
+		if initial {
+			state = "changed"
+		}
+	}
 	if !eventAt.IsZero() && previousEvent.Valid && (eventAt.Before(previousEvent.Time) ||
 		(eventAt.Equal(previousEvent.Time) && state == previousState && pictureID == previousID)) {
 		return strconv.FormatInt(revision, 10), tx.Commit()
@@ -59,6 +69,9 @@ func saveProfileObservation(ctx context.Context, db *sql.DB, user actor, account
 	// Fetching the image announced by an event resolves its state without another invalidation.
 	if previousState == "changed" && state == "available" && previousID != "" && previousID == pictureID {
 		changed = false
+	}
+	if metadata {
+		changed = true
 	}
 	if state == "changed" && pictureID == "" {
 		changed = true
@@ -78,7 +91,7 @@ func saveProfileObservation(ctx context.Context, db *sql.DB, user actor, account
 		DO UPDATE SET profile_revision=EXCLUDED.profile_revision,picture_state=EXCLUDED.picture_state,
 		picture_id=EXCLUDED.picture_id,event_at=COALESCE(EXCLUDED.event_at,ipo_pos.contact_profile_revisions.event_at),
 		updated_at=clock_timestamp()`, user.BusinessID, account, phone, revision, state, pictureID, eventArg)
-	if err == nil && (changed && !initial || !eventAt.IsZero()) {
+	if err == nil && (changed && !initial || !eventAt.IsZero() || metadata) {
 		_, err = tx.ExecContext(ctx, `INSERT INTO ipo_pos.profile_push_outbox AS q
 			(installation_id,device_generation,user_id,business_id,whatsapp_account_id,auth_generation,phone_number,profile_revision)
 			SELECT p.installation_id,p.generation,p.user_id,$1,$2,$3,$4,$5
@@ -95,6 +108,35 @@ func saveProfileObservation(ctx context.Context, db *sql.DB, user actor, account
 		return "", err
 	}
 	return strconv.FormatInt(revision, 10), tx.Commit()
+}
+
+func (s *whatsAppService) contactMetadataChanged(ctx context.Context, device *store.Device, user actor, account, binding string, event any) error {
+	var jid, alternate types.JID
+	switch event := event.(type) {
+	case *events.PushName:
+		if event.OldPushName == event.NewPushName {
+			return nil
+		}
+		jid, alternate = event.JID, event.JIDAlt
+	case *events.BusinessName:
+		if event.OldBusinessName == event.NewBusinessName {
+			return nil
+		}
+		jid = event.JID
+	case *events.UserAbout:
+		jid = event.JID
+	default:
+		return nil
+	}
+	phone, err := pictureEventPhone(ctx, device, jid)
+	if err == nil && phone == "" && !alternate.IsEmpty() {
+		phone, err = pictureEventPhone(ctx, device, alternate)
+	}
+	if err != nil || phone == "" {
+		return err
+	}
+	_, err = saveProfileChange(ctx, s.db, user, account, binding, phone, "", "", time.Time{}, true)
+	return err
 }
 
 func pictureEventPhone(ctx context.Context, device *store.Device, jid types.JID) (string, error) {

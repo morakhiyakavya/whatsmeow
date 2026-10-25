@@ -328,7 +328,8 @@ func (s *whatsAppService) run(user actor, id string, c *accountConnection, resto
 			return
 		}
 		switch evt.(type) {
-		case *events.PairSuccess, *events.Connected, *events.Disconnected, *events.ManualLoginReconnect, *events.Picture, events.PermanentDisconnect:
+		case *events.PairSuccess, *events.Connected, *events.Disconnected, *events.ManualLoginReconnect,
+			*events.Picture, *events.PushName, *events.BusinessName, *events.UserAbout, events.PermanentDisconnect:
 			select {
 			case lifecycle <- evt:
 			case <-ctx.Done():
@@ -480,6 +481,15 @@ func (s *whatsAppService) run(user actor, id string, c *accountConnection, resto
 			}
 		case evt := <-lifecycle:
 			switch evt := evt.(type) {
+			case *events.PushName, *events.BusinessName, *events.UserAbout:
+				if saved.Valid && c.state().State == "connected" {
+					eventCtx, stop := context.WithTimeout(ctx, 5*time.Second)
+					err = s.contactMetadataChanged(eventCtx, device, user, id, saved.String, evt)
+					stop()
+					if err != nil {
+						return "storage_unavailable"
+					}
+				}
 			case *events.Message:
 				if saved.Valid && c.state().State == "connected" {
 					eventCtx, stop := context.WithTimeout(ctx, 5*time.Second)

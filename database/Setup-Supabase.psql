@@ -34,6 +34,7 @@ SET ROLE ipo_platform_owner;
 \ir 013_ipo_catalogue.sql
 \ir 014_shareholder_form_type.sql
 \ir 015_dashboard_assumptions.sql
+\ir 016_contact_directory_push.sql
 REVOKE ALL ON SCHEMA ipo_pos, whatsapp FROM PUBLIC;
 RESET ROLE;
 \set api_role ipo_platform_api
@@ -49,6 +50,8 @@ BEGIN
         OR has_table_privilege('ipo_platform_api','ipo_pos.whatsapp_number_checks','INSERT')
         OR has_table_privilege('ipo_platform_api','ipo_pos.contact_profile_revisions','UPDATE')
         OR has_table_privilege('ipo_platform_api','ipo_pos.profile_push_outbox','INSERT')
+        OR has_table_privilege('ipo_platform_api','ipo_pos.directory_push_outbox','INSERT')
+        OR has_table_privilege('ipo_platform_api','ipo_pos.contact_directory_revisions','UPDATE')
         OR pg_has_role('ipo_platform_api','ipo_platform_owner','MEMBER') THEN
         RAISE EXCEPTION 'Runtime role has excessive permissions';
     END IF;

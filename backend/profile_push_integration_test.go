@@ -443,6 +443,19 @@ func testPictureEvents(t *testing.T, s *whatsAppService, client *fakePairingClie
 	expectStatus(t, 502, status, object)
 	awaitRevision(2)
 	client.userInfo, client.pictureInfo = nil, nil
+	client.handler(&events.PushName{JID: types.NewJID("unknown", types.HiddenUserServer), JIDAlt: jid, OldPushName: "Old", NewPushName: "New"})
+	awaitRevision(3)
+	client.handler(&events.BusinessName{JID: lid, OldBusinessName: "Old business", NewBusinessName: "New business"})
+	awaitRevision(4)
+	client.handler(&events.UserAbout{JID: jid, Status: "Private About", Timestamp: timestamp})
+	awaitRevision(5)
+	var pictureState string
+	if err := s.db.QueryRow(`SELECT picture_state FROM ipo_pos.contact_profile_revisions
+		WHERE business_id=$1 AND whatsapp_account_id=$2 AND phone_number=$3`, business, account, phone).Scan(&pictureState); err != nil || pictureState != "not_set" {
+		t.Fatal("metadata invalidation changed the known photo state", err)
+	}
+	client.handler(&events.PushName{JID: jid, OldPushName: "Same", NewPushName: "Same"})
+	client.handler(&events.UserAbout{JID: types.NewJID("group", types.GroupServer)})
 	if phone, err := pictureEventPhone(context.Background(), client.device, types.NewJID("group", types.GroupServer)); err != nil || phone != "" {
 		t.Fatal("group photo was treated as a contact")
 	}

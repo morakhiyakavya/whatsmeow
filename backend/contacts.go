@@ -43,6 +43,11 @@ func (a *api) importContacts(w http.ResponseWriter, r *http.Request, user actor)
 		return
 	}
 	defer tx.Rollback()
+	// Lock before contact rows: concurrent batches must not invert row/outbox lock order.
+	if _, err = tx.ExecContext(r.Context(), `SELECT pg_advisory_xact_lock(hashtextextended($1,0))`, "contact-directory/"+user.BusinessID); err != nil {
+		dbFailure(w, err)
+		return
+	}
 	for _, c := range input.Contacts {
 		_, err = tx.ExecContext(r.Context(), `INSERT INTO ipo_pos.contact_names AS n
             (business_id,phone_number,supplied_by_user_id,name) VALUES($1,$2,$3,$4)

@@ -217,7 +217,7 @@ func TestBusinessDataSyncIntegration(t *testing.T) {
 	}), "business"); err != nil {
 		t.Fatal(err)
 	}
-	code, body, _ = client.request("GET", path, nil, "")
+	code, _, _ = client.request("GET", path, nil, "")
 	if code != 401 && code != 403 {
 		t.Fatal("revoked membership read data", code)
 	}

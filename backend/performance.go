@@ -180,8 +180,8 @@ func (a *api) recordPerformance(ctx context.Context, config configuration) {
 	meter.Gauge("server.runtime.gc_cpu_seconds.total", samples[2].Value.Float64(), sentry.WithUnit(sentry.UnitSecond))
 	readCtx, cancel := context.WithTimeout(ctx, 2*time.Second)
 	defer cancel()
-	var confirmations, pushes, directoryPushes, imports int64
-	var confirmationAge, pushAge, directoryAge, importAge float64
+	var confirmations, pushes, directoryPushes, businessPushes, imports int64
+	var confirmationAge, pushAge, directoryAge, businessAge, importAge float64
 	err := a.db.QueryRowContext(readCtx, `SELECT
 	 (SELECT count(*) FROM ipo_pos.transaction_confirmations WHERE status IN ('pending','sending')),
 	 COALESCE((SELECT extract(epoch FROM clock_timestamp()-min(created_at)) FROM ipo_pos.transaction_confirmations WHERE status IN ('pending','sending')),0),
@@ -189,8 +189,10 @@ func (a *api) recordPerformance(ctx context.Context, config configuration) {
 	 COALESCE((SELECT extract(epoch FROM clock_timestamp()-min(next_attempt_at)) FROM ipo_pos.profile_push_outbox WHERE next_attempt_at<=now() AND attempts<5 AND expires_at>now()),0),
 	 (SELECT count(*) FROM ipo_pos.directory_push_outbox WHERE next_attempt_at<=now() AND attempts<5 AND expires_at>now()),
 	 COALESCE((SELECT extract(epoch FROM clock_timestamp()-min(next_attempt_at)) FROM ipo_pos.directory_push_outbox WHERE next_attempt_at<=now() AND attempts<5 AND expires_at>now()),0),
+	 (SELECT count(*) FROM ipo_pos.business_push_outbox WHERE next_attempt_at<=now() AND attempts<5 AND expires_at>now()),
+	 COALESCE((SELECT extract(epoch FROM clock_timestamp()-min(next_attempt_at)) FROM ipo_pos.business_push_outbox WHERE next_attempt_at<=now() AND attempts<5 AND expires_at>now()),0),
 	 (SELECT count(*) FROM ipo_pos.ipo_import_runs WHERE status IN ('pending','running','failed','partial') AND attempts<3 AND next_attempt_at<=now()),
-	 COALESCE((SELECT extract(epoch FROM clock_timestamp()-min(next_attempt_at)) FROM ipo_pos.ipo_import_runs WHERE status IN ('pending','running','failed','partial') AND attempts<3 AND next_attempt_at<=now()),0)`).Scan(&confirmations, &confirmationAge, &pushes, &pushAge, &directoryPushes, &directoryAge, &imports, &importAge)
+	 COALESCE((SELECT extract(epoch FROM clock_timestamp()-min(next_attempt_at)) FROM ipo_pos.ipo_import_runs WHERE status IN ('pending','running','failed','partial') AND attempts<3 AND next_attempt_at<=now()),0)`).Scan(&confirmations, &confirmationAge, &pushes, &pushAge, &directoryPushes, &directoryAge, &businessPushes, &businessAge, &imports, &importAge)
 	if err != nil {
 		sentry.NewLogger(ctx).Warn().String("outcome", operationOutcome(err)).Emit("Performance queue snapshot unavailable")
 		return
@@ -199,7 +201,7 @@ func (a *api) recordPerformance(ctx context.Context, config configuration) {
 		name  string
 		count int64
 		age   float64
-	}{{"confirmation", confirmations, confirmationAge}, {"profile_push", pushes, pushAge}, {"directory_push", directoryPushes, directoryAge}, {"ipo_import", imports, importAge}} {
+	}{{"confirmation", confirmations, confirmationAge}, {"profile_push", pushes, pushAge}, {"directory_push", directoryPushes, directoryAge}, {"business_push", businessPushes, businessAge}, {"ipo_import", imports, importAge}} {
 		option := sentry.WithAttributes(attribute.String("queue.name", queue.name))
 		meter.Gauge("server.queue.depth", float64(queue.count), option)
 		meter.Gauge("server.queue.oldest_age", max(0, queue.age), sentry.WithUnit(sentry.UnitSecond), option)

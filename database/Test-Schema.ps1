@@ -46,7 +46,7 @@ try {
         if ($LASTEXITCODE -eq 0) { throw 'Hosted setup unexpectedly accepted an existing installation' }
     }
 
-    foreach ($sqlFile in @('001_initial.sql', '002_api.sql', '003_whatsapp_accounts.sql', '004_contact_names.sql', '005_transaction_confirmations.sql', '006_passwordless_sessions.sql', '007_whatsapp_number_checks.sql', '008_signed_transaction_quantity.sql', '009_signed_transaction_rate.sql', '010_development_signup.sql', '011_contact_profile_push.sql', '012_account_recovery.sql', '013_ipo_catalogue.sql', '014_shareholder_form_type.sql', '015_dashboard_assumptions.sql', '016_contact_directory_push.sql', 'schema_test.sql')) {
+    foreach ($sqlFile in @('001_initial.sql', '002_api.sql', '003_whatsapp_accounts.sql', '004_contact_names.sql', '005_transaction_confirmations.sql', '006_passwordless_sessions.sql', '007_whatsapp_number_checks.sql', '008_signed_transaction_quantity.sql', '009_signed_transaction_rate.sql', '010_development_signup.sql', '011_contact_profile_push.sql', '012_account_recovery.sql', '013_ipo_catalogue.sql', '014_shareholder_form_type.sql', '015_dashboard_assumptions.sql', '016_contact_directory_push.sql', '017_business_data_sync.sql', 'schema_test.sql')) {
         $taskSqlPath = Join-Path $PSScriptRoot $sqlFile
         & (Join-Path $PostgresBin 'psql.exe') --no-psqlrc --set ON_ERROR_STOP=1 --host=127.0.0.1 --port $taskPort --username=schema_test --dbname=postgres --file $taskSqlPath
         if ($LASTEXITCODE -ne 0) { throw "Schema validation failed: $sqlFile" }

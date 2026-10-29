@@ -44,10 +44,13 @@ func startProfilePush(ctx context.Context, db *sql.DB, sender pushSender) func()
 					workCtx, stop = context.WithTimeout(ctx, 15*time.Second)
 					directoryFound, directoryErr := deliverDirectoryPush(workCtx, db, sender)
 					stop()
-					if err != nil || directoryErr != nil {
-						log.Print("Contact notification storage unavailable")
+					workCtx, stop = context.WithTimeout(ctx, 15*time.Second)
+					businessFound, businessErr := deliverContactPush(workCtx, db, sender, "business")
+					stop()
+					if err != nil || directoryErr != nil || businessErr != nil {
+						log.Print("Notification storage unavailable")
 					}
-					if err != nil || directoryErr != nil || (!found && !directoryFound) {
+					if err != nil || directoryErr != nil || businessErr != nil || (!found && !directoryFound && !businessFound) {
 						break
 					}
 				}
@@ -58,19 +61,23 @@ func startProfilePush(ctx context.Context, db *sql.DB, sender pushSender) func()
 }
 
 func deliverProfilePush(ctx context.Context, db *sql.DB, sender pushSender) (worked bool, resultErr error) {
-	return deliverContactPush(ctx, db, sender, false)
+	return deliverContactPush(ctx, db, sender, "profile")
 }
 
 func deliverDirectoryPush(ctx context.Context, db *sql.DB, sender pushSender) (bool, error) {
-	return deliverContactPush(ctx, db, sender, true)
+	return deliverContactPush(ctx, db, sender, "directory")
 }
 
-func deliverContactPush(ctx context.Context, db *sql.DB, sender pushSender, directory bool) (worked bool, resultErr error) {
+func deliverContactPush(ctx context.Context, db *sql.DB, sender pushSender, stream string) (worked bool, resultErr error) {
+	directory := stream != "profile"
 	table, revisionColumn := "ipo_pos.profile_push_outbox", "profile_revision"
 	fields := "q.whatsapp_account_id,q.phone_number,q.profile_revision,q.auth_generation"
 	if directory {
 		table, revisionColumn = "ipo_pos.directory_push_outbox", "revision"
 		fields = "''::text,''::text,q.revision,0::bigint"
+	}
+	if stream == "business" {
+		table = "ipo_pos.business_push_outbox"
 	}
 	span := startOperation(ctx, "queue.process", "profile_push.deliver")
 	span.SetData("push.directory", directory)
@@ -104,6 +111,9 @@ func deliverContactPush(ctx context.Context, db *sql.DB, sender pushSender, dire
 	queue := "profile_push"
 	if directory {
 		queue = "directory_push"
+	}
+	if stream == "business" {
+		queue = "business_push"
 	}
 	recordQueueAge(ctx, queue, due)
 	// Recheck session, installation generation, link ownership and business access immediately before sending.
@@ -142,6 +152,10 @@ func deliverContactPush(ctx context.Context, db *sql.DB, sender pushSender, dire
 		if directory {
 			data = map[string]string{"type": "contacts_changed", "user_id": job.user,
 				"business_id": job.business, "directory_revision": strconv.FormatInt(job.revision, 10)}
+		}
+		if stream == "business" {
+			data = map[string]string{"type": "business_data_changed", "user_id": job.user,
+				"business_id": job.business, "revision": strconv.FormatInt(job.revision, 10)}
 		}
 		outcome = sender.send(send.Context(), token, data)
 		var sendErr error

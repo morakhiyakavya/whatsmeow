@@ -5,6 +5,12 @@ application sign-in, business membership, customers, the shared IPO/form catalog
 transactions, complete immutable transaction history, and business-owned WhatsApp
 account registration. No frontend is required to exercise the API.
 
+Transaction and analysis-input sync additionally requires migration 017 and
+refreshed runtime grants. `GET /api/businesses/{businessID}/data/sync` provides
+revision-checked deltas for transactions, saved assumptions and shared IPO/source
+data. FCM carries only a business revision hint. See [the sync contract](../docs/BUSINESS_DATA_SYNC.md)
+for Android refresh policy, payloads and rollout. Position calculations remain pending.
+
 The [IPO catalogue importer](../docs/IPO_CATALOGUE.md) adds source-owned IPO terms,
 subscriptions, reservations, promoter shareholding, anchor lock-ins and category
 application amounts. A protected Sentry uptime POST queues a durable refresh job.

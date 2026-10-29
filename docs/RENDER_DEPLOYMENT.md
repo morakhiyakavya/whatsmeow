@@ -7,7 +7,7 @@ business/admin or copy local WhatsApp sessions.
 
 ## Current deployment
 
-Deployed and verified on 25 October 2026 (IST) in `kavya's Workspace`:
+Deployed and verified on 26 October 2026 (IST) in `kavya's Workspace`:
 
 - API base URL: [whatsapp-pos-dev](https://whatsapp-pos-dev.onrender.com).
 - [Live health endpoint](https://whatsapp-pos-dev.onrender.com/health).
@@ -15,6 +15,39 @@ Deployed and verified on 25 October 2026 (IST) in `kavya's Workspace`:
 - Source: the tested `main` SHA from the latest successful [CI/CD run](CI_CD.md).
 - Service: `srv-db5nundckfvc73arsvkg`; the exact live deploy/SHA is in the dashboard.
 - One Free instance in Singapore; native auto-deploy is disabled and GitHub Actions triggers verified deployments.
+
+The contact-directory rollout applied migration 016 once to the shared Supabase
+database and published `f69accbacdc1f6c82eae4d91416b7ed5ed3c62b9` through
+[the deployment workflow](https://github.com/morakhiyakavya/whatsmeow/actions/runs/40221805283).
+Render deployment `dep-dbf4ngfavr4c73cqe4hg` became live at 18:35:35 UTC on
+25 October (00:05:35 IST on 26 October). Azure's deployment job confirmed the same
+revision; both hosts returned health 200 and unauthenticated API/directory-sync
+401 with `no-store`. Their existing application/WhatsApp versus IPO-only roles
+are retained.
+
+The documentation-newline correction `68188daa6d8cc7fa3bdca6cd738d98e74ef81c99`
+then passed [both deployment jobs](https://github.com/morakhiyakavya/whatsmeow/actions/runs/40222179026)
+and the separate [Go 1.26/1.27 workflow](https://github.com/morakhiyakavya/whatsmeow/actions/runs/40222179011).
+It is the current revision on both hosts. Render deployment
+`dep-dbf4ptivcj2c73er6t20` became live at 00:10:32 IST on 26 October. The preceding
+Go run failed only its document end-of-file hook; all application checks passed.
+
+FCM sending is now configured for Firebase project `vanitilabs`, using dedicated
+service account `venweb-fcm@vanitilabs.iam.gserviceaccount.com` with only
+`roles/firebasecloudmessaging.admin`. Its private key is mounted as Render secret
+file `/etc/secrets/venweb-fcm-server.json`; `FCM_PROJECT_ID` and
+`GOOGLE_APPLICATION_CREDENTIALS` select it. No credential is tracked in Git or
+bundled into Android. Google's HTTP v1 `validate_only` accepted an existing device
+registration; this deliberately sent no notification. An earlier configuration
+deployment failed before the secret file was mounted, retaining the previous
+healthy release; the subsequent source deployment succeeded. Real device delivery
+and background scheduling still require device verification.
+
+Android development APK version 0.2.3 (versionCode 6) is available in the sibling
+`transactions/venweb.apk`. Its signing certificate matches the preceding APK.
+Install this build to enable the encrypted local directory and background sync;
+initial sync, authentication, customer creation and transaction saves still use
+the server. It is a debug build, not a Play Store release.
 
 On 25 October at 13:34:02 UTC (19:04:02 IST), configuration-only deployment
 `dep-dbf0a5navr4c73cc3j80` retained source `c4bc1a3` and the WhatsApp settings,

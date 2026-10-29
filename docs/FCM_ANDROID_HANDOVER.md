@@ -1,5 +1,19 @@
 # Contact and WhatsApp profile invalidations for venweb Android
 
+Transaction and analysis-input notifications use the separate
+[business-data sync contract](BUSINESS_DATA_SYNC.md), requiring migration 017.
+Their FCM payload contains only recipient/business IDs and a revision.
+
+## Hosted rollout (26 October 2026 IST)
+
+Migration 016 and the revision-checked sync endpoint are deployed. Render now
+uses the dedicated `venweb-fcm` service account in project `vanitilabs`; Google's
+`validate_only` accepted an existing installation without delivering a message.
+See [the deployment record](RENDER_DEPLOYMENT.md) for source and credential setup.
+The matching Android development APK is sibling `transactions/venweb.apk`,
+version 0.2.3 (versionCode 6). Real FCM reception/background execution and a
+production signing/release build remain unchecked.
+
 ## Local directory synchronisation
 
 The sibling Android app now stores contact records locally in SQLite, with encrypted
@@ -46,7 +60,7 @@ in the background, then a directory sync saves the authoritative result locally.
 Saved observations expire after 24 hours for filtering; unknown numbers stay selectable.
 Photo/name/About metadata retains the existing event-driven no-expiry policy.
 
-No new backend table, Firebase dependency or migration beyond the pending 016 is
+No new backend table, Firebase dependency or migration beyond 016 is
 needed for this feed. Deploy the feed before installing the local-first Android
 build. Full-snapshot cost at production scale, real FCM delivery and device background
 scheduling remain unverified. FCM is a change hint rather than the only data source.

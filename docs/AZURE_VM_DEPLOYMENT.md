@@ -1,5 +1,23 @@
 # Azure VM deployment
 
+## Transaction sync rollout — 30 October 2026
+
+Shared Supabase migration 017/runtime grants are applied and Render is live at
+`e1ec5d33ccc023a5317986576e3182b3ae6fe2ef`. Azure deployment job `123459562310`
+in [workflow 40877140355](https://github.com/morakhiyakavya/whatsmeow/actions/runs/40877140355)
+passed artifact download/checksum but timed out connecting to port 22 before the
+deployment helper ran. Public HTTPS and a separate SSH check also timed out.
+No Azure binary or private configuration was replaced by that attempt. After the
+VM became reachable, Azure-only retry job `124048000499` succeeded on 30 October
+2026 at 17:24:16 IST. The original artifact passed its checksum and the privileged
+helper reported `Azure is healthy at e1ec5d33ccc023a5317986576e3182b3ae6fe2ef`
+after startup/local health checks and writing the revision. Public health returned
+200; unauthenticated `/api/me` returned 401 with `no-store`. The API and Caddy are
+active; the API process started at 17:24:13 IST. The restricted deploy account
+cannot read the private revision/release files, so exact-SHA confirmation uses
+the trusted helper's successful output. Render health also returned 200. No new
+build, migration, configuration change or host-role handover was performed.
+
 ## Current state — 25 October 2026
 
 Azure runs the **IPO importer** independently, so source requests originate from

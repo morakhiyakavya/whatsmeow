@@ -23,6 +23,20 @@ Android communicates through the Go API, never directly with Supabase.
 
 Backend prerequisites are migrations 001–017 and refreshed runtime grants.
 Deploy migration 017 and the endpoint before distributing this Android build.
+The shared hosted database received migration 017/runtime grants on 29 October
+2026 (IST), preserving all existing users, transactions and immutable versions.
+The deployment revision is `e1ec5d33ccc023a5317986576e3182b3ae6fe2ef`;
+[CI/CD run 40877140355](https://github.com/morakhiyakavya/whatsmeow/actions/runs/40877140355)
+records the independent Render/Azure deployment outcomes. Confirm each outcome
+before assuming both hosts have been updated.
+Render is verified live at that SHA, deploy `dep-dbhk4mou01pc73bhksk0`, on
+29 October 2026 at 18:26:39 IST. Health returned 200; unauthenticated account and
+business-sync requests returned 401 with `no-store`. Azure's first attempt timed
+out connecting to SSH before replacing its binary. Azure-only retry job
+`124048000499` succeeded on 30 October 2026 at 17:24:16 IST: the deployment helper
+confirmed that exact SHA after checksum/startup/local health checks. Public health
+returned 200, unauthenticated `/api/me` returned 401 with `no-store`, and the API
+and Caddy are active. Android continues using Render; Azure remains IPO-only.
 Readiness alone proves neither that a particular revision is live nor that FCM
 reached a handset; confirm the deployment workflow and explicit device tests.
 

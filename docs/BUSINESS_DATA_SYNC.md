@@ -4,7 +4,9 @@ Migration `017_business_data_sync.sql` extends the existing FCM sender to change
 in transactions, business analytics assumptions and shared IPO/source-basis data.
 Apply it after 016, then reapply `database/api_grants.sql`, before starting the new
 backend or installing the matching Android build. Existing installations are not
-upgraded automatically. This implementation has not been deployed.
+upgraded automatically. Hosted migration 017/runtime grants were applied on
+29 October 2026 (IST); see [the Android handover](ANDROID_BUSINESS_SYNC_HANDOVER.md)
+and deployment records for host rollout status.
 
 ## Change signals
 

@@ -3,6 +3,8 @@
 The IPO transaction application built on this checkout has a runnable Go API in
 [backend](backend/README.md). Its [project vision](docs/PROJECT_VISION.md),
 local PostgreSQL setup, and manual transaction examples are documented there.
+New to the application? Start with the [project and business overview](docs/PROJECT_OVERVIEW.md)
+for workflows, business rules, worked examples and implementation status.
 
 [![Go Reference](https://pkg.go.dev/badge/go.mau.fi/whatsmeow.svg)](https://pkg.go.dev/go.mau.fi/whatsmeow)
 

@@ -8,10 +8,21 @@ WhatsApp credentials are not copied by this setup.
 
 Project `tqfwoudoxundtrhogmwa` was installed and verified on 11 October 2026 using
 the Singapore session pooler on port `5432`. PostgreSQL reports version 17.11.
-Application migrations 001–016 are installed: `ipo_pos` has 35 tables, and the
+Application migrations 001–017 are installed: `ipo_pos` has 38 tables, and the
 backend initialized 17 WhatsApp credential tables at library schema version 16.
 One existing user and business were observed and preserved during migration 011.
 Do not rerun the fresh-install script for this project.
+
+Migration 017 and runtime grants were applied once on 29 October 2026 (IST),
+before the transaction/analysis-input sync rollout to both hosts. Client TLS used
+certificate and hostname validation. The three new tables, five triggers and
+130 baseline change keys were verified; the migration queued no notifications.
+Before/after checksums confirmed unchanged users, transactions and immutable
+versions, with counts 1/8/8 and 933 shared contact names. The actual API role can
+read sync keys/revisions but cannot insert outbox rows, update revisions or delete
+change keys. A CONNECT regrant warning from the owner was harmless; the actual
+runtime connection and existing CONNECT permission passed. The separate local
+development database was not migrated.
 
 Migration 016 was applied once before the 26 October 2026 (IST) contact-directory
 rollout. It adds `contact_directory_revisions`, `directory_push_outbox` and three

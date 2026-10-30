@@ -4,9 +4,31 @@ Commit threshold: **3 completed tasks**. Follow the policy in `../AGENTS.md`.
 
 ## Pending
 
-None. The three completed tasks are checkpointed in Batch 43 below.
+None. The three completed tasks are checkpointed in Batch 44 below.
 
 ## Checkpoints
+
+### Batch 44 — Business-sync rollout and newcomer overview
+
+Checkpointed at the three-task threshold. Earlier per-task counts describe their completion time. Existing committed handover/test implementation is not restaged; this batch contains the reviewed overview and rollout records. Unrelated CI/CD and older ledger-history changes remain outside the checkpoint.
+
+1. Publish the Android developer/agent handover for transaction and analysis-input sync (29 October 2026 IST).
+   - Behaviour: added a standalone entry point with the Android API base, Render/Azure roles, FCM schema, authenticated delta request/response and cursor handling, error recovery, cache/draft requirements, existing implementation files, exact development APK checksum and remaining real-device checks. Published the handover at `813829861e76004c5c6e76ac50b31483b0262e1f` alongside the previously checkpointed implementation; follow-up `e1ec5d33ccc023a5317986576e3182b3ae6fe2ef` discards an unused test response value identified by CI static analysis.
+   - Verification: reviewed against the implemented Go feed, migrations, sender, Android store/view model and recorded tests; examples and links reviewed, diff whitespace passed. The test-only CI correction passed backend staticcheck; the new Go 1.27 CI build/pre-commit passed. Runtime tests are reused for the unchanged implementation; final deployment workflow remains tracked below.
+   - Paths: `docs/ANDROID_BUSINESS_SYNC_HANDOVER.md`, `backend/business_sync_test.go`, `docs/TASK_CHECKPOINT.md`.
+   - Limits: no new financial calculation, Android release signing or real-device FCM test. Deployment is a separate unfinished task until both hosts are verified. Pending: 1/3.
+
+2. Create a shareable newcomer overview of venweb and its business rules (29 October 2026 IST).
+   - Behaviour: added an eight-section Markdown guide and matching eight-page Word document covering purpose/status, business ownership and roles, signed quantity/amount rules, contact identities, manual entry and confirmation outcomes, catalogue facts versus business assumptions, Subject 1/Subject 2 formulas, worked examples, planned reporting/history/reconciliation/listing, AI scope and architecture. Linked the guide from the root README. Distinguished implemented backend and Android working-copy functionality from planned analytics/automation and recorded deployment/device limitations without exposing credentials or customer data.
+   - Verification: reviewed against the owning product/API/catalogue/reporting/sync documents, transaction/confirmation/assumption handlers, routes, migrations and sibling Android README. Decimal assertions passed for signed amounts, rate suggestions, forecast shares/cost/result and historical-average examples. Source links, DOCX content parity, eight sections/five tables, title formatting and owned diff whitespace checks passed. Rendered through installed Microsoft Word and inspected all eight final page PNGs; the packaged renderer could not run because LibreOffice is unavailable, so the native Word PDF export and bundled PDF rasteriser supplied layout verification.
+   - Paths: `README.md`, `docs/PROJECT_OVERVIEW.md`, `docs/PROJECT_OVERVIEW.docx`, `docs/TASK_CHECKPOINT.md` (this entry only).
+   - Limits: documentation only; no application tests/builds, live service/source/device checks, customer messages, deployment or push. Current-versus-planned status is dated and must be refreshed as implementation changes. Preserved all pre-existing rollout, CI/CD and ledger-history edits. Pending: 2/3; no commit.
+
+3. Complete the transaction-sync backend rollout on Azure (30 October 2026 IST).
+   - Behaviour: retried only failed Azure job `123459562310` in workflow `40877140355`; retry `124048000499` reused the original tested artifact and deployed latest published main `e1ec5d33ccc023a5317986576e3182b3ae6fe2ef`. The helper verified the binary checksum, restarted the service, checked local database health and wrote its revision before reporting success at 17:24:16 IST. Render already runs the same application revision; the shared migration 017/runtime grants were applied on 29 October and were not repeated. Updated the rollout/handover records to close the earlier connectivity failure.
+   - Verification: remote main matched the artifact SHA; retry job succeeded and its trusted helper explicitly reported that SHA. Public Azure health returned 200 and unauthenticated `/api/me` returned 401 with `no-store`; API/Caddy are active and the API process started at 17:24:13 IST. Render public health returned 200 with `no-store`. Reused the unchanged revision's passing CI/static/schema/API/module/rollback/build checks and prior migration permission/data-preservation checks. Reviewed the batch documentation and checked owned diff whitespace; prior overview DOCX render/content checks are reused because the artifact is unchanged.
+   - Paths: `docs/ANDROID_BUSINESS_SYNC_HANDOVER.md`, `docs/AZURE_VM_DEPLOYMENT.md`, `docs/BUSINESS_DATA_SYNC.md`, `docs/RENDER_DEPLOYMENT.md`, `docs/SUPABASE_SETUP.md`, `docs/TASK_CHECKPOINT.md` (Pending/Batch 44 only). The deployment is external runtime state; no source code, credentials, private configuration, plan, host role or migration was changed. Preserve unrelated `docs/CI_CD.md` and earlier ledger-history edits.
+   - Limits: the restricted deploy account cannot read private revision/release files; exact-SHA verification uses the trusted deployment helper's successful output. No new authenticated customer/device flow, real FCM/WhatsApp send, importer refresh, load or Spot-eviction recovery check. Azure remains the IPO importer and Render remains the application/WhatsApp host. No push.
 
 ### Batch 43 — Contact rollout, Android search and transaction sync
 

@@ -7,6 +7,22 @@ business/admin or copy local WhatsApp sessions.
 
 ## Current deployment
 
+The transaction/analysis-input sync increment is now live at
+`e1ec5d33ccc023a5317986576e3182b3ae6fe2ef`, Render deployment
+`dep-dbhk4mou01pc73bhksk0` (29 October 2026, 18:26:39 IST).
+[Workflow 40877140355](https://github.com/morakhiyakavya/whatsmeow/actions/runs/40877140355)
+passed static analysis, all schema/API/module checks, deployment rollback checks,
+artifact build and the Render deployment. The Go 1.26/1.27 workflow also passed.
+Health returned 200; unauthenticated `/api/me` and the new business-data sync route
+returned 401, all with `no-store`. Migration 017/runtime grants were applied once
+to shared Supabase beforehand, preserving user and transaction/history checksums.
+Azure's first independent deploy attempt timed out at SSH before binary
+replacement. Azure-only retry job `124048000499` succeeded on 30 October 2026 at
+17:24:16 IST, with the helper confirming the same SHA and public health returning
+200. Render's public health remained 200. No environment values, credentials,
+plans or host roles were changed. No deliberate customer transaction, WhatsApp
+message or FCM message was sent. See the [Android handover](ANDROID_BUSINESS_SYNC_HANDOVER.md).
+
 Deployed and verified on 26 October 2026 (IST) in `kavya's Workspace`:
 
 - API base URL: [whatsapp-pos-dev](https://whatsapp-pos-dev.onrender.com).

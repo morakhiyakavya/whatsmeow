@@ -3,7 +3,12 @@
 Status: assumptions/history API and source-fact snapshots are implemented
 in migration 015 and the existing Go backend, tested in disposable databases. They
 are installed in the existing local/hosted databases and deployed on Render. Remaining
-dashboard/reconciliation/closing/listing contracts are proposed.
+reconciliation/closing/listing contracts are proposed. The live-position list/detail
+API and native Android report view now calculate configured application forecasts,
+direct shares and premium-only CE/PE costs. Migration 018 adds versioned explicit
+calculation units/capacities and an additional premium cost/credit. This increment
+is tested locally and migration 018 is installed on the hosted database;
+application deployment and real-device delivery remain pending.
 The [dashboard requirements](IPO_POSITION_REPORTING.md) own product behaviour;
 the [rate guidance](PROJECT_VISION.md#application-rate-guidance-agreed-implementation-pending)
 owns pricing formulas. This document defines how to deliver those requirements
@@ -316,8 +321,8 @@ active transaction-picker list. All business queries filter the authorized busin
 
 | Method and suffix | Role | Contract |
 |---|---|---|
-| GET `/dashboard/ipos` | Admin/cashier | Paginated net summaries; `date=YYYY-MM-DD` selects an original past close, absent/today selects live; `phase=active|closed|all` defaults active for live and all for past dates |
-| GET `/dashboard/ipos/{ipoID}` | Admin/cashier | Same summary for one book; optional `include=categories,activity,pricing` loads detail only when requested |
+| GET `/dashboard/ipos` | Admin/cashier | Implemented retained-book names/IDs with `after_id` pagination; summary cards, past closes and phase filters below remain proposed |
+| GET `/dashboard/ipos/{ipoID}` | Admin/cashier | Implemented live calculations and optional `include=categories`; configured application forecasts, direct shares, premium-only CE/PE and revision checking. Activity/history remain planned |
 | GET `/dashboard/ipos/{ipoID}/transactions` | Admin/cashier | Bounded source-version drill-down for the selected live/date view; current transaction listing alone cannot reconstruct old state |
 | GET `/dashboard/ipos/{ipoID}/history` | Admin/cashier | Original closing records with `from`, `to` local dates and a date cursor |
 | GET `/ipos/{ipoID}/analytics-assumptions` | Admin/cashier | Implemented: latest version, read-only defaults and source context |

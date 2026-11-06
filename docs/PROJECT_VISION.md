@@ -251,8 +251,9 @@ Subject 2 suggested rate = ROUND(Q * G * f, 0)
 In the workbook, `p = required applications / expected applications`. The inputs
 must represent comparable counts for that category and a valid probability;
 missing inputs or an invalid denominator must remain unavailable, not become
-zero. The probability model still needs issue/category-specific validation before
-implementation. The Subject 2 rate is conditional on successful allotment, so its
+zero. The implemented model requires an explicit business calculation basis per
+category and rejects ratios above one. Shareholder bid-amount ratios require
+matching crore units and bid shares per application. The Subject 2 rate is conditional on successful allotment, so its
 formula does not additionally multiply by `p`. Keep whole-rupee rounding as in the
 workbook; preserve signed GMP and rate values without converting them to absolutes.
 
@@ -291,7 +292,8 @@ Before implementation is complete, verify workbook parity, lower/default/higher
 factors, whole-rupee rounding, zero/negative GMP, missing/invalid forecast inputs,
 business isolation, and preservation of saved transaction amounts. GMP/forecast
 storage from migration 015 and its settings API are implemented and deployed;
-the calculation/pricing API and user controls remain planned.
+the live calculation/pricing API and Android controls are implemented locally,
+awaiting rollout with migration 018. CE/PE quote guidance remains deferred.
 
 ### Position and historical reporting (agreed; implementation pending)
 
@@ -306,12 +308,20 @@ collection or attributed manual entry. Shared assumptions and pricing factors ar
 admin-controlled within each business. The [position and reporting specification](IPO_POSITION_REPORTING.md)
 defines these views and allotted trades. Payments, outstanding balances and after-
 listing settlement are handled separately by the user and are outside this scope.
-The assumptions/history API and source-basis storage are implemented and deployed;
-reporting, reconciliation, closing and listing APIs/screens remain planned.
+The assumptions/history API and source-basis storage are implemented and deployed.
+A local live-position list/detail API and Android report view now calculate ledger
+buckets, configured application forecasts, direct-share GMP valuation and CE/PE
+premium costs. CE/PE labels add no ordinary shares; quote guidance is deferred.
+Missing calculation inputs remain unknown; see the
+[backend contract](../backend/README.md#live-position-detail).
+Migration 018 is installed on Supabase. The backend/Android increment awaits
+application rollout and device verification.
+Reconciliation, closing and listing remain planned.
 
 The [database and API design](IPO_ANALYTICS_DESIGN.md) proposes additive versioned
 inputs, manual coverage, daily closes and authenticated contracts for this dashboard.
-The assumptions/source-basis portion is applied; the remaining contracts are planned.
+The assumptions/source-basis portion is applied; explicit calculation basis and
+live reads are implemented locally. The remaining historical contracts are planned.
 
 ## Transaction details and amount calculation
 

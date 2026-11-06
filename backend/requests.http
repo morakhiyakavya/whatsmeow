@@ -34,6 +34,10 @@ Authorization: Bearer {{token}}
 GET {{base}}/api/businesses/{{business}}/ipos/{{ipo}}/analytics-assumptions
 Authorization: Bearer {{token}}
 
+### Live trading book (admin or cashier; current position, not a historical close)
+GET {{base}}/api/businesses/{{business}}/dashboard/ipos/{{ipo}}?include=categories
+Authorization: Bearer {{token}}
+
 ### Replace assumptions (admin; use the latest expected_version)
 PUT {{base}}/api/businesses/{{business}}/ipos/{{ipo}}/analytics-assumptions
 Authorization: Bearer {{token}}

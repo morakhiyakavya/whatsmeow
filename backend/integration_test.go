@@ -363,6 +363,9 @@ func TestManualLedgerIntegration(t *testing.T) {
 	status, object, _ = other.request("POST", "/api/login", map[string]string{"phone_number": second.AdminPhone, "password": second.AdminPassword}, "")
 	expectStatus(t, 200, status, object)
 	other.Token = field(t, object, "access_token")
+	t.Run("Live position report", func(t *testing.T) {
+		testLivePositionAPI(t, admin, client, cashier, other, base, "/api/businesses/"+otherBusiness, request)
+	})
 	t.Run("Signed transactions", func(t *testing.T) {
 		testSignedTransactionAPI(t, cashier, base, request)
 	})

@@ -16,22 +16,30 @@
   cashier reads, business isolation and concurrent-version checks.
 - [x] Apply migration 015/runtime grants locally and on Supabase; deploy the tested
   backend on the existing Render service and verify health/authentication boundaries.
-- [ ] Build user controls for GMP, expected application counts and Subject 2 factor.
-- [ ] Implement the agreed [application rate guidance](PROJECT_VISION.md#application-rate-guidance-agreed-implementation-pending)
+- [x] Build Android controls for GMP, expected forecast totals, explicit calculation
+  shares/capacity/units, extra premium cost/credit and Subject 2 factor.
+- [x] Implement the agreed [application rate guidance](PROJECT_VISION.md#application-rate-guidance-agreed-implementation-pending)
   with the workbook's Subject 1 probability-based rate and Subject 2 GMP-value
   factor. Give users an adjustable Subject 2 factor starting at 80%; changes affect
   suggestions, not saved transaction rates, amounts or share quantities. Include
   the input controls and business-isolated GMP/forecast settings when delivering
-  this feature; its API and screens remain unimplemented.
+  this feature. API and Android implementation are locally tested; rollout is pending.
 
 ## IPO positions and history
 
+- [x] Start the backend live-position detail API with exact full-book buy/sell
+  buckets, weighted rates, direct-share GMP valuation and explicit missing
+  application/CE/PE measures. Extended locally with configured application forecasts,
+  premium-only CE/PE costs, retained-book pagination and native Android report views.
+- [x] Apply migration 018 on Supabase, preserving saved financial records and grants.
+- [ ] Deploy the tested backend and verify Android FCM-driven
+  analytics refresh with saved transactions; spreadsheet trades are validation only.
 - [x] Document the [current dashboard requirements](IPO_POSITION_REPORTING.md),
   business management controls, expected application-count inputs, daily closing
   preservation and NSE-first/BSE-fallback reference without payment tracking.
 - [x] Draft the [additive database and API design](IPO_ANALYTICS_DESIGN.md), reusing
   the ledger/versioning and distinguishing unknown actual costs from bank payments.
-- [ ] Implement the [position and reporting contract](IPO_POSITION_REPORTING.md):
+- [x] Implement the live portion of the [position and reporting contract](IPO_POSITION_REPORTING.md):
   cumulative net position first; buy/sell details and Retail, Retail 199, SHNI,
   BHNI and Shareholder expected-share contributions on request, all reconciling.
   Shareholder is conditional on the IPO's quota; distinguish offered/not offered/

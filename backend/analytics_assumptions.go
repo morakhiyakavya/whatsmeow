@@ -20,16 +20,54 @@ type applicationForecasts struct {
 }
 
 type assumptionInput struct {
-	ExpectedVersion *int                  `json:"expected_version"`
-	GMP             *string               `json:"gmp"`
-	Factor          *string               `json:"subject2_pricing_factor"`
-	Applications    *applicationForecasts `json:"expected_applications"`
-	Reason          string                `json:"change_reason"`
+	ExpectedVersion *int                        `json:"expected_version"`
+	GMP             *string                     `json:"gmp"`
+	Factor          *string                     `json:"subject2_pricing_factor"`
+	Applications    *applicationForecasts       `json:"expected_applications"`
+	Reason          string                      `json:"change_reason"`
+	Basis           map[string]calculationBasis `json:"calculation_basis"`
+	AdditionalCost  *string                     `json:"additional_cost"`
 }
+
+type calculationBasis struct {
+	Shares   string `json:"shares_per_application"`
+	Capacity string `json:"capacity"`
+	Unit     string `json:"unit"`
+}
+
+func (basis mapCalculationBasis) normalize() error {
+	for code, value := range basis {
+		if code != "RETAIL" && code != "RETAIL_199" && code != "SHNI" && code != "BHNI" && code != "SHAREHOLDER" {
+			return errors.New("unknown calculation category")
+		}
+		shares, ok := decimal(value.Shares, false)
+		if !ok || shares == "0" || !applicationCountPattern.MatchString(value.Capacity) || strings.TrimLeft(value.Capacity, "0") == "" ||
+			value.Unit != "applications" && (value.Unit != "bid_amount_crore" || code != "SHAREHOLDER") {
+			return errors.New("supply positive shares, a positive integer capacity, and matching forecast units")
+		}
+		value.Shares = shares
+		value.Capacity = strings.TrimLeft(value.Capacity, "0")
+		basis[code] = value
+	}
+	return nil
+}
+
+type mapCalculationBasis map[string]calculationBasis
 
 var applicationCountPattern = regexp.MustCompile(`^[0-9]{1,24}$`)
 
 func (in *assumptionInput) normalize() error {
+	if err := mapCalculationBasis(in.Basis).normalize(); err != nil {
+		return err
+	}
+	if in.AdditionalCost != nil {
+		value, ok := decimal(*in.AdditionalCost, true)
+		_, fraction, _ := strings.Cut(value, ".")
+		if !ok || len(fraction) > 2 {
+			return errors.New("additional_cost must be a signed decimal with at most two fractional digits")
+		}
+		in.AdditionalCost = &value
+	}
 	if in.ExpectedVersion == nil || *in.ExpectedVersion < 0 || *in.ExpectedVersion >= 2147483647 {
 		return errors.New("supply expected_version between 0 and 2147483646")
 	}
@@ -80,7 +118,7 @@ const assumptionJSON = `jsonb_build_object('business_id',v.business_id,'ipo_id',
  'expected_applications',jsonb_build_object('RETAIL',v.retail_expected_applications::text,
  'SHNI',v.shni_expected_applications::text,'BHNI',v.bhni_expected_applications::text,
  'SHAREHOLDER',v.shareholder_expected_applications::text),'recorded_at',v.recorded_at,
- 'changed_by_user_id',v.changed_by_user_id,'change_reason',v.change_reason)`
+ 'changed_by_user_id',v.changed_by_user_id,'change_reason',v.change_reason,'calculation_basis',v.calculation_basis,'additional_cost',v.additional_cost::text)`
 
 func analyticsIPO(w http.ResponseWriter, r *http.Request) (string, bool) {
 	id := r.PathValue("ipoID")
@@ -101,7 +139,7 @@ func (a *api) getAnalyticsAssumptions(w http.ResponseWriter, r *http.Request, us
  ORDER BY version DESC LIMIT 1),jsonb_build_object('business_id',$1::uuid,'ipo_id',i.id,
  'version',0,'gmp',null,'subject2_pricing_factor','0.8','expected_applications',
  jsonb_build_object('RETAIL',null,'SHNI',null,'BHNI',null,'SHAREHOLDER',null),
- 'recorded_at',null,'changed_by_user_id',null,'change_reason',null)) || jsonb_build_object(
+ 'recorded_at',null,'changed_by_user_id',null,'change_reason',null,'calculation_basis','{}'::jsonb,'additional_cost','0.00')) || jsonb_build_object(
  'source_basis',(SELECT to_jsonb(b) FROM ipo_pos.ipo_dashboard_basis_versions b
  WHERE b.ipo_id=i.id ORDER BY version DESC LIMIT 1),'catalogue_last_seen_at',i.last_seen_at)
  FROM ipo_pos.ipos i WHERE i.id=$2`, user.BusinessID, id)
@@ -121,13 +159,22 @@ func (a *api) putAnalyticsAssumptions(w http.ResponseWriter, r *http.Request, us
 		return
 	}
 	var data json.RawMessage
+	var basis any
+	if input.Basis != nil {
+		encoded, _ := json.Marshal(input.Basis)
+		basis = string(encoded)
+	}
 	err := a.db.QueryRowContext(r.Context(), `INSERT INTO ipo_pos.ipo_dashboard_assumption_versions AS v
  (business_id,ipo_id,version,gmp,subject2_pricing_factor,retail_expected_applications,
  shni_expected_applications,bhni_expected_applications,shareholder_expected_applications,
- changed_by_user_id,change_reason) VALUES($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11)
+ changed_by_user_id,change_reason,calculation_basis,additional_cost) VALUES($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,
+ COALESCE($12::jsonb,(SELECT calculation_basis FROM ipo_pos.ipo_dashboard_assumption_versions
+ WHERE business_id=$1 AND ipo_id=$2 ORDER BY version DESC LIMIT 1),'{}'::jsonb),
+ COALESCE($13::numeric,(SELECT additional_cost FROM ipo_pos.ipo_dashboard_assumption_versions
+ WHERE business_id=$1 AND ipo_id=$2 ORDER BY version DESC LIMIT 1),0))
  RETURNING `+assumptionJSON, user.BusinessID, id, *input.ExpectedVersion+1, input.GMP,
 		input.Factor, input.Applications.Retail, input.Applications.SHNI, input.Applications.BHNI,
-		input.Applications.Shareholder, user.UserID, input.Reason).Scan(&data)
+		input.Applications.Shareholder, user.UserID, input.Reason, basis, input.AdditionalCost).Scan(&data)
 	if err != nil {
 		var pgErr *pgconn.PgError
 		if errors.As(err, &pgErr) && pgErr.Code == "40001" {

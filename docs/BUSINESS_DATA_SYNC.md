@@ -84,15 +84,20 @@ Interrupted pages, malformed responses and changed sessions retain the previous
 snapshot. Newer dirty markers arriving during refresh remain pending.
 
 Transactions reads and Load more use the local store. The dashboard reads saved
-GMP and Subject 2 pricing factor from the same cache. No position calculation,
-allotment engine, report generation or offline transaction submission is added:
-these are still future backend features. Source basis and saved forecasts are
-cached as inputs, not presented as completed analysis results.
+GMP and Subject 2 pricing factor from the same cache. Source basis and saved
+forecasts are cached as inputs. The local
+[live-position detail API](../backend/README.md#live-position-detail)
+calculates configured application forecasts, direct shares and premium-only CE/PE
+costs from saved transactions. Android fetches an open report separately after
+catch-up, using the cache revision. A changed server revision returns 409 and
+requires catch-up before retry. Old/failed responses preserve the previous report
+timestamp with a stale marker; business/session changes discard it. Reports are
+not added to FCM or this feed. Apply migration 018 before deploying this increment.
 
-Refresh is triggered by FCM, foreground entry, network reconnection, the existing
-best-effort 15-minute background job, manual transaction/catalogue refresh and
-entry to Transactions/Dashboard when the last successful check is at least one
-minute old. Dirty events bypass that freshness window. Repeated foreground
+Refresh is triggered by initial cache misses, FCM and manual Refresh. Populated,
+clean caches do not refresh for navigation, age, foreground or reconnection;
+foreground/reconnection retry pending changes. The former periodic business-data
+job is cancelled. Repeated foreground
 requests share the in-flight sync; the background worker shares the store's
 sync mutex. Only the selected business syncs automatically. Pending markers for
 other businesses are retained until selected. Drafts, unresolved submissions and

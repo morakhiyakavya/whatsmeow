@@ -9,7 +9,10 @@ Transaction and analysis-input sync additionally requires migration 017 and
 refreshed runtime grants. `GET /api/businesses/{businessID}/data/sync` provides
 revision-checked deltas for transactions, saved assumptions and shared IPO/source
 data. FCM carries only a business revision hint. See [the sync contract](../docs/BUSINESS_DATA_SYNC.md)
-for Android refresh policy, payloads and rollout. Position calculations remain pending.
+for Android refresh policy, payloads and rollout. Migration 018 additionally adds
+versioned calculation basis and other premium cost/credit to the existing assumptions.
+The live-position API calculates configured application forecasts and direct shares;
+Android refreshes an open report after the existing business-data notification.
 
 The [IPO catalogue importer](../docs/IPO_CATALOGUE.md) adds source-owned IPO terms,
 subscriptions, reservations, promoter shareholding, anchor lock-ins and category
@@ -42,9 +45,9 @@ private session diagnostics, see the [Android recovery contract](../docs/ANDROID
 The [dashboard requirements](../docs/IPO_POSITION_REPORTING.md) and
 [proposed analytics database/API design](../docs/IPO_ANALYTICS_DESIGN.md) describe
 net-first reporting, forecasts, manual allotment inputs and locked daily history.
-The assumptions/history API and source-basis storage below are implemented locally;
-dashboard position calculations, reconciliation, daily closes and listing results
-remain subsequent increments.
+The assumptions/history API and source-basis storage are deployed. The live-position
+detail/list APIs and Android report view are implemented. Reconciliation, daily
+closes, listing references and CE/PE quote guidance remain subsequent increments.
 
 ## Local setup and start
 
@@ -332,6 +335,8 @@ IDs from `/api/me`. Supplying another business ID never confers access.
 | GET | `/ipos/import-status` | Source coverage, refresh runs and freshness |
 | GET, PUT | `/ipos/{ipoID}/analytics-assumptions` | Business GMP, expected application counts and Subject 2 factor; admin writes, member reads |
 | GET | `/ipos/{ipoID}/analytics-assumptions/history` | Immutable business/IPO revisions, paginated with before_version |
+| GET | `/dashboard/ipos/{ipoID}` | Revision-checked live book totals; optional include=categories; configured application forecasts, direct shares and premium-only CE/PE costs |
+| GET | `/dashboard/ipos` | Retained business books, including archived/all-cancelled books; limit 1–100, next_after_id/after_id |
 | GET | `/form-types` | Supported form catalogue |
 | GET, POST | `/whatsapp-accounts` | List/register business-owned WhatsApp accounts |
 | GET | `/whatsapp-accounts/{id}` | Read one business-owned account |
@@ -381,9 +386,94 @@ Requests reject unknown JSON fields, multiple JSON values and bodies over 64 KiB
 Errors use `{"error":{"code":"...","message":"..."}}`. Database errors do
 not disclose SQL, connection credentials or customer data.
 
+## Live-position detail
+
+`GET /api/businesses/{businessID}/dashboard/ipos/{ipoID}` is read-only for admins
+and cashiers. It resolves any retained IPO with a transaction in that business,
+including archived IPOs and books whose transactions are all cancelled. A missing
+book returns 404 `book_unavailable`; an all-cancelled book returns `empty:true`.
+The response identifies the business/IPO, calculation version/time, IST date,
+currency, selected assumption/basis versions, assumption recording time and source freshness.
+
+Add `include=categories` for form-type/subject buckets containing separate Buy/Sell
+quantities, recorded amounts and weighted average rates. Sell quantities are
+positive magnitudes; Sell amounts preserve the agreed rate's sign. Averages use
+saved rounded amounts divided by their own side's quantity. Quantity units remain
+separate: applications, direct shares and CE/PE contracts are never added together.
+Current active rows are aggregated in one database snapshot using the existing
+business/IPO index, with O(N) source-row work and O(C) state for fixed buckets;
+the report does not stop at a transaction-list page or sum historical versions.
+
+Direct `SHARES` contribute signed confirmed shares and their saved premium amount,
+regardless of subject flag. With saved business GMP, the estimate is
+`net_shares * gmp - net_premium_cost`. Break-even is cost divided by nonzero net
+shares. Flat books retain their cost/credit and estimated result, with a null
+break-even and `zero_net_shares` reason. Money is returned as decimal strings to
+two places; shares and rates to six. Negative GMP, quantities and rates are retained.
+
+Application shares use the saved admin calculation basis and a matching forecast
+unit, without inferring allotments from minimum bids. For a configured bucket,
+`ratio = capacity / expected total` and `shares = signed quantity * shares per application * ratio`.
+Subject 1 cost retains saved transaction amounts. Subject 2 expected cost uses the
+sum of unrounded signed quantity-times-rate agreements multiplied by that ratio;
+rounding the face amounts first can change the expected cost. Ratios outside
+0–1 remain unavailable rather than being capped. Retail 199 reuses the Retail
+forecast total and requires its own explicit share/capacity basis.
+
+Shareholder `bid_amount_crore` mode uses shares bid per application and matching
+reserved/expected bid amounts in crore, not application counts. The result is a
+proportionate share estimate; never probability-discount an already supplied
+allotment result again. Legacy allotted applications remain unavailable until a
+confirmed share multiplier is captured. Missing/not-offered Shareholder source
+data remains visible alongside any relevant exposure.
+
+CE/PE quantities describe underlying shares for their entered premium agreements.
+Their signed saved amounts contribute to cost, but they add no ordinary shares.
+Their numeric display labels do not change costing. CE/PE quote guidance is deferred.
+Other costs/credits, such as an application-data charge, use the attributed
+`additional_cost` assumption. This is a forecast cost input, not a payment ledger.
+
+Each nullable valuation has a field-specific reason. `known_net_shares` and
+`known_net_premium_cost` are explicitly partial subtotals; `net_recorded_amount`
+is the ledger face amount, not expected cost or a payment balance. Complete IPO
+valuation fields stay null if any contribution is unresolved. Missing GMP leaves
+known quantities/costs readable and profit/loss unavailable. A complete GMP-based
+estimate is labelled `profit_loss_basis:"forecast"`, never realised or final listing profit.
+
+Calculation version 2 publishes six-place bucket shares and two-place costs, then
+sums those published measures. Whole-share screen rounding does not alter the
+denominator used for costing. Subject 1 suggestions are whole-rupee
+`shares per application * GMP * ratio`; Subject 2 suggestions instead multiply
+by the configured pricing factor. Factor changes never rewrite agreed rates,
+amounts or share estimates.
+
+An optional `date=YYYY-MM-DD` accepts today in Asia/Kolkata. Past dates return 404
+`close_unavailable`; invalid/future dates and unsupported filters/includes return
+400. An optional `revision` must match the report's business-data snapshot, otherwise
+409 `business_data_changed` prevents accepting a mixed revision. Existing FCM
+notifications still carry revisions only; no financial report is put in a push.
+Android catches up its encrypted input cache, then refetches the open authenticated
+report. Scope changes, newer invalidations and closed dialogs reject late results;
+failure retains the old calculation time with an explicit stale message. Reports
+are held in memory, not persisted as another financial ledger. Activity, historical
+closes, manual reconciliation and final listing results remain pending.
+
 ## Dashboard assumption inputs
 
 Apply migration 015 once as the migration owner, then reapply `api_grants.sql`.
+Apply migration 018 before the calculation-version-2 backend. Existing revisions
+keep an empty calculation basis and zero additional cost. Optional
+`calculation_basis` maps RETAIL, RETAIL_199, SHNI, BHNI or SHAREHOLDER to exactly
+`shares_per_application`, `capacity` and `unit` string fields. Shares must be
+positive with at most six decimal places; capacity is a positive integer of up
+to 24 digits. Units are `applications`, or `bid_amount_crore` for Shareholder.
+The legacy `expected_applications` fields hold the corresponding expected total
+in that explicit unit. `additional_cost` is a signed amount with at most two
+decimal places. Admins configure these planning inputs with the existing revision
+and reason; cashiers read them. An older client omitting these two fields preserves
+their latest values. An explicit empty basis clears configured models. A new
+assumption revision automatically follows the existing FCM/sync path; no new
+Firebase dependency or sender is required.
 Existing installations are not migrated by startup or by the importer. New tables
 are `ipo_dashboard_assumption_versions` and `ipo_dashboard_basis_versions`.
 

@@ -4,9 +4,31 @@ Commit threshold: **3 completed tasks**. Follow the policy in `../AGENTS.md`.
 
 ## Pending
 
-None. The three completed tasks are checkpointed in Batch 47 below.
+None. The three completed tasks are checkpointed in Batch 48 below.
 
 ## Checkpoints
+
+### Batch 48 — Inline IPO trade analytics and Pixel installations
+
+Android source is recorded by path in the sibling working copy. The Pixel installations are recorded here as verified device state.
+
+1. Install the dashboard shortcuts build on the connected Pixel (6 November 2026 IST).
+   - Behaviour and verification: replaced the existing venweb installation through ADB, preserving app data. The installed base APK matched the tested build SHA-256 `5F841FDCB150BE48E5E798AE8B61319D458960CC3517C16B51FC7E5DE64B97BB`. Android accepted the main activity launch.
+   - Paths: `docs/TASK_CHECKPOINT.md` (this entry only). The installed APK is device state.
+   - Limits: installation verified. Native screen checks were not run. Pending: 1/3.
+
+2. Show compact net trades directly on each Android IPO card (6 November 2026 IST).
+
+   - Behaviour: Trades & rates opens by default inside the IPO card. Expected & pending switches the same card to forecasts. Each trade row shows signed net quantity and net recorded amount divided by net quantity. Flat positions show a dash for the rate. Inline reports reuse the existing business-revision endpoint.
+   - Verification: the focused rate unit test, debug APK build, test APK build, lint and whitespace checks passed. The final debug APK SHA-256 is `1C00E9DA2F6436D86D6B2A42E72EB5CFCAEE6B930BE74C6425F759F4DDDCE843`.
+   - Paths relative to `../transactions/`: `app/src/main/java/com/venweb/app/DeskScreens.kt` (IPO card), `app/src/main/java/com/venweb/app/PositionScreens.kt` (inline analytics and report rows), `app/src/main/java/com/venweb/app/PositionReports.kt` (net rate and bucket validation), `app/src/main/java/com/venweb/app/PosViewModel.kt` (scoped dashboard reports), `app/src/test/java/com/venweb/app/PositionReportTest.kt`, `app/src/androidTest/java/com/venweb/app/PositionFlowTest.kt` (dashboard report cache), `README.md` (dashboard reports). This repository: `docs/TASK_CHECKPOINT.md` (this entry only).
+   - Limits: native instrumentation was compiled. Installation and a dashboard screen check are recorded in task 3. Pending: 2/3.
+
+3. Install the inline IPO analytics build on the connected Pixel (6 November 2026 IST).
+
+   - Behaviour and verification: replaced the existing app through ADB, preserving its data. The installed APK matched the tested hash from task 2. Android launched venweb and the dashboard exposed Trades & rates, Expected & pending, Net qty and Avg. rate. Reviewed the ledger diff and whitespace.
+   - Paths: `docs/TASK_CHECKPOINT.md` (Batch 48 only). The installed APK is device state.
+   - Limits: the live dashboard labels were verified. The forecast selector and signed rate values were not exercised on the device.
 
 ### Batch 47 — IPO analytics rollout and dashboard shortcuts
 

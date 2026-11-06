@@ -134,15 +134,31 @@ func (a *api) getAnalyticsAssumptions(w http.ResponseWriter, r *http.Request, us
 	if !ok {
 		return
 	}
-	queryJSON(w, r, a.db, 200, `SELECT coalesce((SELECT `+assumptionJSON+`
+	var data, snapshot json.RawMessage
+	err := a.db.QueryRowContext(r.Context(), `SELECT coalesce((SELECT `+assumptionJSON+`
  FROM ipo_pos.ipo_dashboard_assumption_versions v WHERE business_id=$1 AND ipo_id=i.id
  ORDER BY version DESC LIMIT 1),jsonb_build_object('business_id',$1::uuid,'ipo_id',i.id,
  'version',0,'gmp',null,'subject2_pricing_factor','0.8','expected_applications',
  jsonb_build_object('RETAIL',null,'SHNI',null,'BHNI',null,'SHAREHOLDER',null),
  'recorded_at',null,'changed_by_user_id',null,'change_reason',null,'calculation_basis','{}'::jsonb,'additional_cost','0.00')) || jsonb_build_object(
- 'source_basis',(SELECT to_jsonb(b) FROM ipo_pos.ipo_dashboard_basis_versions b
- WHERE b.ipo_id=i.id ORDER BY version DESC LIMIT 1),'catalogue_last_seen_at',i.last_seen_at)
- FROM ipo_pos.ipos i WHERE i.id=$2`, user.BusinessID, id)
+ 'source_basis',to_jsonb(b),'catalogue_last_seen_at',i.last_seen_at), COALESCE(`+matchingForecastSnapshot+`,'{}'::jsonb)
+ FROM ipo_pos.ipos i LEFT JOIN LATERAL (SELECT * FROM ipo_pos.ipo_dashboard_basis_versions
+ WHERE ipo_id=i.id ORDER BY version DESC LIMIT 1) b ON true WHERE i.id=$2`, user.BusinessID, id).Scan(&data, &snapshot)
+	if err != nil {
+		dbFailure(w, err)
+		return
+	}
+	var result map[string]json.RawMessage
+	if err := json.Unmarshal(data, &result); err != nil {
+		dbFailure(w, err)
+		return
+	}
+	capacities := map[string]string{}
+	for code, basis := range catalogueForecastBasis(snapshot) {
+		capacities[code] = basis.Capacity
+	}
+	result["estimated_application_capacity"], _ = json.Marshal(capacities)
+	writeJSON(w, 200, result)
 }
 
 func (a *api) putAnalyticsAssumptions(w http.ResponseWriter, r *http.Request, user actor) {

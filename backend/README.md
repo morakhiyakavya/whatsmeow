@@ -389,9 +389,9 @@ not disclose SQL, connection credentials or customer data.
 ## Live-position detail
 
 `GET /api/businesses/{businessID}/dashboard/ipos/{ipoID}` is read-only for admins
-and cashiers. It resolves any retained IPO with a transaction in that business,
-including archived IPOs and books whose transactions are all cancelled. A missing
-book returns 404 `book_unavailable`; an all-cancelled book returns `empty:true`.
+and cashiers. It resolves any catalogue IPO, including archived issues. Before
+trades are saved, or when all trades are cancelled, it returns `empty:true` and
+the current business's saved demand forecast. An unknown IPO returns 404.
 The response identifies the business/IPO, calculation version/time, IST date,
 currency, selected assumption/basis versions, assumption recording time and source freshness.
 
@@ -411,8 +411,13 @@ shares. Flat books retain their cost/credit and estimated result, with a null
 break-even and `zero_net_shares` reason. Money is returned as decimal strings to
 two places; shares and rates to six. Negative GMP, quantities and rates are retained.
 
-Application shares use the saved admin calculation basis and a matching forecast
-unit, without inferring allotments from minimum bids. For a configured bucket,
+For Mainboard Retail and supported SHNI/BHNI pools, the backend derives a planning
+capacity from the matched catalogue snapshot. It divides the category's published
+quota by the minimum allotment size, rounded down. Retail uses the fetched lot size.
+SHNI and BHNI use the minimum NII allotment size with separately published quotas.
+The assumptions endpoint exposes those same estimates as `estimated_application_capacity`.
+Existing business calculation settings remain available for categories outside the
+catalogue model. For a bucket with matching forecast units,
 `ratio = capacity / expected total` and `shares = signed quantity * shares per application * ratio`.
 Subject 1 cost retains saved transaction amounts. Subject 2 expected cost uses the
 sum of unrounded signed quantity-times-rate agreements multiplied by that ratio;
@@ -440,7 +445,10 @@ valuation fields stay null if any contribution is unresolved. Missing GMP leaves
 known quantities/costs readable and profit/loss unavailable. A complete GMP-based
 estimate is labelled `profit_loss_basis:"forecast"`, never realised or final listing profit.
 
-Calculation version 2 publishes six-place bucket shares and two-place costs, then
+`net_pending_shares` adds expected allotment shares and net direct shares. When
+expected allotment is incomplete, the API returns the known expected subtotal
+and direct shares separately. Calculation version 3 publishes six-place bucket
+shares and two-place costs, then
 sums those published measures. Whole-share screen rounding does not alter the
 denominator used for costing. Subject 1 suggestions are whole-rupee
 `shares per application * GMP * ratio`; Subject 2 suggestions instead multiply

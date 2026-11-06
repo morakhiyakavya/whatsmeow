@@ -123,8 +123,18 @@ func testLivePositionAPI(t *testing.T, owner *sql.DB, admin, cashier, other test
 	expectStatus(t, 201, status, body)
 	ipo := field(t, body, "id")
 	path := base + "/dashboard/ipos/" + ipo
+	status, body, _ = cashier.request("GET", path+"?include=categories", nil, "")
+	expectStatus(t, 200, status, body)
+	if body["empty"] != true || len(body["categories"].([]any)) != 0 {
+		t.Fatal("pre-trade IPO must have an empty book", body)
+	}
+	status, body, _ = admin.request("PUT", base+"/ipos/"+ipo+"/analytics-assumptions", map[string]any{"expected_version": 0, "gmp": "200", "subject2_pricing_factor": "0.8", "expected_applications": map[string]any{"RETAIL": "4"}, "change_reason": "Forecast before terms"}, "")
+	expectStatus(t, 200, status, body)
 	status, body, _ = cashier.request("GET", path, nil, "")
-	expectStatus(t, 404, status, body)
+	expectStatus(t, 200, status, body)
+	if field(t, body["expected_applications"].(map[string]any), "RETAIL") != "4" || body["empty"] != true {
+		t.Fatal("pre-IPO demand forecast was hidden", body)
+	}
 	trade := cloneMap(request)
 	trade["ipo_id"] = ipo
 	trade["form_type_code"] = "SHARES"
@@ -140,8 +150,6 @@ func testLivePositionAPI(t *testing.T, owner *sql.DB, admin, cashier, other test
 	status, body, _ = cashier.request("POST", base+"/transactions", trade, "analytics-sell")
 	expectStatus(t, 201, status, body)
 	sellID := field(t, body, "id")
-	status, body, _ = admin.request("PUT", base+"/ipos/"+ipo+"/analytics-assumptions", map[string]any{"expected_version": 0, "gmp": "200", "subject2_pricing_factor": "0.8", "expected_applications": map[string]any{}, "change_reason": "Fixture GMP"}, "")
-	expectStatus(t, 200, status, body)
 	status, body, headers := cashier.request("GET", path+"?include=categories", nil, "")
 	expectStatus(t, 200, status, body)
 	if headers.Get("Cache-Control") != "no-store" || field(t, body, "net_shares") != "2.000000" || field(t, body, "net_premium_cost") != "200.00" || field(t, body, "estimated_profit_loss") != "200.00" || body["transaction_count"] != float64(2) {
@@ -166,7 +174,10 @@ func testLivePositionAPI(t *testing.T, owner *sql.DB, admin, cashier, other test
 	status, body, _ = other.request("GET", path, nil, "")
 	expectStatus(t, 403, status, body)
 	status, body, _ = other.request("GET", otherBase+"/dashboard/ipos/"+ipo, nil, "")
-	expectStatus(t, 404, status, body)
+	expectStatus(t, 200, status, body)
+	if body["empty"] != true || body["gmp"] != nil || body["transaction_count"] != float64(0) {
+		t.Fatal("another business's trades or assumptions leaked", body)
+	}
 	for _, query := range []string{"?include=pricing", "?include=categories&include=categories", "?date=not-a-date", "?date=9999-01-01", "?phase=all", "?limit=1"} {
 		status, body, _ = cashier.request("GET", path+query, nil, "")
 		expectStatus(t, 400, status, body)
@@ -282,6 +293,28 @@ func testLivePositionAPI(t *testing.T, owner *sql.DB, admin, cashier, other test
 	if field(t, body, "known_net_shares") != "123.000000" {
 		t.Fatal("retained book disappeared after catalogue expiry")
 	}
+	for _, query := range []string{
+		`UPDATE ipo_pos.ipos SET board='Mainboard',lot_size=12,price_high=1000 WHERE id=$1`,
+		`INSERT INTO ipo_pos.ipo_reservations(ipo_id,category,reserved_shares,basis,source_url,observed_at)
+ VALUES($1,'Retail Shares Offered',36,'shares','https://example.test',now())`,
+		`SELECT ipo_pos.capture_ipo_dashboard_basis($1)`,
+	} {
+		if _, err := owner.Exec(query, ipo); err != nil {
+			t.Fatal(err)
+		}
+	}
+	status, body, _ = cashier.request("GET", base+"/ipos/"+ipo+"/analytics-assumptions", nil, "")
+	expectStatus(t, 200, status, body)
+	if field(t, body["estimated_application_capacity"].(map[string]any), "RETAIL") != "3" ||
+		field(t, body["expected_applications"].(map[string]any), "RETAIL") != "4" {
+		t.Fatal("official capacity did not join the existing demand forecast", body)
+	}
+	status, body, _ = cashier.request("GET", path+"?include=categories", nil, "")
+	expectStatus(t, 200, status, body)
+	if field(t, body, "net_expected_shares") != "18.000000" || field(t, body, "net_direct_shares") != "111.000000" ||
+		field(t, body, "net_pending_shares") != "129.000000" || field(t, body, "net_premium_cost") != "5151.25" {
+		t.Fatal("report did not use the same official capacity as the editor", body)
+	}
 	if _, err := owner.Exec(`UPDATE ipo_pos.transactions SET status='cancelled',version=version+1,change_reason='Empty fixture book'
  WHERE ipo_id=$1 AND status='confirmed'`, ipo); err != nil {
 		t.Fatal(err)
@@ -292,7 +325,7 @@ func testLivePositionAPI(t *testing.T, owner *sql.DB, admin, cashier, other test
 		t.Fatal("empty/cancelled book is not explicit", body)
 	}
 	encoded, err := json.Marshal(body)
-	if err != nil || !strings.Contains(string(encoded), `"calculation_version":2`) {
+	if err != nil || !strings.Contains(string(encoded), `"calculation_version":3`) {
 		t.Fatal("calculation provenance missing")
 	}
 }

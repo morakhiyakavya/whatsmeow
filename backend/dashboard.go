@@ -72,6 +72,9 @@ type livePosition struct {
 	ShareholderAvailability string                      `json:"shareholder_availability"`
 	NetRecordedAmount       string                      `json:"net_recorded_amount"`
 	KnownShares             string                      `json:"known_net_shares"`
+	KnownExpectedShares     string                      `json:"known_net_expected_shares"`
+	DirectShares            string                      `json:"net_direct_shares"`
+	PendingShares           *string                     `json:"net_pending_shares"`
 	KnownPremiumCost        string                      `json:"known_net_premium_cost"`
 	Categories              []positionBucket            `json:"categories,omitempty"`
 	positionMeasures
@@ -97,14 +100,15 @@ const livePositionSQL = `WITH buckets AS (
  'expected_applications',jsonb_build_object('RETAIL',a.retail_expected_applications::text,'SHNI',a.shni_expected_applications::text,
  'BHNI',a.bhni_expected_applications::text,'SHAREHOLDER',a.shareholder_expected_applications::text),
  'basis_version',b.version,'shareholder_availability',COALESCE(b.shareholder_availability,'unknown'),
+ 'forecast_snapshot',` + matchingForecastSnapshot + `,
  'source_last_seen_at',i.last_seen_at,'source_stale',i.last_seen_at IS NULL OR i.last_seen_at<now()-interval '90 minutes',
  'categories',COALESCE((SELECT jsonb_agg(to_jsonb(buckets) ORDER BY form_type_code,category) FROM buckets),'[]'::jsonb))
  FROM ipo_pos.ipos i
  LEFT JOIN LATERAL (SELECT * FROM ipo_pos.ipo_dashboard_assumption_versions
   WHERE business_id=$1 AND ipo_id=i.id ORDER BY version DESC LIMIT 1) a ON true
- LEFT JOIN LATERAL (SELECT version,shareholder_availability FROM ipo_pos.ipo_dashboard_basis_versions
+ LEFT JOIN LATERAL (SELECT version,shareholder_availability,snapshot FROM ipo_pos.ipo_dashboard_basis_versions
   WHERE ipo_id=i.id ORDER BY version DESC LIMIT 1) b ON true
- WHERE i.id=$2 AND EXISTS(SELECT 1 FROM ipo_pos.transactions WHERE business_id=$1 AND ipo_id=i.id)`
+ WHERE i.id=$2`
 
 func (a *api) getLivePosition(w http.ResponseWriter, r *http.Request, user actor) {
 	id, ok := analyticsIPO(w, r)
@@ -140,13 +144,16 @@ func (a *api) getLivePosition(w http.ResponseWriter, r *http.Request, user actor
 	var data json.RawMessage
 	if err := a.db.QueryRowContext(r.Context(), livePositionSQL, user.BusinessID, id).Scan(&data); err != nil {
 		if errors.Is(err, sql.ErrNoRows) {
-			fail(w, 404, "book_unavailable", "No trading book exists for this IPO")
+			fail(w, 404, "book_unavailable", "IPO not found")
 		} else {
 			dbFailure(w, err)
 		}
 		return
 	}
-	var result livePosition
+	var result struct {
+		livePosition
+		ForecastSnapshot json.RawMessage `json:"forecast_snapshot"`
+	}
 	if err := json.Unmarshal(data, &result); err != nil {
 		dbFailure(w, err)
 		return
@@ -155,14 +162,22 @@ func (a *api) getLivePosition(w http.ResponseWriter, r *http.Request, user actor
 		fail(w, 409, "business_data_changed", "Business data changed; refresh before loading this report")
 		return
 	}
-	if err := calculateLivePosition(&result); err != nil {
+	for code, basis := range catalogueForecastBasis(result.ForecastSnapshot) {
+		result.Basis[code] = basis
+	}
+	if err := calculateLivePosition(&result.livePosition); err != nil {
 		dbFailure(w, err)
 		return
 	}
-	if q.Get("include") != "categories" {
-		result.Categories = nil
+	if q.Get("include") == "categories" {
+		writeJSON(w, 200, struct {
+			livePosition
+			Categories []positionBucket `json:"categories"`
+		}{result.livePosition, result.Categories})
+		return
 	}
-	writeJSON(w, 200, result)
+	result.Categories = nil
+	writeJSON(w, 200, result.livePosition)
 }
 
 func (a *api) listPositionBooks(w http.ResponseWriter, r *http.Request, user actor) {
@@ -234,7 +249,7 @@ func valuePosition(m *positionMeasures, gmp *big.Rat) error {
 }
 
 func calculateLivePosition(p *livePosition) error {
-	p.ViewKind, p.CalculationVersion = "live", 2
+	p.ViewKind, p.CalculationVersion = "live", 3
 	p.Count = 0
 	p.positionMeasures = positionMeasures{Reasons: []positionReason{}}
 	p.Date = p.CalculatedAt.In(time.FixedZone("IST", 19800)).Format("2006-01-02")
@@ -248,6 +263,7 @@ func calculateLivePosition(p *livePosition) error {
 		}
 	}
 	shares, cost, recorded, expectedShares, confirmedShares := new(big.Rat), new(big.Rat), new(big.Rat), new(big.Rat), new(big.Rat)
+	directShares := new(big.Rat)
 	expectedKnown, confirmedKnown, costKnown := true, true, true
 	for i := range p.Categories {
 		b := &p.Categories[i]
@@ -279,6 +295,7 @@ func calculateLivePosition(p *livePosition) error {
 		b.PremiumCost = &b.NetAmount
 		switch b.Form {
 		case "SHARES":
+			directShares.Add(directShares, values[2])
 			b.Unit = "shares"
 			b.ConfirmedShares = &b.NetQuantity
 			b.Shares = &b.NetQuantity
@@ -355,9 +372,13 @@ func calculateLivePosition(p *livePosition) error {
 	}
 	p.NetRecordedAmount = *positionString(recorded, 2)
 	p.KnownShares = *positionString(shares, 6)
+	p.KnownExpectedShares = *positionString(expectedShares, 6)
+	p.DirectShares = *positionString(directShares, 6)
+	p.PendingShares = nil
 	p.KnownPremiumCost = *positionString(cost, 2)
 	if expectedKnown {
 		p.ExpectedShares = positionString(expectedShares, 6)
+		p.PendingShares = positionString(new(big.Rat).Add(expectedShares, directShares), 6)
 	} else {
 		p.Reasons = append(p.Reasons, positionReason{"net_expected_shares", "application_or_contract_basis_unavailable"})
 	}

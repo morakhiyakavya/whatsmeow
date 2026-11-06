@@ -8,10 +8,20 @@ WhatsApp credentials are not copied by this setup.
 
 Project `tqfwoudoxundtrhogmwa` was installed and verified on 11 October 2026 using
 the Singapore session pooler on port `5432`. PostgreSQL reports version 17.11.
-Application migrations 001–017 are installed: `ipo_pos` has 38 tables, and the
+Application migrations 001–018 are installed: `ipo_pos` has 38 tables, and the
 backend initialized 17 WhatsApp credential tables at library schema version 16.
 One existing user and business were observed and preserved during migration 011.
 Do not rerun the fresh-install script for this project.
+
+Migration 018 was applied once on 6 November 2026 before the live analytics
+backend rollout. It adds validated calculation basis and additional premium
+cost/credit columns to existing versioned assumptions; it creates no new tables.
+User/transaction/assumption counts stayed 1/8/4. Existing runtime column SELECT
+and INSERT privileges remain valid; UPDATE remains denied. No spreadsheet trades
+or assumption values were imported. Two controlled Jio refresh hints subsequently
+advanced sync metadata without changing the saved financial records; actual phone
+FCM receipt and background catch-up were verified. The separate local development
+database was not migrated.
 
 Migration 017 and runtime grants were applied once on 29 October 2026 (IST),
 before the transaction/analysis-input sync rollout to both hosts. Client TLS used

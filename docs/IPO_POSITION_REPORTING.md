@@ -4,8 +4,9 @@ Agreed behaviour. Settings/history API and source-fact snapshots are implemented
 in migration 015 and deployed on Render. The local live-position list/detail API
 and Android report view now cover exact ledger buckets, configured application
 forecasts, direct shares and premium-only CE/PE costs. Explicit calculation basis
-and extra premium cost/credit use migration 018, now installed on Supabase. Backend rollout and physical-device
-delivery remain pending. Missing inputs retain explicit unknown measures;
+and extra premium cost/credit use migration 018, now installed on Supabase. Render
+rollout and physical-device FCM/catch-up/report checks passed on 6 November 2026.
+Missing inputs retain explicit unknown measures;
 reconciliation, daily closes, listing results and CE/PE quote guidance remain planned.
 Reuse the transaction ledger, immutable versions, shared IPO catalogue and business
 memberships. Pricing follows the [agreed workbook formulas](PROJECT_VISION.md#application-rate-guidance-agreed-implementation-pending).

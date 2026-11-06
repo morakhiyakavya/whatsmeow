@@ -7,8 +7,9 @@ reconciliation/closing/listing contracts are proposed. The live-position list/de
 API and native Android report view now calculate configured application forecasts,
 direct shares and premium-only CE/PE costs. Migration 018 adds versioned explicit
 calculation units/capacities and an additional premium cost/credit. This increment
-is tested locally and migration 018 is installed on the hosted database;
-application deployment and real-device delivery remain pending.
+is deployed on Render at `da0720e`, with migration 018 installed on Supabase.
+Real phone FCM receipt, background catch-up and authenticated report reads passed.
+Azure's importer now runs the same revision after its isolated deployment retry.
 The [dashboard requirements](IPO_POSITION_REPORTING.md) own product behaviour;
 the [rate guidance](PROJECT_VISION.md#application-rate-guidance-agreed-implementation-pending)
 owns pricing formulas. This document defines how to deliver those requirements

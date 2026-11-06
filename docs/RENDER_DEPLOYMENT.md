@@ -7,6 +7,23 @@ business/admin or copy local WhatsApp sessions.
 
 ## Current deployment
 
+Live analytics are deployed at `da0720efa2a648e76d49f4b9c89d04e509599f44`,
+deployment `dep-dbmo83m1egvs73d651dg` (6 November 2026, 13:09:48 IST).
+[Workflow 42181990451](https://github.com/morakhiyakavya/whatsmeow/actions/runs/42181990451)
+passed CI and Render deployment. Migration 018 was applied beforehand. Health is
+200 and unauthenticated analytics reads are 401 with `no-store`. Authenticated
+reads for every saved trading book passed on Android 0.2.6/code 9. A real FCM
+business hint was received on the connected phone, and background catch-up reached
+revision 10964 without a manual sync. Only revision metadata was advanced; no
+spreadsheet trades or forecast settings were imported. Configured application
+basis is still empty, so missing forecasts remain unavailable.
+Azure's first two attempts timed out at SSH. Azure-only retry `127820714883`
+deployed the same revision after the VM became reachable. Render serves the
+Android app and WhatsApp. Azure runs the IPO importer. See the
+[Azure deployment record](AZURE_VM_DEPLOYMENT.md).
+
+### Previous transaction-sync rollout
+
 The transaction/analysis-input sync increment is now live at
 `e1ec5d33ccc023a5317986576e3182b3ae6fe2ef`, Render deployment
 `dep-dbhk4mou01pc73bhksk0` (29 October 2026, 18:26:39 IST).

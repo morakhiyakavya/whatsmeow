@@ -1,5 +1,16 @@
 # Azure VM deployment
 
+## Analytics rollout — 6 November 2026
+
+Azure and Render are live at `da0720efa2a648e76d49f4b9c89d04e509599f44` with
+shared Supabase migration 018. Azure job `127774280319` and retry `127774922789`
+timed out connecting to SSH before the deployment helper ran. After the VM
+became reachable, Azure-only retry `127820714883` verified the original artifact's
+checksum and deployed it. The helper confirmed the exact revision after startup
+and local health checks at 15:07:30 IST. Public `/health` returned 200 and the
+unauthenticated analytics route returned 401, both with `no-store`. Azure runs
+the importer and Android uses Render. [Deployment workflow](https://github.com/morakhiyakavya/whatsmeow/actions/runs/42181990451)
+
 ## Transaction sync rollout — 30 October 2026
 
 Shared Supabase migration 017/runtime grants are applied and Render is live at

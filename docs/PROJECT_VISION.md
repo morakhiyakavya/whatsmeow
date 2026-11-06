@@ -292,8 +292,9 @@ Before implementation is complete, verify workbook parity, lower/default/higher
 factors, whole-rupee rounding, zero/negative GMP, missing/invalid forecast inputs,
 business isolation, and preservation of saved transaction amounts. GMP/forecast
 storage from migration 015 and its settings API are implemented and deployed;
-the live calculation/pricing API and Android controls are implemented locally,
-awaiting rollout with migration 018. CE/PE quote guidance remains deferred.
+the live calculation/pricing API is deployed on Render with migration 018, and
+Android 0.2.6 is installed with verified FCM/background catch-up. CE/PE quote
+guidance remains deferred.
 
 ### Position and historical reporting (agreed; implementation pending)
 
@@ -314,8 +315,9 @@ buckets, configured application forecasts, direct-share GMP valuation and CE/PE
 premium costs. CE/PE labels add no ordinary shares; quote guidance is deferred.
 Missing calculation inputs remain unknown; see the
 [backend contract](../backend/README.md#live-position-detail).
-Migration 018 is installed on Supabase. The backend/Android increment awaits
-application rollout and device verification.
+Migration 018 is installed on Supabase. Render and Android 0.2.6 have verified
+live report reads and FCM/background catch-up. Azure's importer runs the same
+backend revision following its deployment retry.
 Reconciliation, closing and listing remain planned.
 
 The [database and API design](IPO_ANALYTICS_DESIGN.md) proposes additive versioned

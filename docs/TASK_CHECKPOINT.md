@@ -4,9 +4,34 @@ Commit threshold: **3 completed tasks**. Follow the policy in `../AGENTS.md`.
 
 ## Pending
 
-None. The three completed implementation tasks are checkpointed in Batch 45 below.
+None. The three completed tasks are checkpointed in Batch 46 below.
 
 ## Checkpoints
+
+### Batch 46 — Analytics delivery and simpler forecast entry
+
+This checkpoint records the verified Android and Azure rollouts and the local
+Android forecast editor change. The Android source lives in a sibling repository
+alongside earlier changes and remains in its working copy. Older ledger edits
+and unrelated CI/CD documentation remain outside this checkpoint.
+
+1. Deliver saved-book analytics to Android through Render and verified FCM catch-up (6 November 2026 IST).
+   - Behaviour: published Batch 45 as `da0720efa2a648e76d49f4b9c89d04e509599f44`, preserving newer upstream fixes. Existing CI deployed Render `dep-dbmo83m1egvs73d651dg` live at that exact SHA; migration 018 was already installed once. Android development 0.2.6/code 9 is installed with existing data/signing identity. Explicitly registered this signed-in installation through the existing API, then sent a controlled saved-Jio revision hint. No spreadsheet trades, model settings, new financial records or WhatsApp send intents were written. Documented current capabilities, setup, handover and the independent importer failure.
+   - Verification: workflow `42181990451` passed CI (all module tests/vet/static/import/schema/API/rollback/build checks) and Render deployment. Public Render health returned 200; unauthenticated analytics returned 401 with `no-store`. Opt-in on-phone checks passed authenticated reports for all three saved books, both before and after FCM, using the synced business revision without exporting credentials. The actual receiver logged receipt at 13:15:29 IST; a separate passive check confirmed the persisted notification revision, automatic cache advancement to at least 10964 and a cleared dirty marker without forcing sync. Twenty flow/storage tests and ten native screen tests passed (19.299 s and 28.379 s); the input-save regression passed after post-write invalidation. Final APK hash remains `868D4A301AC58D5A7AA5966901DA785DD20328D50EF341CA478DFF9B42F45723`. The first screen attempts were blocked by emulator System UI/phone lock; all affected screen checks passed once the user unlocked the phone. Reviewed rollout documentation and diff whitespace.
+   - Paths: `docs/RENDER_DEPLOYMENT.md`, `docs/AZURE_VM_DEPLOYMENT.md`, `docs/SUPABASE_SETUP.md`, `docs/ANDROID_BUSINESS_SYNC_HANDOVER.md`, `docs/IPO_ANALYTICS_DESIGN.md`, `docs/IPO_POSITION_REPORTING.md`, `docs/PROJECT_VISION.md`, `docs/TODO.md`, `docs/TASK_CHECKPOINT.md` (this Pending entry only); sibling `../transactions/README.md` (rollout notes), `../transactions/app/src/androidTest/java/com/venweb/app/PositionLiveTest.kt` (opt-in registration/passive push/live report checks), `../transactions/app/src/androidTest/java/com/venweb/app/PositionUiTest.kt` (wait/display expectations). Other sibling analytics source/APK paths remain in Batch 45. Runtime registration/FCM/migration/deployment state is external, not source to stage. Preserve unrelated CI/CD and older ledger-history edits.
+   - Limits: Azure jobs `127774280319` and isolated retry `127774922789` timed out at SSH before the helper ran; public HTTPS also timed out. Its binary/configuration was not replaced and current running state is unverified. Android uses the verified Render application host; importer rollout requires restored VM reachability. Saved calculation basis is empty, so application forecasts correctly remain unavailable until admin configuration. Reports/screens are verified, but the phone relocked before leaving the actual Jio dialog open. No release/Play Store build, TalkBack, production load, historical close/reconciliation/listing engine or CE/PE quote guidance. This completes Android application delivery; the independent Azure deployment remains outstanding. Pending: 1/3; rollout documentation is uncommitted.
+
+2. Complete the Azure importer rollout after VM connectivity recovered (6 November 2026 IST).
+   - Behaviour: retried only Azure job `127774922789` in workflow `42181990451`. Retry `127820714883` reused the retained tested artifact for `da0720efa2a648e76d49f4b9c89d04e509599f44`, the revision already serving Android on Render. Azure runs the IPO importer with the shared migration 018. This resolves the outstanding Azure item in task 1.
+   - Verification: GitHub reported the Azure job successful. The artifact checksum passed, and the deployment helper confirmed the exact revision after startup and local health checks at 15:07:30 IST. Public health returned 200. The new analytics route returned 401 without credentials. Both responses used `no-store`. Reviewed rollout documentation and diff whitespace.
+   - Paths: `docs/AZURE_VM_DEPLOYMENT.md`, `docs/ANDROID_BUSINESS_SYNC_HANDOVER.md`, `docs/IPO_ANALYTICS_DESIGN.md`, `docs/PROJECT_VISION.md`, `docs/RENDER_DEPLOYMENT.md`, `docs/TODO.md`, `docs/TASK_CHECKPOINT.md` (this Pending entry only). Preserve prior rollout notes and unrelated changes.
+   - Limits: the retry reused prior CI and the installed migration. A fresh IPO import was not exercised. Pending: 2/3.
+
+3. Reuse fetched IPO inputs in the Android forecast editor (6 November 2026 IST).
+   - Behaviour: each category has one expected-demand field. Optional allotment inputs expand under the same category, and the forecast fields no longer have a generic missing-capacity label above them. Mainboard Retail can use the fetched lot size with one tap. Admins can select a published-share-based capacity estimate when its underlying application size matches the entered shares and both values use application counts. Saved overrides are retained. Big Retail still shares the Retail forecast. The existing API and calculation model are reused.
+   - Verification: all 13 focused analysis-input unit tests passed and both debug APKs built. Checked the grouped editor, source-value selection, docs and diffs. The Android emulator repeatedly stalled during app and System UI startup, so the instrumented screen checks could not finish.
+   - Paths relative to `../transactions/`: `app/src/main/java/com/venweb/app/AnalysisInputs.kt` (source-value helpers), `app/src/main/java/com/venweb/app/DeskScreens.kt` (forecast editor only), `app/src/test/java/com/venweb/app/AnalysisInputTest.kt` (source compatibility regression), `app/src/androidTest/java/com/venweb/app/AnalysisInputUiTest.kt` (updated editor checks), `README.md` (editor paragraph only). This repository: `docs/TASK_CHECKPOINT.md` (Batch 46 only).
+   - Limits: local Android build. No handset installation, hosted change or release build. Capacity remains an explicitly selected estimate when official allotment capacity is unavailable.
 
 ### Batch 45 — Live forecasts and Android analytics
 

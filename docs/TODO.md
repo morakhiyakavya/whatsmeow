@@ -23,7 +23,8 @@
   factor. Give users an adjustable Subject 2 factor starting at 80%; changes affect
   suggestions, not saved transaction rates, amounts or share quantities. Include
   the input controls and business-isolated GMP/forecast settings when delivering
-  this feature. API and Android implementation are locally tested; rollout is pending.
+  this feature. Render/Android rollout, authenticated report reads and FCM catch-up
+  are verified; empty calculation basis still requires admin configuration.
 
 ## IPO positions and history
 
@@ -32,8 +33,9 @@
   application/CE/PE measures. Extended locally with configured application forecasts,
   premium-only CE/PE costs, retained-book pagination and native Android report views.
 - [x] Apply migration 018 on Supabase, preserving saved financial records and grants.
-- [ ] Deploy the tested backend and verify Android FCM-driven
+- [x] Deploy the tested application backend and verify Android FCM-driven
   analytics refresh with saved transactions; spreadsheet trades are validation only.
+- [x] Finish the independent Azure importer deployment and verify its live revision.
 - [x] Document the [current dashboard requirements](IPO_POSITION_REPORTING.md),
   business management controls, expected application-count inputs, daily closing
   preservation and NSE-first/BSE-fallback reference without payment tracking.

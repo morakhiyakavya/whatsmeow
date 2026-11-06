@@ -1,5 +1,29 @@
 # Android handover: transactions and analysis inputs
 
+## Live analytics extension — 6 November 2026
+
+Render now runs `da0720efa2a648e76d49f4b9c89d04e509599f44` with migration 018.
+Android 0.2.6/code 9 adds Dashboard Analytics and Trading book analytics, using
+saved transactions only. The list endpoint returns retained book names/IDs; the
+detail endpoint accepts `include=categories&revision=<cached revision>`. See the
+[live report/input contract](../backend/README.md#live-position-detail).
+An FCM hint contains the same minimal revision fields shown below. After cache
+catch-up, refetch an open report through the authenticated API. Do not put reports
+into FCM. Revision mismatch returns 409; failures retain the original calculation
+time with a stale marker. Closed/business/session changes reject late responses.
+Explicit calculation shares/capacity/units and additional premium costs use the
+existing admin assumption editor. Empty basis leaves forecasts unknown; CE/PE
+contributes entered premium cost and no ordinary shares. Quote guidance is deferred.
+
+Real phone FCM receipt and automatic background catch-up to revision 10964 passed,
+followed by authenticated revision-checked reports for all saved books. The APK
+uses the existing debug certificate; SHA-256:
+`868D4A301AC58D5A7AA5966901DA785DD20328D50EF341CA478DFF9B42F45723`.
+Azure's importer now runs the same revision after its isolated retry. Android
+uses Render for application traffic.
+
+## Previous sync baseline
+
 Use this document as the Android developer/agent entry point. The implementation
 baseline is backend commit `ccf6c5c`; the detailed protocol is
 [BUSINESS_DATA_SYNC.md](BUSINESS_DATA_SYNC.md). Existing contact/profile contracts
@@ -94,8 +118,9 @@ Supported kinds:
 
 A null `data` is a tombstone. Remove that kind/ID from local records. These are
 latest-state deltas; use the existing transaction history API for audit versions.
-Position balances, allotment reconciliation and computed reports remain pending;
-do not present saved inputs as completed analysis.
+Live computed reports are now available through the separate authenticated
+analytics API. Allotment reconciliation, historical closes and listing results
+remain pending; saved inputs alone are not completed analysis.
 
 When `next_revision` is non-null, keep the original `since_revision` and the
 first response's `revision`, then pass all three cursor values:

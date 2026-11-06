@@ -4,9 +4,33 @@ Commit threshold: **3 completed tasks**. Follow the policy in `../AGENTS.md`.
 
 ## Pending
 
-None. The three completed tasks are checkpointed in Batch 46 below.
+None. The three completed tasks are checkpointed in Batch 47 below.
 
 ## Checkpoints
+
+### Batch 47 — IPO analytics rollout and dashboard shortcuts
+
+The backend rollout was published as `b5d99d9`. Android source remains in the
+sibling working copy with earlier edits. This checkpoint records the three
+completed tasks without staging unrelated repository changes.
+
+1. Separate saved trades from share forecasts and reuse catalogue capacity (6 November 2026 IST).
+   - Behaviour: Android shows saved demand on IPO cards and supports entering it before terms are available. The editor shows the backend's estimated capacity above one demand field per category and removes the lot size and manual allotment controls. The IPO Analytics view separates signed buy/sell quantities and weighted rates from expected allotments, direct holdings and pending shares. Mainboard Retail and qualifying SHNI/BHNI use catalogue-derived estimates. The backend keeps previously saved models for categories without a catalogue rule, and missing contributions remain pending. An authenticated business can open a catalogue IPO report before its first trade.
+   - Verification: disposable schema and manual-ledger checks passed. The final focused integration confirmed a pre-trade demand save, later catalogue capacity reuse, matching editor/report values and business isolation. Catalogue, signed-position and costing tests passed. Backend vet, staticcheck and formatting passed. Eleven focused Android unit tests, debug/test APK builds and lint passed. Updated native screen checks compiled. Reviewed owned diffs and docs.
+   - Paths: `backend/analytics_assumptions.go`, `backend/dashboard.go`, `backend/dashboard_source_basis.go`, `backend/dashboard_source_basis_test.go`, `backend/dashboard_test.go`, `backend/README.md`, `docs/TASK_CHECKPOINT.md` (this entry only). Sibling paths relative to `../transactions/`: `app/src/main/java/com/venweb/app/AnalysisInputs.kt`, `app/src/main/java/com/venweb/app/DeskScreens.kt`, `app/src/main/java/com/venweb/app/PositionReports.kt`, `app/src/main/java/com/venweb/app/PositionScreens.kt`, `app/src/debug/java/com/venweb/app/DesignPreviewActivity.kt`, `app/src/test/java/com/venweb/app/AnalysisInputTest.kt`, `app/src/androidTest/java/com/venweb/app/AnalysisInputUiTest.kt`, `app/src/androidTest/java/com/venweb/app/PositionUiTest.kt`, `README.md` (analytics/editor paragraphs only).
+   - Limits: local build awaiting a paired backend rollout and handset install. Native screen instrumentation was compiled but not run. Catalogue-based estimates do not yet cover Big Retail, Shareholder or SME without an existing applicable model. Pending: 1/3.
+
+2. Roll out the two-tab IPO analytics to both servers and the connected Pixel (6 November 2026 IST).
+   - Behaviour: published the reviewed backend as `b5d99d9f5ebd719afe568de69f15e640ec9c96f1` through workflow `42203490522`. Render deployed `dep-dbmqr1etlv9c73bon3hg` and the Azure helper confirmed the same revision. Installed the paired Android build with ADB replacement, preserving the signed-in installation. The rollout reused the existing hosted schema.
+   - Verification: CI, Render and Azure jobs passed. Both hosts returned health 200 and unauthenticated analytics 401 with `no-store`. The installed APK matched SHA-256 `DFE30D793D67CA0A1A6E71D50FB52571F10AE48DAD6788BC477D55D3DE7C41C9`. The Pixel passed the authenticated live position check and, after the user unlocked it, both the analytics tab and capacity placement screen checks. Reviewed rollout notes and whitespace.
+   - Paths: `docs/TASK_CHECKPOINT.md` (this entry only) and sibling `../transactions/README.md` (analytics rollout paragraph only). The server revision and APK installation are external runtime state.
+   - Limits: no fresh IPO import or FCM delivery test in this rollout. Pending: 2/3.
+
+3. Open each IPO report from its own dashboard button and remove the premium adjustment editor (6 November 2026 IST).
+   - Behaviour: each IPO card opens Trades & rates or Expected & pending directly. Retained books offer the same two actions. Reports retain their selected view on refresh. Business-input saves omit the premium adjustment so the existing API preserves previously recorded values. A nonzero adjustment remains visible in the report totals breakdown.
+   - Verification: 11 focused Android unit tests, debug and test APK builds, and lint passed. Updated screen and refresh instrumentation compiled. Reviewed the UI paths, saved-input payload and diff whitespace. Debug APK SHA-256 `5F841FDCB150BE48E5E798AE8B61319D458960CC3517C16B51FC7E5DE64B97BB`.
+   - Paths relative to `../transactions/`: `app/src/main/java/com/venweb/app/AnalysisInputs.kt`, `app/src/main/java/com/venweb/app/DeskScreens.kt`, `app/src/main/java/com/venweb/app/PositionScreens.kt`, `app/src/main/java/com/venweb/app/PosViewModel.kt` (report selection), `app/src/debug/java/com/venweb/app/DesignPreviewActivity.kt` (report previews), `app/src/test/java/com/venweb/app/AnalysisInputTest.kt`, `app/src/androidTest/java/com/venweb/app/AnalysisInputUiTest.kt`, `app/src/androidTest/java/com/venweb/app/PositionUiTest.kt`, `app/src/androidTest/java/com/venweb/app/PositionFlowTest.kt`, `README.md` (dashboard report paragraph). This repository: `docs/TASK_CHECKPOINT.md` (Batch 47 only).
+   - Limits: local Android build. Handset installation and native screen execution are pending. The existing server requires no update.
 
 ### Batch 46 — Analytics delivery and simpler forecast entry
 

@@ -5,6 +5,10 @@ application sign-in, business membership, customers, the shared IPO/form catalog
 transactions, complete immutable transaction history, and business-owned WhatsApp
 account registration. No frontend is required to exercise the API.
 
+Optional [Azure Spot recovery](../docs/AZURE_VM_RECOVERY.md) runs on Render and
+checks the configured importer VM every five minutes. Its last result appears
+in `/health`; health requests themselves perform no Azure calls or mutations.
+
 Transaction and analysis-input sync additionally requires migration 017 and
 refreshed runtime grants. `GET /api/businesses/{businessID}/data/sync` provides
 revision-checked deltas for transactions, saved assumptions and shared IPO/source

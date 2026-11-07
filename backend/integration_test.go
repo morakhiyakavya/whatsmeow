@@ -5,6 +5,7 @@ import (
 	"context"
 	"database/sql"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"io"
 	"net/http"
@@ -156,6 +157,18 @@ func TestManualLedgerIntegration(t *testing.T) {
 	if field(t, object, "status") != "ok" || healthHeaders.Get("Cache-Control") != "no-store" {
 		t.Fatal("health response changed or could be cached")
 	}
+	app.azureVM = newAzureVMRecovery(azureVMFixture())
+	app.azureVM.status.Store(&azureVMStatus{State: "deallocated", Action: "start_requested"})
+	app.azureVM.client.Transport = ipoTransport(func(*http.Request) (*http.Response, error) {
+		t.Error("health endpoint must not call Azure or request VM startup")
+		return nil, errors.New("unexpected Azure request")
+	})
+	status, object, _ = client.request("GET", "/health", nil, "")
+	expectStatus(t, 200, status, object)
+	if field(t, object["azure_vm"].(map[string]any), "state") != "deallocated" || field(t, object, "status") != "ok" {
+		t.Fatal("health must expose cached recovery state without depending on VM availability")
+	}
+	app.azureVM = nil
 	status, object, _ = client.request("GET", "/api/me", nil, "")
 	expectStatus(t, 401, status, object)
 	status, object, _ = client.request("POST", "/api/login", map[string]string{"phone_number": bootstrap.AdminPhone, "password": "wrong-password"}, "")

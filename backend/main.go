@@ -37,6 +37,7 @@ type api struct {
 	developmentSignup bool
 	release           string
 	ipoJobToken       string
+	azureVM           *azureVMRecovery
 }
 
 func main() {
@@ -147,6 +148,11 @@ func run(envPath string, bootstrap bool) error {
 		stopPerformance := startPerformanceMonitor(ctx, app, config)
 		defer stopPerformance()
 	}
+	if config.AzureVM != nil {
+		app.azureVM = newAzureVMRecovery(*config.AzureVM)
+		stopRecovery := app.azureVM.start(ctx)
+		defer stopRecovery()
+	}
 	server := &http.Server{Addr: config.Addr, Handler: app.routes(), ReadHeaderTimeout: 5 * time.Second, ReadTimeout: 10 * time.Second, WriteTimeout: 15 * time.Second, IdleTimeout: 60 * time.Second}
 	serverErr := make(chan error, 1)
 	listener, err := net.Listen("tcp", config.Addr)
@@ -253,7 +259,11 @@ func (a *api) health(w http.ResponseWriter, r *http.Request) {
 		fail(w, 503, "database_unavailable", "Database is unavailable")
 		return
 	}
-	writeJSON(w, 200, map[string]string{"status": "ok"})
+	status := map[string]any{"status": "ok"}
+	if a.azureVM != nil {
+		status["azure_vm"] = a.azureVM.status.Load()
+	}
+	writeJSON(w, 200, status)
 }
 
 func writeJSON(w http.ResponseWriter, status int, v any) {

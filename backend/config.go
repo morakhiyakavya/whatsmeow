@@ -20,6 +20,7 @@ type configuration struct {
 	SentryDSN, SentryEnvironment, SentryRelease                                                string
 	FCMProjectID, FCMCredentialsFile                                                           string
 	IPOJobToken, IPODatabaseURL                                                                string
+	AzureVM                                                                                    *azureVMConfig
 }
 
 func loadConfig(path string) (configuration, error) {
@@ -57,6 +58,9 @@ func loadConfig(path string) (configuration, error) {
 		return values[key]
 	}
 	c := configuration{DatabaseURL: get("DATABASE_URL"), Addr: get("API_ADDR"), BusinessName: get("BOOTSTRAP_BUSINESS_NAME"), AdminName: get("BOOTSTRAP_ADMIN_NAME"), AdminPhone: get("BOOTSTRAP_ADMIN_PHONE"), AdminPassword: get("BOOTSTRAP_ADMIN_PASSWORD"), WhatsAppDatabaseURL: get("WHATSAPP_DATABASE_URL")}
+	if c.AzureVM, err = loadAzureVMConfig(get); err != nil {
+		return c, err
+	}
 	setting := get("ALLOW_PASSWORD_LOGIN")
 	if setting != "" && setting != "true" && setting != "false" {
 		return c, errors.New("ALLOW_PASSWORD_LOGIN must be true or false")

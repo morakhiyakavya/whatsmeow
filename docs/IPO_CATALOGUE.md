@@ -21,6 +21,13 @@ not duplicate them. Business GMP/counts/factors are never changed by ingestion.
 Existing installations require an explicit migration; rollout notes below describe
 their last deployed version.
 
+The consolidated-subscription increment requires migrations 001–018 followed by
+[019](../database/019_combined_ipo_subscriptions.sql). Migration 019 allows the
+`NSE+BSE` subscription coverage label and adds nullable `source_observed_at`.
+Existing observations keep their original coverage. Apply 019 once as migration
+owner before deploying the new backend. Fresh local/hosted setup and the schema
+runner include it. This source increment is awaiting production migration and deployment.
+
 Set `IPO_JOB_TOKEN` privately using at least 32 random bytes (43 URL-safe base64
 characters). The setting accepts 43–128 non-whitespace characters. Set
 `IPO_DATABASE_URL` to the trusted worker connection for catalogue writes; when
@@ -78,7 +85,11 @@ lot size, registrar, issue-size wording/shares/amount (INR), last-seen/terms tim
 expected timeline values, derived status and `catalogue_stale`. Related arrays:
 
 - `subscriptions`: category/label, offered/bid shares, application count, multiple,
-  source, coverage, observation time and staleness. Total is separately published;
+  source, coverage, fetch observation time, `source_observed_at` when published,
+  and staleness. Staleness uses publication time when available, otherwise fetch
+  observation time. Mainboard rows have `coverage=NSE+BSE`; legacy NSE-only
+  mainboard observations are retained in storage and omitted from this array
+  until consolidated observations replace them. Total is separately published;
   overlapping NII parent/child rows are never added together.
 - `reservations`: category, reserved shares, percentage, basis, source URL/time.
 - `promoter_shareholdings`: holder, pre/post percentages, source URL/time.
@@ -90,6 +101,18 @@ Decimals are strings; bounded lot counts are integers. Missing values remain
 unknown; empty enrichment arrays mean no observation, not proven absence. Latest
 observations are upserted, not a historical quote series. Expected timeline values
 remain labelled separately from confirmed opening/closing/listing dates.
+
+Reservations come from recognised allocation columns, excluding subscription/bid
+tables. Tables with share counts take precedence over percentage-only duplicates.
+Combined `shares (percentage)` cells retain both units. A zero percentage beside
+positive shares is omitted as inconsistent; counts are preserved and missing
+counts are never inferred from a percentage. Each row retains the source's column
+labels in `basis`; denominators are not assumed to match across tables.
+A successful nonempty reservation observation removes obsolete IPO Watch category
+labels for that issue in the same transaction, while preserving other providers,
+immutable earlier snapshots and business inputs. Missing/failed reservation
+observations retain the previous set. The next successful import captures the
+corrected current set for business-data synchronisation.
 
 Amounts use the upper price band and whole lots. Mainboard minima correctly
 respect strict lower boundaries, fixing the upstream exact-boundary rounding.
@@ -108,12 +131,34 @@ errors/credentials. Catalogue/subscription observations become stale after 90 mi
 
 NSE current/upcoming/recent-past feeds populate the catalogue. Details/enrichment
 target open, upcoming within 21 days and closed within seven days. Older products
-remain available. Subscription coverage is explicitly NSE-only; complete BSE-only
-coverage is unverified. Provider keys match only provider-owned rows; manual
+remain available. Automatic discovery covers NSE-listed issues, including issues
+also listing on BSE. The importer contacts NSE and IPO Watch. Provider keys match only provider-owned rows; manual
 products are not joined by name. Renamed/reused identities require review.
 Invalid/partial/empty responses preserve prior data, and failed rows do not block
 valid issues. Disappearance does not imply withdrawal. NSE list issue size can
 exclude anchors, so its wording is preserved without inventing a total.
+
+Mainboard subscriptions come directly from NSE's `activeCat.dataList`, the
+exchange-published NSE+BSE consolidated book. Header rows are skipped, numeric
+fields use `noOfShareOffered`, `noOfSharesBid` and `noOfTotalMeant`, and
+`activeCat.updateTime` supplies publication time. The current-issue feed also
+provides a published consolidated headline total. Totals and overlapping NII
+parent/child rows remain separate. Missing combined category data remains
+unavailable or retains the previous combined observation.
+
+NSE SME issues use the single-exchange `bidDetails` book, labelled `NSE only`.
+This retains their published application counts when combined-table placeholders
+are empty or zero. Mainboard combined rows have unknown application counts unless
+the consolidated source publishes them; NSE-only application counts are never
+carried into a combined row. Changing a row's coverage replaces its numeric
+fields atomically; sparse updates within the same coverage retain known values.
+An NSE-only observation cannot overwrite a combined row, and older or undated
+observations cannot overwrite a timestamped combined observation. Mainboard forecast
+capacity uses combined offered-share observations or separate published reservations.
+
+`IPO_LIVE_SOURCE_TEST=1` enables read-only `TestNSECombinedLiveSources`, which checks
+published consolidated demand when a current mainboard issue is available. It
+reports a skip when the current feed has no suitable issue.
 
 IPO Watch candidates are issuer-verified; later recognised tables supersede
 template duplicates. Unknown placeholders and unpublished anchor dates stay

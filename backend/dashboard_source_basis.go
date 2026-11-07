@@ -29,6 +29,7 @@ func catalogueForecastBasis(snapshot json.RawMessage) map[string]calculationBasi
 		Subscriptions []struct {
 			Category string `json:"category"`
 			Shares   string `json:"offered_shares"`
+			Coverage string `json:"coverage"`
 		} `json:"subscriptions"`
 	}
 	basis := map[string]calculationBasis{}
@@ -59,7 +60,7 @@ func catalogueForecastBasis(snapshot json.RawMessage) map[string]calculationBasi
 		}
 		if offered == "" {
 			for _, row := range facts.Subscriptions {
-				if row.Category == category {
+				if row.Category == category && row.Coverage == "NSE+BSE" {
 					offered = row.Shares
 					break
 				}

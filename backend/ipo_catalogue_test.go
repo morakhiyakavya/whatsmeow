@@ -80,7 +80,7 @@ func TestIPOSourceParsing(t *testing.T) {
 		t.Fatal(item, err)
 	}
 	s := item.Subscriptions[len(item.Subscriptions)-1]
-	if s.Category != "individual" || s.Multiple != nil || *s.Applications != "3" {
+	if s.Category != "individual" || s.Coverage != "NSE only" || s.Multiple != nil || *s.Applications != "3" {
 		t.Fatal(s)
 	}
 	if err := parseIPODetail([]byte(strings.Replace(detail, "EXAMPLE", "OTHER", 1)), &item); err == nil {

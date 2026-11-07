@@ -95,6 +95,7 @@ func run(envPath string, bootstrap bool) error {
 		AND to_regclass('ipo_pos.ipo_import_runs') IS NOT NULL
 		AND to_regclass('ipo_pos.ipo_dashboard_assumption_versions') IS NOT NULL
 		AND to_regclass('ipo_pos.ipo_dashboard_basis_versions') IS NOT NULL
+		AND EXISTS (SELECT 1 FROM information_schema.columns WHERE table_schema='ipo_pos' AND table_name='ipo_subscriptions' AND column_name='source_observed_at')
 		AND EXISTS (SELECT 1 FROM information_schema.columns WHERE table_schema='ipo_pos' AND table_name='ipo_dashboard_assumption_versions' AND column_name='calculation_basis')
 		AND EXISTS (SELECT 1 FROM ipo_pos.form_types WHERE code='SHAREHOLDER')
 		AND EXISTS (SELECT 1 FROM information_schema.columns WHERE table_schema='ipo_pos' AND table_name='login_attempts' AND column_name='recovery_hash')
@@ -104,7 +105,7 @@ func run(envPath string, bootstrap bool) error {
         AND EXISTS (SELECT 1 FROM pg_constraint WHERE conrelid=to_regclass('ipo_pos.transaction_versions') AND conname='transaction_versions_nonzero_quantity_check')
         AND EXISTS (SELECT 1 FROM pg_constraint WHERE conrelid=to_regclass('ipo_pos.transactions') AND conname='transactions_signed_rate_check')
         AND EXISTS (SELECT 1 FROM pg_constraint WHERE conrelid=to_regclass('ipo_pos.transaction_versions') AND conname='transaction_versions_signed_rate_check')`).Scan(&schemaReady); err != nil || !schemaReady {
-		return errors.New("apply application migrations through database/018_analytics_calculation_basis.sql before starting the API")
+		return errors.New("apply application migrations through database/019_combined_ipo_subscriptions.sql before starting the API")
 	}
 	app, err := newAPI(db)
 	if err != nil {

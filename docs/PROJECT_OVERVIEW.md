@@ -125,7 +125,7 @@ The importer stores IPO identity, board, dates, price bands and available lot, s
 
 The selected architecture triggers the Azure importer through an authenticated Sentry POST every 30 minutes. A fast acknowledgement means the job was queued, not that collection succeeded. The Go worker persists results and failures; partial or stale coverage is visible through the API. Missing/failed fields preserve valid existing observations and stable IPO references.
 
-Current subscriptions have NSE-only coverage; complete BSE-only coverage is unverified. Overlapping NII parent and subcategory figures must not be summed. Published share-subscription multiples do not automatically establish an applicant's success probability.
+The consolidated-subscription source increment targets NSE-listed IPOs and reads NSE's published combined NSE+BSE mainboard figures. NSE SME observations retain single-exchange coverage. This increment is awaiting production migration 019 and deployment. Overlapping NII parent and subcategory figures must not be summed. Published share-subscription multiples do not automatically establish an applicant's success probability.
 
 Application amounts use the shared issue-specific lot and price rules where supported. A base lot, shares applied for and shares actually allotted are different quantities. Do not hardcode Retail 199 as a fixed lot count, or assume Mainboard and SME rules are interchangeable.
 

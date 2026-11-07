@@ -51,8 +51,8 @@ func (a *api) ipoImportStatus(w http.ResponseWriter, r *http.Request, _ actor) {
 	 'latest_run',(SELECT to_jsonb(j) FROM ipo_pos.ipo_import_runs j ORDER BY j.created_at DESC LIMIT 1),
 	 'last_successful_refresh',(SELECT max(finished_at) FROM ipo_pos.ipo_import_runs WHERE status='succeeded'),
 	 'last_partial_refresh',(SELECT max(finished_at) FROM ipo_pos.ipo_import_runs WHERE status='partial'),
-	 'coverage','NSE only; BSE-only coverage unverified',
-	 'stale',NOT EXISTS(SELECT 1 FROM ipo_pos.ipo_import_runs WHERE status IN ('succeeded','partial') AND finished_at>now()-interval '90 minutes'))`)
+	 'coverage',$1::text,
+	 'stale',NOT EXISTS(SELECT 1 FROM ipo_pos.ipo_import_runs WHERE status IN ('succeeded','partial') AND finished_at>now()-interval '90 minutes'))`, ipoSourceCoverage)
 }
 
 func openIPOImportDatabase(ctx context.Context, dsn string) (*sql.DB, error) {
@@ -283,18 +283,30 @@ func saveSourceIPOs(ctx context.Context, db *sql.DB, items []ipoSourceIssue) err
 		 registrar=COALESCE(NULLIF(s."Registrar",''),i.registrar),issue_size_text=COALESCE(NULLIF(s."IssueText",''),i.issue_size_text),
 		 issue_size_shares=COALESCE(s."IssueShares"::numeric,i.issue_size_shares),terms_observed_at=clock_timestamp()
 		 FROM source s WHERE i.id=s.id AND s."DetailOK"`,
-		`INSERT INTO ipo_pos.ipo_subscriptions(ipo_id,category,label,source,offered_shares,bid_shares,applications,multiple,observed_at)
-		 SELECT s.id,x."Category",x."Label",'nse',x."Offered",x."Bid",x."Applications",x."Multiple",clock_timestamp()
+		`INSERT INTO ipo_pos.ipo_subscriptions AS stored(ipo_id,category,label,source,coverage,offered_shares,bid_shares,applications,multiple,observed_at,source_observed_at)
+		 SELECT s.id,x."Category",x."Label",'nse',COALESCE(NULLIF(x."Coverage",''),'NSE only'),
+		 x."Offered",x."Bid",x."Applications",x."Multiple",clock_timestamp(),x."SourceObservedAt"
 		 FROM source s CROSS JOIN LATERAL jsonb_to_recordset(s."Subscriptions") AS x(
-		 "Category" text,"Label" text,"Offered" numeric,"Bid" numeric,"Applications" numeric,"Multiple" numeric)
+		 "Category" text,"Label" text,"Coverage" text,"Offered" numeric,"Bid" numeric,"Applications" numeric,"Multiple" numeric,"SourceObservedAt" timestamptz)
 		 ON CONFLICT(ipo_id,category) DO UPDATE SET label=excluded.label,
-		 offered_shares=COALESCE(excluded.offered_shares,ipo_subscriptions.offered_shares),
-		 bid_shares=COALESCE(excluded.bid_shares,ipo_subscriptions.bid_shares),applications=COALESCE(excluded.applications,ipo_subscriptions.applications),
-		 multiple=COALESCE(excluded.multiple,ipo_subscriptions.multiple),observed_at=excluded.observed_at`,
+		 offered_shares=CASE WHEN stored.coverage=excluded.coverage THEN COALESCE(excluded.offered_shares,stored.offered_shares) ELSE excluded.offered_shares END,
+		 bid_shares=CASE WHEN stored.coverage=excluded.coverage THEN COALESCE(excluded.bid_shares,stored.bid_shares) ELSE excluded.bid_shares END,
+		 applications=CASE WHEN stored.coverage=excluded.coverage THEN COALESCE(excluded.applications,stored.applications) ELSE excluded.applications END,
+		 multiple=CASE WHEN stored.coverage=excluded.coverage THEN COALESCE(excluded.multiple,stored.multiple) ELSE excluded.multiple END,
+		 source_observed_at=CASE WHEN stored.coverage=excluded.coverage THEN COALESCE(excluded.source_observed_at,stored.source_observed_at) ELSE excluded.source_observed_at END,
+		 coverage=excluded.coverage,observed_at=excluded.observed_at
+		 WHERE (stored.coverage='NSE only' OR excluded.coverage='NSE+BSE')
+		 AND (stored.coverage<>excluded.coverage OR stored.source_observed_at IS NULL
+		 OR excluded.source_observed_at>=stored.source_observed_at)`,
 		`UPDATE ipo_pos.ipos i SET timeline=i.timeline||s."Timeline" FROM source s
 		 WHERE i.id=s.id AND s."Timeline"<>'{}'::jsonb`,
 		`UPDATE ipo_pos.ipos i SET issue_size_amount=COALESCE(s."IssueAmount"::numeric,i.issue_size_amount)
 		 FROM source s WHERE i.id=s.id AND s."EnrichmentOK"`,
+		`DELETE FROM ipo_pos.ipo_reservations r USING source s
+		 WHERE r.ipo_id=s.id AND s."EnrichmentOK" AND jsonb_array_length(s."Reservations")>0
+		 AND r.source_url LIKE 'https://ipowatch.in/%'
+		 AND NOT EXISTS (SELECT 1 FROM jsonb_array_elements(s."Reservations") entry
+		 WHERE entry->>'Category'=r.category)`,
 		`INSERT INTO ipo_pos.ipo_reservations(ipo_id,category,reserved_shares,percentage,basis,source_url,observed_at)
 		 SELECT DISTINCT ON (s.id,x."Category") s.id,x."Category",x."Shares",x."Percentage",x."Basis",s."EnrichmentURL",clock_timestamp()
 		 FROM source s CROSS JOIN LATERAL jsonb_array_elements(s."Reservations") WITH ORDINALITY AS entry(value,position)

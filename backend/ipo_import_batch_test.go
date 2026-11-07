@@ -80,7 +80,7 @@ func TestIPOImportBatchIntegration(t *testing.T) {
 		return len(counter.queries)
 	}
 	single, batch := queriesFor(items[:1]), queriesFor(items[1:])
-	if single != batch || batch > 11 {
+	if single != batch || batch > 12 {
 		t.Fatalf("query count grows with IPO count: single=%d batch=%d", single, batch)
 	}
 	t.Logf("one IPO and 39 IPOs each use %d database calls, including one BEGIN/COMMIT", batch)
@@ -136,6 +136,54 @@ func TestIPOImportBatchIntegration(t *testing.T) {
 	if err := db.QueryRow(`SELECT id FROM ipo_pos.ipos WHERE source_issue_id=$1`, bad.Symbol).Scan(&absentID); err != sql.ErrNoRows {
 		t.Fatal("invalid issue survived rollback", err)
 	}
+	t.Run("replace source reservations atomically and preserve sparse refreshes", func(t *testing.T) {
+		item := ipoSourceIssue{Symbol: "RESERVATIONFIXTURE", Name: "Reservation fixture", Board: "SME",
+			EnrichmentOK: true, EnrichmentURL: "https://ipowatch.in/reservation-fixture-ipo/",
+			Reservations: []ipoReservation{{Category: "NII Shares Offered", Percentage: ptr("39.96"), Basis: "Old template"}}}
+		if err := saveSourceIPOs(ctx, db, []ipoSourceIssue{item}); err != nil {
+			t.Fatal(err)
+		}
+		if _, err := db.Exec(`INSERT INTO ipo_pos.ipo_reservations(ipo_id,category,reserved_shares,basis,source_url,observed_at)
+		 SELECT id,'Other provider',100,'Other provider','https://www.nseindia.com/fixture',now()
+		 FROM ipo_pos.ipos WHERE source_issue_id=$1`, item.Symbol); err != nil {
+			t.Fatal(err)
+		}
+		item.Reservations = []ipoReservation{{Category: "NII", Shares: ptr("2260800"), Percentage: ptr("39.49"), Basis: "Net issue"}}
+		if err := saveSourceIPOs(ctx, db, []ipoSourceIssue{item}); err != nil {
+			t.Fatal(err)
+		}
+		assertCurrent := func() {
+			t.Helper()
+			var matches bool
+			if err := db.QueryRow(`SELECT
+			 (SELECT count(*)=2 AND bool_and(category IN ('NII','Other provider')) FROM ipo_pos.ipo_reservations WHERE ipo_id=i.id)
+			 AND (SELECT snapshot->'reservations'->0->>'category'='NII Shares Offered'
+			 FROM ipo_pos.ipo_dashboard_basis_versions WHERE ipo_id=i.id ORDER BY version LIMIT 1 OFFSET 1)
+			 AND (SELECT jsonb_array_length(snapshot->'reservations')=2 FROM ipo_pos.ipo_dashboard_basis_versions
+			 WHERE ipo_id=i.id ORDER BY version DESC LIMIT 1)
+			 FROM ipo_pos.ipos i WHERE source_issue_id=$1`, item.Symbol).Scan(&matches); err != nil || !matches {
+				t.Fatal("obsolete rows retained, other provider lost, or history changed", matches, err)
+			}
+		}
+		assertCurrent()
+		// Failed enrichment and pages without a reservation table retain the last set.
+		item.EnrichmentOK = false
+		item.Reservations = []ipoReservation{{Category: "Unverified", Shares: ptr("1")}}
+		if err := saveSourceIPOs(ctx, db, []ipoSourceIssue{item}); err != nil {
+			t.Fatal(err)
+		}
+		assertCurrent()
+		item.EnrichmentOK, item.Reservations = true, nil
+		if err := saveSourceIPOs(ctx, db, []ipoSourceIssue{item}); err != nil {
+			t.Fatal(err)
+		}
+		assertCurrent()
+		item.Reservations = []ipoReservation{{Category: "Invalid", Percentage: ptr("101"), Basis: "Invalid"}}
+		if err := saveSourceIPOs(ctx, db, []ipoSourceIssue{item}); err == nil {
+			t.Fatal("invalid replacement accepted")
+		}
+		assertCurrent()
+	})
 	// Cancelled work must return promptly without committing a valid subset.
 	cancelCtx, cancel := context.WithCancel(ctx)
 	cancel()

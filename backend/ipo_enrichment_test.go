@@ -16,6 +16,72 @@ func enrichmentFixture(name string) string {
 	return `<h1>` + name + ` IPO Date, Review</h1><table><tr><th>Investor Category</th><th>Shares (%)</th></tr><tr><td>Retail</td><td>35%</td></tr></table>`
 }
 
+func TestIPOReservationTables(t *testing.T) {
+	for _, test := range []struct {
+		name    string
+		rows    [][]string
+		shares  string
+		percent string
+	}{
+		{"shares only", [][]string{{"Investor Category", "Shares Offered"}, {"Retail", "33,96,000"}}, "3396000", ""},
+		{"percentage only", [][]string{{"Investor Category", "Shares (%)"}, {"Retail", "35%"}}, "", "35.000000"},
+		{"combined cell", [][]string{{"Investor Category", "Shares (%)"}, {"Retail", "33,96,000 (60.03%)"}}, "3396000", "60.030000"},
+		{"reordered columns", [][]string{{"Investor Category", "% Net Issue", "Shares Offered"}, {"Retail", "59.32%", "33,96,000"}}, "3396000", "59.320000"},
+		{"placeholder percent", [][]string{{"Investor Category", "Shares Offered", "% Net Issue"}, {"- bNII > ₹10L", "15,07,200", "0.00%"}}, "1507200", ""},
+		{"published zero", [][]string{{"Investor Category", "Shares Offered", "Percentage"}, {"Shareholder", "0", "0%"}}, "0", "0.000000"},
+	} {
+		t.Run(test.name, func(t *testing.T) {
+			rows := parseIPOReservations(test.rows)
+			if len(rows) != 1 {
+				t.Fatal(rows)
+			}
+			value := func(s *string) string {
+				if s == nil {
+					return ""
+				}
+				return *s
+			}
+			if value(rows[0].Shares) != test.shares || value(rows[0].Percentage) != test.percent || strings.HasPrefix(rows[0].Category, "-") {
+				t.Fatalf("unexpected reservation: %+v", rows[0])
+			}
+		})
+	}
+	for _, rows := range [][][]string{
+		nil, {{}}, {{"Investor Category"}, {"Retail"}},
+		{{"Investor Category", "Subscription (x)", "Shares Offered", "Shares bid for"}, {"Retail", "2.26x", "3396000", "7668000"}},
+		{{"Investor Category", "Shares Offered", "Shares Applied"}, {"Retail", "3396000", "7668000"}},
+		{{"Investor Category", "Shares Offered", "Amount"}, {"Retail", "3396000", "100"}},
+		{{"Investor Category", "Shares", "Percentage"}, {"Retail", "1000", "35%"}, {"NII", "500"}},
+		{{"Investor Category", "Shares", "Percentage"}, {"Retail", "1000", "35%"}, {"NII", "TBA", "TBA"}},
+		{{"Unknown Header", "Shares", "Percentage"}, {"Retail", "1000", "35%"}},
+	} {
+		if got := parseIPOReservations(rows); len(got) != 0 {
+			t.Fatal("unrecognised or incomplete reservation table accepted", got)
+		}
+	}
+}
+
+func TestIPOReservationsPreferShareCountsAndIgnoreSubscriptionTables(t *testing.T) {
+	fixture := `<h1>Vedant Poly Fabs IPO</h1>
+<table><tr><th>Investor Category</th><th>Shares Offered</th><th>% Net Issue</th></tr>
+<tr><td>NII</td><td>22,60,800</td><td>39.49%</td></tr>
+<tr><td>- bNII > ₹10L</td><td>15,07,200</td><td>0%</td></tr>
+<tr><td>- sNII &lt; ₹10L</td><td>7,53,600</td><td>0%</td></tr>
+<tr><td>Retail</td><td>33,96,000</td><td>59.32%</td></tr></table>
+<table><tr><th>Investor Category</th><th>Shares (%)</th></tr><tr><td>Retail Shares Offered</td><td>60.03%</td></tr></table>
+<table><tr><th>Investor Category</th><th>Subscription (x)</th><th>Shares Offered</th><th>Shares bid for</th></tr>
+<tr><td>Retail</td><td>2.26x</td><td>33,96,000</td><td>76,68,000</td></tr></table>`
+	item := ipoSourceIssue{Name: "Vedant Poly Fabs Limited"}
+	if err := parseIPOEnrichment(strings.NewReader(fixture), &item, "https://ipowatch.in/vedant-poly-fabs-ipo/"); err != nil {
+		t.Fatal(err)
+	}
+	if len(item.Reservations) != 4 || *item.Reservations[0].Shares != "2260800" ||
+		item.Reservations[1].Percentage != nil || item.Reservations[2].Percentage != nil ||
+		*item.Reservations[3].Percentage != "59.320000" || !strings.Contains(item.Reservations[0].Basis, "% Net Issue") {
+		t.Fatalf("reservation table replaced or units confused: %+v", item.Reservations)
+	}
+}
+
 func TestIPOEnrichmentMappings(t *testing.T) {
 	for symbol, mapping := range ipoEnrichmentMappings {
 		t.Run(symbol, func(t *testing.T) {

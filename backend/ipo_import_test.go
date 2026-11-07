@@ -118,7 +118,7 @@ func TestIPOCatalogueIntegration(t *testing.T) {
 	if err := db.QueryRow(`SELECT (now() AT TIME ZONE 'Asia/Kolkata')::date`).Scan(&today); err != nil {
 		t.Fatal(err)
 	}
-	item := ipoSourceIssue{Symbol: "SOURCEFIXTURE", Name: "Source Fixture Limited", Board: "Mainboard", Open: ptr(today.Format("2006-01-02")), Close: ptr(today.AddDate(0, 0, 3).Format("2006-01-02")), Low: ptr("900"), High: ptr("1000"), Lot: 200, Registrar: "Fixture Registrar", DetailOK: true, EnrichmentOK: true, EnrichmentURL: "https://ipowatch.in/source-fixture-ipo/", Timeline: map[string]any{}, Subscriptions: []ipoSubscription{{Category: "total", Label: "Total", Multiple: ptr("2.5"), Offered: ptr("1000"), Bid: ptr("2500")}}, Reservations: []ipoReservation{{Category: "Retail", Percentage: ptr("35"), Shares: ptr("1000"), Basis: "Net offer"}}, Shareholdings: []ipoShareholding{{Holder: "Promoters", Pre: ptr("90"), Post: ptr("70")}}, Lockins: []ipoLockin{{Label: "30 days", Date: "2026-11-19"}}}
+	item := ipoSourceIssue{Symbol: "SOURCEFIXTURE", Name: "Source Fixture Limited", Board: "Mainboard", Open: ptr(today.Format("2006-01-02")), Close: ptr(today.AddDate(0, 0, 3).Format("2006-01-02")), Low: ptr("900"), High: ptr("1000"), Lot: 200, Registrar: "Fixture Registrar", DetailOK: true, EnrichmentOK: true, EnrichmentURL: "https://ipowatch.in/source-fixture-ipo/", Timeline: map[string]any{}, Subscriptions: []ipoSubscription{{Category: "total", Label: "Total", Coverage: "NSE+BSE", Multiple: ptr("2.5"), Offered: ptr("1000"), Bid: ptr("2500")}}, Reservations: []ipoReservation{{Category: "Retail", Percentage: ptr("35"), Shares: ptr("1000"), Basis: "Net offer"}}, Shareholdings: []ipoShareholding{{Holder: "Promoters", Pre: ptr("90"), Post: ptr("70")}}, Lockins: []ipoLockin{{Label: "30 days", Date: "2026-11-19"}}}
 	collect := func(context.Context) ([]ipoSourceIssue, map[string]string) {
 		return []ipoSourceIssue{item}, map[string]string{"current": "ok", "upcoming": "ok", "past": "ok"}
 	}
@@ -152,7 +152,7 @@ func TestIPOCatalogueIntegration(t *testing.T) {
 		if row["id"] == importedID {
 			found = true
 			apps := row["category_applications"].([]any)
-			if len(apps) != 3 || apps[1].(map[string]any)["min_amount"] != "400000.00" || len(row["reservations"].([]any)) != 1 || len(row["promoter_shareholdings"].([]any)) != 1 || len(row["anchor_lockins"].([]any)) != 1 {
+			if len(apps) != 3 || apps[1].(map[string]any)["min_amount"] != "400000.00" || len(row["subscriptions"].([]any)) != 1 || len(row["reservations"].([]any)) != 1 || len(row["promoter_shareholdings"].([]any)) != 1 || len(row["anchor_lockins"].([]any)) != 1 {
 				t.Fatal(row)
 			}
 		}
@@ -170,7 +170,7 @@ func TestIPOCatalogueIntegration(t *testing.T) {
 	}); err != nil {
 		t.Fatal(err)
 	}
-	partial := ipoSourceIssue{Symbol: item.Symbol, Name: item.Name, Board: item.Board, Subscriptions: []ipoSubscription{{Category: "total", Label: "Total", Multiple: ptr("3")}}}
+	partial := ipoSourceIssue{Symbol: item.Symbol, Name: item.Name, Board: item.Board, Subscriptions: []ipoSubscription{{Category: "total", Label: "Total", Coverage: "NSE+BSE", Multiple: ptr("3")}}}
 	if err = saveSourceIPOs(ctx, db, []ipoSourceIssue{partial}); err != nil {
 		t.Fatal(err)
 	}

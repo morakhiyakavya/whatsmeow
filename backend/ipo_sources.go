@@ -19,6 +19,8 @@ import (
 type ipoSubscription struct {
 	Category, Label                      string
 	Offered, Bid, Applications, Multiple *string
+	Coverage                             string
+	SourceObservedAt                     *time.Time
 }
 type ipoReservation struct {
 	Category, Basis    string
@@ -46,6 +48,8 @@ type ipoSourceIssue struct {
 }
 type ipoSourceClient struct{ http *http.Client }
 
+const ipoSourceCoverage = "NSE-listed IPOs; published NSE+BSE mainboard subscriptions; NSE-only SME subscriptions"
+
 func newIPOSourceClient() *ipoSourceClient {
 	jar, _ := cookiejar.New(nil)
 	return &ipoSourceClient{http: &http.Client{Jar: jar, Timeout: 15 * time.Second, CheckRedirect: func(req *http.Request, via []*http.Request) error {
@@ -58,7 +62,7 @@ func newIPOSourceClient() *ipoSourceClient {
 
 func (s *ipoSourceClient) get(ctx context.Context, target string) (body []byte, resultErr error) {
 	u, err := url.Parse(target)
-	if err != nil || u.Scheme != "https" || (u.Host != "www.nseindia.com" && u.Host != "ipowatch.in") {
+	if err != nil || u.Scheme != "https" || u.User != nil || (u.Host != "www.nseindia.com" && u.Host != "ipowatch.in") {
 		return nil, errors.New("invalid source host")
 	}
 	span := startOperation(ctx, "http.client", "ipo.source_request")
@@ -223,7 +227,11 @@ func parseIPOFeed(data []byte, past bool, now time.Time) ([]ipoSourceIssue, erro
 			}
 		}
 		if m := sourceNumber(sourceText(row["noOfTime"]), false); m != nil {
-			item.Subscriptions = []ipoSubscription{{Category: "total", Label: "Total", Multiple: m, Offered: sourceNumber(sourceText(row["noOfSharesOffered"]), true), Bid: sourceNumber(sourceText(row["noOfsharesBid"]), true)}}
+			coverage := "NSE+BSE"
+			if board == "SME" {
+				coverage = "NSE only"
+			}
+			item.Subscriptions = []ipoSubscription{{Category: "total", Label: "Total", Coverage: coverage, Multiple: m, Offered: sourceNumber(sourceText(row["noOfSharesOffered"]), true), Bid: sourceNumber(sourceText(row["noOfsharesBid"]), true)}}
 		}
 		// NSE list issueSize can exclude anchors; preserve the raw label, not a fabricated total.
 		if raw := sourceText(row["issueSize"]); raw != "" {
@@ -235,7 +243,7 @@ func parseIPOFeed(data []byte, past bool, now time.Time) ([]ipoSourceIssue, erro
 }
 
 func (s *ipoSourceClient) collect(ctx context.Context) ([]ipoSourceIssue, map[string]string) {
-	results := map[string]string{"coverage": "NSE only; BSE-only coverage unverified"}
+	results := map[string]string{"coverage": ipoSourceCoverage}
 	// NSE issues API-session cookies on its public homepage.
 	_, _ = s.get(ctx, "https://www.nseindia.com/")
 	bySymbol := map[string]ipoSourceIssue{}
@@ -316,7 +324,14 @@ func parseIPODetail(data []byte, item *ipoSourceIssue) error {
 				Value json.RawMessage `json:"value"`
 			} `json:"dataList"`
 		} `json:"issueInfo"`
-		Bids []map[string]json.RawMessage `json:"bidDetails"`
+		Bids     []map[string]json.RawMessage `json:"bidDetails"`
+		Combined struct {
+			Rows    []map[string]json.RawMessage `json:"dataList"`
+			Updated string                       `json:"updateTime"`
+		} `json:"activeCat"`
+		Demand struct {
+			Timestamp string `json:"timestamp"`
+		} `json:"demandGraph"`
 	}
 	if json.Unmarshal(data, &body) != nil || body.Info.Symbol != item.Symbol || len(body.Info.Rows) == 0 {
 		return errors.New("unverified IPO detail")
@@ -347,8 +362,16 @@ func parseIPODetail(data []byte, item *ipoSourceIssue) error {
 	if matches := sharePattern.FindAllStringSubmatch(item.IssueText, -1); len(matches) == 1 {
 		item.IssueShares = sourceNumber(matches[0][1], true)
 	}
-	keys := map[string]string{"1": "qib", "2": "nii", "2.1": "bhni", "2.2": "shni", "3": "retail", "4": "employee"}
-	for _, row := range body.Bids {
+	rows := body.Combined.Rows
+	offeredKey, bidKey, multipleKey := "noOfShareOffered", "noOfSharesBid", "noOfTotalMeant"
+	coverage, published := "NSE+BSE", sourceTimestamp(body.Combined.Updated)
+	if item.Board == "SME" {
+		rows = body.Bids
+		offeredKey, bidKey, multipleKey = "noOfSharesOffered", "noOfsharesBid", "noOfTime"
+		coverage, published = "NSE only", sourceTimestamp(body.Demand.Timestamp)
+	}
+	keys := map[string]string{"1": "qib", "2": "nii", "2.1": "bhni", "2.2": "shni", "3": "retail", "4": "employee", "5": "shareholder", "6": "policyholder"}
+	for _, row := range rows {
 		label, serial := sourceText(row["category"]), sourceText(row["srNo"])
 		key, ok := keys[serial]
 		if strings.EqualFold(label, "Total") {
@@ -360,16 +383,19 @@ func parseIPODetail(data []byte, item *ipoSourceIssue) error {
 		if item.Board == "SME" && key == "retail" {
 			key = "individual"
 		}
-		bid := sourceNumber(sourceText(row["noOfsharesBid"]), true)
-		if bid == nil {
+		bid := sourceNumber(sourceText(row[bidKey]), true)
+		if bid == nil && item.Board == "SME" {
 			bid = sourceNumber(sourceText(row["noOfshareBid"]), true)
 		}
-		offered := sourceNumber(sourceText(row["noOfSharesOffered"]), true)
-		multiple := sourceNumber(sourceText(row["noOfTime"]), false)
+		offered := sourceNumber(sourceText(row[offeredKey]), true)
+		multiple := sourceNumber(sourceText(row[multipleKey]), false)
 		if offered == nil || *offered == "0" {
 			multiple = nil
 		}
-		entry := ipoSubscription{key, label, offered, bid, sourceNumber(sourceText(row["noofapplication"]), true), multiple}
+		entry := ipoSubscription{Category: key, Label: label, Offered: offered, Bid: bid, Multiple: multiple, Coverage: coverage, SourceObservedAt: published}
+		if item.Board == "SME" {
+			entry.Applications = sourceNumber(sourceText(row["noofapplication"]), true)
+		}
 		if offered == nil && bid == nil && entry.Applications == nil {
 			continue
 		}
@@ -386,5 +412,22 @@ func parseIPODetail(data []byte, item *ipoSourceIssue) error {
 		}
 	}
 	item.DetailOK = true
+	return nil
+}
+
+func sourceTimestamp(value string) *time.Time {
+	value = strings.TrimSpace(value)
+	for _, prefix := range []string{"updated as on ", "as on "} {
+		if strings.HasPrefix(strings.ToLower(value), prefix) {
+			value = value[len(prefix):]
+			break
+		}
+	}
+	value = strings.TrimSpace(strings.TrimSuffix(value, "IST"))
+	for _, layout := range []string{"2-Jan-2006 15:04:05", "2-Jan-2006 15:04"} {
+		if stamp, err := time.ParseInLocation(layout, value, time.FixedZone("IST", 19800)); err == nil {
+			return &stamp
+		}
+	}
 	return nil
 }

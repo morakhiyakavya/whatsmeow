@@ -18,6 +18,12 @@ The [IPO catalogue importer](../docs/IPO_CATALOGUE.md) adds source-owned IPO ter
 subscriptions, reservations, promoter shareholding, anchor lock-ins and category
 application amounts. A protected Sentry uptime POST queues a durable refresh job.
 Apply migration 013 and runtime grants before starting this version.
+The consolidated subscription increment requires
+[migration 019](../database/019_combined_ipo_subscriptions.sql) after migrations
+001–018. Automatic discovery covers NSE-listed Mainboard and SME IPOs.
+Mainboard demand uses NSE's published combined NSE+BSE table. NSE SME demand
+uses its single-exchange book. Coverage and upstream publication times are
+returned with each observation. See [source coverage](../docs/IPO_CATALOGUE.md#sources-and-preservation).
 The dashboard assumptions increment additionally requires
 [migration 015](../database/015_dashboard_assumptions.sql) after 014 and refreshed
 runtime grants. The current contact-notification increment below also requires 016.

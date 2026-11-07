@@ -9,9 +9,18 @@ Published-link discovery and company-name normalization were additionally review
 at `bde34dff35952ffd856375a384d430337e144f88`; this integration extracts names and
 source links without importing upstream GMP values.
 
+Consolidated subscription field mappings and source-timestamp parsing in
+`backend/ipo_sources.go` are adapted from
+[Aman4563/finresearch](https://github.com/Aman4563/finresearch), reviewed at
+commit `8cda1eea23dba09e6b2ada31f342bd1f2ee25ab9`. The integration uses the existing
+Go collector and persistence pipeline for NSE-listed IPOs and NSE-published
+consolidated NSE+BSE mainboard subscriptions.
+
 MIT License
 
 Copyright (c) 2026 Prateek Heda
+
+Copyright (c) 2026 Aman4563 and FinResearch contributors
 
 Permission is hereby granted, free of charge, to any person obtaining a copy
 of this software and associated documentation files (the "Software"), to deal

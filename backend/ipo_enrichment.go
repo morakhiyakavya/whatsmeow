@@ -148,6 +148,60 @@ func percentage(text string) *string {
 	return value
 }
 
+func parseIPOReservations(rows [][]string) []ipoReservation {
+	if len(rows) < 2 || len(rows[0]) == 0 || !strings.EqualFold(strings.TrimSpace(rows[0][0]), "Investor Category") {
+		return nil
+	}
+	sharesColumn, percentColumn := -1, -1
+	for column, heading := range rows[0][1:] {
+		heading = strings.ToLower(heading)
+		if strings.Contains(heading, "bid") || strings.Contains(heading, "subscription") || strings.Contains(heading, "applied") || strings.Contains(heading, "amount") {
+			return nil
+		}
+		if strings.Contains(heading, "share") {
+			sharesColumn = column + 1
+		}
+		if strings.Contains(heading, "%") || strings.Contains(heading, "percent") {
+			percentColumn = column + 1
+		}
+	}
+	if sharesColumn < 0 && percentColumn < 0 {
+		return nil
+	}
+	reservations := []ipoReservation{}
+	for _, row := range rows[1:] {
+		if len(row) <= max(sharesColumn, percentColumn) {
+			return nil
+		}
+		category := strings.TrimLeft(strings.TrimSpace(row[0]), "-–— ")
+		if category == "" || strings.EqualFold(category, "Investor Category") {
+			continue
+		}
+		var shares, p *string
+		if sharesColumn >= 0 {
+			count, _, _ := strings.Cut(row[sharesColumn], "(")
+			shares = sourceNumber(count, true)
+		}
+		if percentColumn >= 0 {
+			cell := row[percentColumn]
+			if _, percent, combined := strings.Cut(cell, "("); combined {
+				cell = strings.TrimSpace(strings.TrimSuffix(strings.TrimSpace(percent), ")"))
+			}
+			p = percentage(cell)
+		}
+		// A zero percentage alongside positive shares is a source placeholder.
+		if shares != nil && *shares != "0" && p != nil && *p == "0.000000" {
+			p = nil
+		}
+		if shares == nil && p == nil {
+			return nil
+		}
+		reservations = append(reservations, ipoReservation{category,
+			"IPO Watch: " + strings.Join(rows[0][1:], " / ") + "; denominator not independently confirmed", shares, p})
+	}
+	return reservations
+}
+
 func parseIPOEnrichment(reader io.Reader, item *ipoSourceIssue, source string) error {
 	doc, err := html.Parse(reader)
 	if err != nil {
@@ -185,31 +239,24 @@ func parseIPOEnrichment(reader io.Reader, item *ipoSourceIssue, source string) e
 	}
 	tables := htmlTables(doc)
 	found := false
+	reservationShareCount := 0
 	// Later matching tables replace template duplicates, as in the upstream extractor.
 	for _, rows := range tables {
 		if len(rows) == 0 {
 			continue
 		}
 		header := strings.ToLower(strings.Join(rows[0], " "))
-		if strings.Contains(header, "investor category") {
-			reservations := []ipoReservation{}
-			for _, row := range rows[1:] {
-				if len(row) < 2 {
-					continue
-				}
-				p := percentage(row[len(row)-1])
-				var shares *string
-				if len(row) > 2 {
-					shares = sourceNumber(row[1], true)
-				}
-				if shares != nil || p != nil {
-					reservations = append(reservations, ipoReservation{row[0], "As labelled by IPO Watch; denominator not independently confirmed", shares, p})
+		if reservations := parseIPOReservations(rows); len(reservations) > 0 {
+			shareCount := 0
+			for _, row := range reservations {
+				if row.Shares != nil {
+					shareCount++
 				}
 			}
-			if len(reservations) > 0 {
-				item.Reservations = reservations
-				found = true
+			if shareCount >= reservationShareCount {
+				item.Reservations, reservationShareCount = reservations, shareCount
 			}
+			found = true
 		}
 		if strings.Contains(header, "particular") && strings.Contains(header, "pre ipo") {
 			pre, post := -1, -1

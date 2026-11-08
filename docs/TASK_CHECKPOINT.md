@@ -8,6 +8,13 @@ None. The three completed tasks are checkpointed in Batch 49 below.
 
 ## Checkpoints
 
+### Batch 51 — SME IPO capacity and board metadata
+
+Checkpointed the reviewed backend portion for the user-authorized rollout on 8 November 2026. Android source remains in the sibling working copy, and existing mixed work stays outside this commit.
+
+- Eligible SME Individual capacity uses two lots and the published category quota. Vedant's saved quota yields 1,415 slots. The position report and book list expose the board. No migration is required.
+- The Vedant calculation and PostgreSQL-backed editor/report integration passed locally. Paths are `backend/dashboard_source_basis.go`, `backend/dashboard_source_basis_test.go`, `backend/dashboard.go`, `backend/dashboard_test.go`, `backend/README.md`, and this ledger entry.
+
 ### Batch 50 — Immediate WhatsApp confirmation delivery
 
 Checkpointed separately for the user-authorized server publication on 8 November 2026. The earlier three mixed Android tasks remain pending and unstaged. Only the reviewed backend implementation, its setup/documentation changes and this ledger entry belong to this commit.

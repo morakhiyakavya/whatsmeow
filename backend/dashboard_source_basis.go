@@ -33,13 +33,21 @@ func catalogueForecastBasis(snapshot json.RawMessage) map[string]calculationBasi
 		} `json:"subscriptions"`
 	}
 	basis := map[string]calculationBasis{}
-	if json.Unmarshal(snapshot, &facts) != nil || facts.IPO.Board != "Mainboard" || facts.IPO.Lot <= 0 {
+	if json.Unmarshal(snapshot, &facts) != nil || facts.IPO.Lot <= 0 {
 		return basis
 	}
 	// shortcut: estimate minimum allotment slots from published quotas until actual allotment models are available.
-	minimums := map[string]int64{"retail": facts.IPO.Lot}
+	minimums := map[string]int64{}
+	if facts.IPO.Board == "Mainboard" {
+		minimums["retail"] = facts.IPO.Lot
+	}
 	for _, category := range ipoApplications(facts.IPO.Board, facts.IPO.Price, facts.IPO.Lot, facts.IPO.Opens) {
-		if category.Category == "shni" && facts.IPO.Opens > "2022-04-01" {
+		switch {
+		case category.Category == "individual":
+			if shares, err := strconv.ParseInt(category.MinShares, 10, 64); err == nil {
+				minimums["retail"] = shares
+			}
+		case facts.IPO.Board == "Mainboard" && category.Category == "shni" && facts.IPO.Opens > "2022-04-01":
 			// Both NII pools use the minimum NII allotment size. Their bid limits differ.
 			if shares, err := strconv.ParseInt(category.MinShares, 10, 64); err == nil {
 				minimums["shni"], minimums["bhni"] = shares, shares
@@ -47,10 +55,18 @@ func catalogueForecastBasis(snapshot json.RawMessage) map[string]calculationBasi
 		}
 	}
 	for category, minimum := range minimums {
+		sourceCategory, coverage := category, "NSE+BSE"
+		if facts.IPO.Board == "SME" {
+			sourceCategory, coverage = "individual", "NSE only"
+		}
 		var offered string
 		for _, row := range facts.Reservations {
 			label := strings.TrimSpace(strings.ToLower(row.Category))
-			if row.Shares != "" && (label == category || label == category+" shares offered" || category == "retail" && label == "retail individual investors") {
+			matches := label == category || label == category+" shares offered" || category == "retail" && label == "retail individual investors"
+			if facts.IPO.Board == "SME" {
+				matches = matches || label == "individual" || label == "individual investors" || label == "individual shares offered"
+			}
+			if row.Shares != "" && matches {
 				if offered != "" && offered != row.Shares {
 					offered = "conflicting"
 					break
@@ -60,7 +76,7 @@ func catalogueForecastBasis(snapshot json.RawMessage) map[string]calculationBasi
 		}
 		if offered == "" {
 			for _, row := range facts.Subscriptions {
-				if row.Category == category && row.Coverage == "NSE+BSE" {
+				if row.Category == sourceCategory && row.Coverage == coverage {
 					offered = row.Shares
 					break
 				}

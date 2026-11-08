@@ -421,10 +421,12 @@ shares. Flat books retain their cost/credit and estimated result, with a null
 break-even and `zero_net_shares` reason. Money is returned as decimal strings to
 two places; shares and rates to six. Negative GMP, quantities and rates are retained.
 
-For Mainboard Retail and supported SHNI/BHNI pools, the backend derives a planning
-capacity from the matched catalogue snapshot. It divides the category's published
-quota by the minimum allotment size, rounded down. Retail uses the fetched lot size.
-SHNI and BHNI use the minimum NII allotment size with separately published quotas.
+The backend derives planning capacity from the matched catalogue snapshot by dividing
+the published category quota by the minimum allotment size and rounding down.
+Mainboard Retail uses one lot, and supported Mainboard SHNI and BHNI pools use the
+minimum NII allotment size with separately published quotas. For SME issues under
+the rules effective 1 July 2025, Individual uses two lots and the existing `RETAIL`
+forecast key. Automatic SME SHNI and BHNI capacity remains unavailable.
 The assumptions endpoint exposes those same estimates as `estimated_application_capacity`.
 Existing business calculation settings remain available for categories outside the
 catalogue model. For a bucket with matching forecast units,

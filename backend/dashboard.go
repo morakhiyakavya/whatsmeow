@@ -49,6 +49,7 @@ type livePosition struct {
 	IPOID                   string                      `json:"ipo_id"`
 	Code                    string                      `json:"code"`
 	Name                    string                      `json:"name"`
+	Board                   *string                     `json:"board"`
 	Currency                string                      `json:"currency"`
 	ViewKind                string                      `json:"view_kind"`
 	CalculationVersion      int                         `json:"calculation_version"`
@@ -91,7 +92,7 @@ const livePositionSQL = `WITH buckets AS (
   sum(total_amount)::text AS net_recorded_amount,sum(quantity*rate)::text AS unrounded_agreed_amount
  FROM ipo_pos.transactions WHERE business_id=$1 AND ipo_id=$2 AND status='confirmed'
  GROUP BY form_type_code,category
-) SELECT jsonb_build_object('business_id',$1::uuid,'ipo_id',i.id,'code',i.code,'name',i.name,
+) SELECT jsonb_build_object('business_id',$1::uuid,'ipo_id',i.id,'code',i.code,'name',i.name,'board',i.board,
  'currency',(SELECT currency_code FROM ipo_pos.businesses WHERE id=$1),'calculated_at',statement_timestamp(),
  'revision',COALESCE((SELECT revision FROM ipo_pos.business_data_revisions WHERE business_id=$1),0)::text,
  'gmp',a.gmp::text,'assumption_version',COALESCE(a.version,0),'assumptions_recorded_at',a.recorded_at,
@@ -194,11 +195,11 @@ func (a *api) listPositionBooks(w http.ResponseWriter, r *http.Request, user act
 		after = "00000000-0000-0000-0000-000000000000"
 	}
 	queryJSON(w, r, a.db, 200, `WITH books AS (
- SELECT i.id,i.code,i.name FROM ipo_pos.ipos i WHERE i.id>$2::uuid
+ SELECT i.id,i.code,i.name,i.board FROM ipo_pos.ipos i WHERE i.id>$2::uuid
  AND EXISTS(SELECT 1 FROM ipo_pos.transactions t WHERE t.business_id=$1 AND t.ipo_id=i.id)
  ORDER BY i.id LIMIT ($3+1)
  ), visible AS (SELECT * FROM books ORDER BY id LIMIT $3)
- SELECT jsonb_build_object('items',COALESCE((SELECT jsonb_agg(jsonb_build_object('ipo_id',id,'code',code,'name',name) ORDER BY id) FROM visible),'[]'::jsonb),
+ SELECT jsonb_build_object('items',COALESCE((SELECT jsonb_agg(jsonb_build_object('ipo_id',id,'code',code,'name',name,'board',board) ORDER BY id) FROM visible),'[]'::jsonb),
  'next_after_id',CASE WHEN (SELECT count(*) FROM books)>$3 THEN (SELECT id FROM visible ORDER BY id DESC LIMIT 1) END)`, user.BusinessID, after, p.Limit)
 }
 

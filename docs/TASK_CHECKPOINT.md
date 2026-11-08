@@ -8,6 +8,13 @@ None. The three completed tasks are checkpointed in Batch 49 below.
 
 ## Checkpoints
 
+### Batch 53 — SME application rounding and issue-size metadata
+
+Checkpointed the reviewed backend portion for the user-authorized rollout on 8 November 2026. The Android presentation changes remain in the sibling working copy.
+
+- SME capacity rounds to the nearest application, with halves rounded up. Vedant yields 1,415 Individual, 209 SHNI, and 419 Big HNI. The assumptions API exposes the known issue size for the Android reservation display.
+- The full backend suite, PostgreSQL integration, Go vet, and whitespace review passed. Paths are `backend/analytics_assumptions.go`, `backend/dashboard_source_basis.go`, `backend/dashboard_source_basis_test.go`, `backend/dashboard_test.go`, `backend/README.md`, and this ledger entry.
+
 ### Batch 52 — SME SHNI and Big HNI capacity
 
 Checkpointed the reviewed backend changes for the user-authorized rollout on 8 November 2026.

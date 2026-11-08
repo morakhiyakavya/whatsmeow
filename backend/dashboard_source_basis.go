@@ -37,7 +37,7 @@ func catalogueForecastBasis(snapshot json.RawMessage) map[string]calculationBasi
 	if json.Unmarshal(snapshot, &facts) != nil || facts.IPO.Lot <= 0 {
 		return basis
 	}
-	// shortcut: estimate minimum allotment slots from published quotas until actual allotment models are available.
+	// shortcut: estimate applications from published quotas until actual allotment models are available.
 	minimums := map[string]int64{}
 	if facts.IPO.Board == "Mainboard" {
 		minimums["retail"] = facts.IPO.Lot
@@ -102,6 +102,9 @@ func catalogueForecastBasis(snapshot json.RawMessage) map[string]calculationBasi
 			continue
 		}
 		shares, _ := new(big.Int).SetString(offered, 10)
+		if facts.IPO.Board == "SME" {
+			shares.Add(shares, big.NewInt(minimum/2))
+		}
 		capacity := shares.Quo(shares, big.NewInt(minimum))
 		if capacity.Sign() > 0 {
 			basis[strings.ToUpper(category)] = calculationBasis{strconv.FormatInt(minimum, 10), capacity.String(), "applications"}

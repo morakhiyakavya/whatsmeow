@@ -422,13 +422,16 @@ break-even and `zero_net_shares` reason. Money is returned as decimal strings to
 two places; shares and rates to six. Negative GMP, quantities and rates are retained.
 
 The backend derives planning capacity from the matched catalogue snapshot by dividing
-the published category quota by the minimum allotment size and rounding down.
+the published category quota by the minimum allotment size. Mainboard capacity rounds
+down. SME capacity rounds to the nearest whole application, with halves rounded up.
 Mainboard Retail uses one lot, and supported Mainboard SHNI and BHNI pools use the
 minimum NII allotment size with separately published quotas. For SME issues under
 the rules effective 1 July 2025, Individual uses two lots and the existing `RETAIL`
 forecast key. SME SHNI and BHNI use three lots per minimum allotment and their own
 published quotas, following [SEBI Schedule XIV Part A2](https://egazette.gov.in/WriteReadData/2025/261516.pdf#page=108).
 The assumptions endpoint exposes those same estimates as `estimated_application_capacity`.
+It also exposes `issue_size_shares` when known, so the app can show each SME reservation
+as a percentage of the full issue while preserving the published snapshot.
 Existing business calculation settings remain available for categories outside the
 catalogue model. For a bucket with matching forecast units,
 `ratio = capacity / expected total` and `shares = signed quantity * shares per application * ratio`.

@@ -316,7 +316,7 @@ func testLivePositionAPI(t *testing.T, owner *sql.DB, admin, cashier, other test
 		t.Fatal("report did not use the same official capacity as the editor", body)
 	}
 	for _, query := range []string{
-		`UPDATE ipo_pos.ipos SET board='SME',lot_size=1200,price_low=88,price_high=94,
+		`UPDATE ipo_pos.ipos SET board='SME',lot_size=1200,price_low=88,price_high=94,issue_size_shares=6030000,
  opens_on='2026-11-02',closes_on='2026-11-04',listing_on='2026-11-09' WHERE id=$1`,
 		`UPDATE ipo_pos.ipo_reservations SET reserved_shares=7200 WHERE ipo_id=$1 AND category='Retail Shares Offered'`,
 		`INSERT INTO ipo_pos.ipo_reservations(ipo_id,category,reserved_shares,basis,source_url,observed_at)
@@ -332,7 +332,8 @@ func testLivePositionAPI(t *testing.T, owner *sql.DB, admin, cashier, other test
 	expectStatus(t, 200, status, body)
 	capacities := body["estimated_application_capacity"].(map[string]any)
 	if len(capacities) != 3 || field(t, capacities, "RETAIL") != "3" ||
-		field(t, capacities, "SHNI") != "209" || field(t, capacities, "BHNI") != "418" {
+		field(t, capacities, "SHNI") != "209" || field(t, capacities, "BHNI") != "419" ||
+		field(t, body, "issue_size_shares") != "6030000" {
 		t.Fatal("SME editor did not return each pool's capacity", body)
 	}
 	status, body, _ = cashier.request("GET", path+"?include=categories", nil, "")

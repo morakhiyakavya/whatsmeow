@@ -58,7 +58,7 @@ func TestCatalogueForecastBasisUsesTwoLotsForSMEIndividual(t *testing.T) {
 
 func TestCatalogueForecastBasisUsesThreeLotsForBothSMENIIPools(t *testing.T) {
 	shni := calculationBasis{"3600", "209", "applications"}
-	bhni := calculationBasis{"3600", "418", "applications"}
+	bhni := calculationBasis{"3600", "419", "applications"}
 	for _, test := range []struct {
 		name, price, rows string
 		want              map[string]calculationBasis
@@ -71,6 +71,8 @@ func TestCatalogueForecastBasisUsesThreeLotsForBothSMENIIPools(t *testing.T) {
  {"category":"shni","offered_shares":"753600","coverage":"NSE only"},
  {"category":"bhni","offered_shares":"1507200","coverage":"NSE only"}]`,
 			map[string]calculationBasis{"SHNI": shni, "BHNI": bhni}},
+		{"half rounds up", "94", `"reservations":[{"category":"sNII","reserved_shares":"5400"}]`,
+			map[string]calculationBasis{"SHNI": {"3600", "2", "applications"}}},
 		{"total NII cannot supply either quota", "94", `"reservations":[{"category":"NII","reserved_shares":"2260800"}]`, nil},
 		{"conflicting small pool", "94", `"reservations":[
  {"category":"sNII","reserved_shares":"753600"},{"category":"SHNI Shares Offered","reserved_shares":"7200"},

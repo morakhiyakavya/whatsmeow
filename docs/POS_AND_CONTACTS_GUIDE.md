@@ -845,8 +845,14 @@ business colleagues can inspect this receipt; pairing secrets remain owner-only.
 There is one send attempt and no manual resend endpoint. An uncertain result is
 never automatically resent. Retrying the transaction POST does not resend its receipt.
 
-The connected worker checks for pending receipts every two seconds, one receipt
-per account per tick; the send can take longer. There is no delivery-time guarantee.
+After migration 020, committing a receipt wakes its connected account worker
+immediately. Pending receipts drain serially without a timer between them; the
+send itself can take longer. Startup/reconnection and a 30-second recovery sweep
+cover missed database notifications. Status changes publish existing scoped FCM
+revision hints; Android immediately fetches its pending receipt when a hint arrives,
+with foreground and 30-second checks for missed pushes. Counterparty selection
+also warms recipient/device caches in the background without sending a message.
+There is no delivery-time guarantee; FCM may be delayed while the phone sleeps.
 Offline paired accounts can accumulate pending receipts. The configured backend
 worker must run to send them; the POS phone does not perform the protocol send
 itself. Pending intents persist across server restarts. An interrupted `sending`

@@ -27,8 +27,16 @@ type fakePairingClient struct {
 	sender      confirmationSender
 	numberCheck func(context.Context, []string) ([]types.IsOnWhatsAppResponse, error)
 	userInfo    func(context.Context, []types.JID) (map[types.JID]types.UserInfo, error)
+	userDevices func(context.Context, []types.JID) ([]types.JID, error)
 	pictureInfo func(context.Context, types.JID, *whatsmeow.GetProfilePictureParams) (*types.ProfilePictureInfo, error)
 	connect     func(context.Context) error
+}
+
+func (f *fakePairingClient) GetUserDevices(ctx context.Context, jids []types.JID) ([]types.JID, error) {
+	if f.userDevices != nil {
+		return f.userDevices(ctx, jids)
+	}
+	return nil, errors.New("unexpected recipient preparation in pairing-only fixture")
 }
 
 func (f *fakePairingClient) GetUserInfo(ctx context.Context, jids []types.JID) (map[types.JID]types.UserInfo, error) {
@@ -242,6 +250,7 @@ func testWhatsAppPairing(t *testing.T, dsn string, db *sql.DB, app *api, admin, 
 	awaitConnection(t, s, businessID, id, "connected")
 	testWhatsAppNumbers(t, db, cashier, other, s, fake, upperPath)
 	testWhatsAppProfiles(t, cashier, other, s, fake, upperPath)
+	testWhatsAppPreparation(t, cashier, other, fake, upperPath)
 	testPictureEvents(t, s, fake, cashier, upperPath)
 	status, object, _ = cashier.request("GET", path, nil, "")
 	expectStatus(t, 200, status, object)

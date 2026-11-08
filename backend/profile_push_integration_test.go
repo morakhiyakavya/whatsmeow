@@ -389,7 +389,7 @@ func TestProfilePushIntegration(t *testing.T) {
 	if queueCount() != 0 || count(`SELECT count(*) FROM ipo_pos.push_devices WHERE user_id=$1`, user) != 0 {
 		t.Fatal("unlink did not revoke installations and pending notifications")
 	}
-	stop := startProfilePush(ctx, db, never)
+	stop := startProfilePush(ctx, db, never, make(chan struct{}, 1))
 	stop()
 	if _, err := saveProfileObservation(ctx, db, actor, account, "wrong-binding", phone, "hidden", "", time.Time{}); !errors.Is(err, errProfileUnavailable) {
 		t.Fatal("stale worker binding can change profile revisions")

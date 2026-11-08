@@ -845,6 +845,23 @@ search indexes remain future work if measured latency requires them.
 
 ## Mobile POS confirmations
 
+Apply [migration 020](../database/020_confirmation_wakeups.sql) before this backend.
+It adds commit-time worker notifications and publishes confirmation status changes
+through the existing business-data FCM outbox. No new runtime grants are needed.
+`WHATSAPP_DATABASE_URL` must use a direct or session-pooled PostgreSQL connection
+for `LISTEN`; transaction pooling cannot retain the subscription. One dedicated
+listener connection is used in addition to the existing SQL pools.
+
+When a counterparty or sender is selected, Android makes a best-effort POST to
+`/api/businesses/{businessID}/whatsapp-accounts/{id}/prepare-recipient` with
+`{"phone_number":"+919876543210"}`. This owner-only, connected-account endpoint
+warms the existing recipient LID and recipient/sender device caches and returns
+204. It sends no message and creates no customer/transaction. Preparation has an
+eight-second budget including worker admission; invalid input returns 400,
+unpaired/disconnected accounts 409, upstream/storage failure 502 and timeout 504.
+Normal sending still validates and prepares anything missing; preparation is not
+a delivery or registration guarantee.
+
 Use the existing login and `Authorization: Bearer TOKEN` for each request; obtain
 business IDs from `/api/me`. The server determines the actor and checks active user,
 business and role. The mobile app must store tokens in protected platform storage,
@@ -871,13 +888,23 @@ confirmation and reject changed data or a different sender under the same key.
 The POST response includes `whatsapp_confirmation` when requested. GET
 `/api/businesses/{businessID}/transactions/{id}/confirmation` reads the latest status
 and receipt under normal business permissions; no confirmation returns 404.
-The queued intent survives restart. The trusted worker claims one pending receipt
-per connected account every two seconds and sends with a 20-second timeout. Its
+The queued intent survives restart. A committed insert wakes the trusted account
+worker through PostgreSQL `LISTEN`/`NOTIFY`; it drains pending receipts serially
+without a timer between messages and sends with a 20-second timeout. Its
 existing account lock prevents competing workers from using the same session.
 It rechecks current ownership/membership/binding, customer phone and transaction version;
 cancellation blocks the send, and changed recipients, senders or transaction versions fail
 the pending receipt. New transaction confirmations can queue while the account is offline.
 An active worker configuration (`WHATSAPP_DATABASE_URL`) is needed to deliver them.
+Startup/reconnection wakes pending work, and a 30-second sweep recovers missed
+notifications. FCM outboxes also wake immediately after commit, with a 30-second
+recovery sweep. Their existing leases, authorization checks and retry backoff remain.
+Android responds to the existing `business_data_changed` FCM hint by immediately
+fetching its pending receipt through the authenticated API. It also checks on
+foreground entry and every 30 seconds while pending to recover delayed/missed
+pushes; failed reads retry with bounded backoff. FCM contains only existing scoped
+revision hints, never receipt bodies, phone numbers or financial values. Normal
+priority FCM may be delayed by Android Doze, so this is not an instant-delivery SLA.
 
 Statuses are `pending`, `sending`, `sent`, `uncertain`, `failed` and `cancelled`.
 `sent` means WhatsApp acknowledged the message, not that the customer read it.

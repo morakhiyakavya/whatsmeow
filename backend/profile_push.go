@@ -23,20 +23,23 @@ type pushSender interface {
 	send(context.Context, string, map[string]string) pushOutcome
 }
 
-func startProfilePush(ctx context.Context, db *sql.DB, sender pushSender) func() {
+func startProfilePush(ctx context.Context, db *sql.DB, sender pushSender, wake chan struct{}) func() {
 	ctx, cancel := context.WithCancel(ctx)
 	var wg sync.WaitGroup
 	wg.Add(1)
 	go func() {
 		defer wg.Done()
-		ticker := time.NewTicker(2 * time.Second)
+		ticker := time.NewTicker(30 * time.Second)
 		defer ticker.Stop()
+		signalWork(wake)
 		for {
 			select {
 			case <-ctx.Done():
 				return
 			case <-ticker.C:
-				// Bound each sweep; new jobs and expired leases are picked up on later ticks.
+				signalWork(wake)
+			case <-wake:
+				// Bound each sweep; queued wake-ups continue batches without waiting for the recovery timer.
 				for range 32 {
 					workCtx, stop := context.WithTimeout(ctx, 15*time.Second)
 					found, err := deliverProfilePush(workCtx, db, sender)
@@ -53,6 +56,10 @@ func startProfilePush(ctx context.Context, db *sql.DB, sender pushSender) func()
 					if err != nil || directoryErr != nil || businessErr != nil || (!found && !directoryFound && !businessFound) {
 						break
 					}
+					if ctx.Err() != nil {
+						return
+					}
+					signalWork(wake)
 				}
 			}
 		}

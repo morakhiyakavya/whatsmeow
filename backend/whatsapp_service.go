@@ -31,6 +31,7 @@ type pairingClient interface {
 	Logout(context.Context) error
 	IsOnWhatsApp(context.Context, []string) ([]types.IsOnWhatsAppResponse, error)
 	GetUserInfo(context.Context, []types.JID) (map[types.JID]types.UserInfo, error)
+	GetUserDevices(context.Context, []types.JID) ([]types.JID, error)
 	GetProfilePictureInfo(context.Context, types.JID, *whatsmeow.GetProfilePictureParams) (*types.ProfilePictureInfo, error)
 }
 
@@ -51,6 +52,8 @@ type accountConnection struct {
 	logout       chan chan error
 	numberChecks chan numberCheck
 	profiles     chan profileRequest
+	preparations chan recipientPreparation
+	deliveries   chan struct{}
 	telemetryCtx context.Context
 	telemetryKey string
 }
@@ -84,6 +87,7 @@ type whatsAppService struct {
 	store             *sqlstore.Container
 	accounts          map[string]*accountConnection
 	newClient         func(*store.Device) pairingClient
+	pushWake          chan struct{}
 	developmentSignup bool
 }
 
@@ -112,13 +116,15 @@ func openWhatsAppService(ctx context.Context, dsn string) (*whatsAppService, err
 		return nil, errors.New("WhatsApp storage setup failed; check credentials, schema permissions and server availability")
 	}
 	serviceCtx, stop := context.WithCancel(ctx)
-	s := &whatsAppService{ctx: serviceCtx, cancel: stop, db: db, store: container, accounts: make(map[string]*accountConnection)}
+	s := &whatsAppService{ctx: serviceCtx, cancel: stop, db: db, store: container, accounts: make(map[string]*accountConnection), pushWake: make(chan struct{}, 1)}
 	s.newClient = func(device *store.Device) pairingClient {
 		client := whatsmeow.NewClient(device, nil)
 		client.InitialAutoReconnect = true
 		client.DisableLoginAutoReconnect = true
 		return client
 	}
+	s.wg.Add(1)
+	go s.listenForWork(config)
 	return s, nil
 }
 
@@ -173,7 +179,7 @@ func (s *whatsAppService) start(user actor, id, method, phone string, proof ...[
 	if active >= 32 {
 		return nil, errors.New("connection_capacity")
 	}
-	c := &accountConnection{connectionState: connectionState{State: "connecting", Method: method}, phone: phone, done: make(chan struct{}), proof: loginProof, logout: make(chan chan error), numberChecks: make(chan numberCheck), profiles: make(chan profileRequest), telemetryCtx: s.ctx, telemetryKey: performanceKey(key)}
+	c := &accountConnection{connectionState: connectionState{State: "connecting", Method: method}, phone: phone, done: make(chan struct{}), proof: loginProof, logout: make(chan chan error), numberChecks: make(chan numberCheck), profiles: make(chan profileRequest), preparations: make(chan recipientPreparation), deliveries: make(chan struct{}, 1), telemetryCtx: s.ctx, telemetryKey: performanceKey(key)}
 	s.accounts[key] = c
 	s.wg.Add(1)
 	go func() {
@@ -360,10 +366,24 @@ func (s *whatsAppService) run(user actor, id string, c *accountConnection, resto
 		expiry = timer.C
 	}
 	phoneRequested := false
-	deliveries := time.NewTicker(2 * time.Second)
+	deliveries := time.NewTicker(30 * time.Second)
 	defer deliveries.Stop()
 	for {
 		select {
+		case request := <-c.preparations:
+			prepareCtx, stop := context.WithCancel(request.ctx)
+			stopOnShutdown := context.AfterFunc(ctx, stop)
+			var current sql.NullString
+			err = conn.QueryRowContext(prepareCtx, activeWhatsAppAccount, user.BusinessID, id, user.UserID).Scan(&current)
+			if err == nil && (current != saved || !saved.Valid || c.state().State != "connected") {
+				err = errProfileUnavailable
+			}
+			if err == nil {
+				err = prepareRecipient(prepareCtx, client, device, request.phone)
+			}
+			stopOnShutdown()
+			stop()
+			request.result <- err
 		case request := <-c.profiles:
 			process := startOperation(request.ctx, "whatsapp.profile", "whatsapp.profile.process")
 			profileCtx, stop := context.WithCancel(process.Context())
@@ -425,12 +445,18 @@ func (s *whatsAppService) run(user actor, id string, c *accountConnection, resto
 		case <-expiry:
 			return "expired"
 		case <-deliveries.C:
+			signalWork(c.deliveries)
+		case <-c.deliveries:
 			if c.state().State == "connected" {
-				if err = deliverConfirmation(ctx, conn, user, id, saved.String, client); err != nil {
-					if errors.Is(err, sql.ErrNoRows) {
+				worked, deliveryErr := deliverConfirmation(ctx, conn, user, id, saved.String, client)
+				if deliveryErr != nil {
+					if errors.Is(deliveryErr, sql.ErrNoRows) {
 						return "account_unavailable"
 					}
 					return "storage_unavailable"
+				}
+				if worked {
+					signalWork(c.deliveries)
 				}
 			}
 		case <-checks.C:
@@ -536,6 +562,7 @@ func (s *whatsAppService) run(user actor, id string, c *accountConnection, resto
 				if _, connected := evt.(*events.Connected); connected {
 					expiry = nil
 					c.update("connected", "", time.Time{})
+					signalWork(c.deliveries)
 				}
 			case *events.ManualLoginReconnect:
 				client.Disconnect()

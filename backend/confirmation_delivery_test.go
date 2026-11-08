@@ -126,6 +126,29 @@ func testConfirmationDelivery(t *testing.T, dsn string, db *sql.DB, cashier test
 		t.Fatal("wire message ID differs from the recorded ID")
 	}
 	s.close()
+	// Status changes publish only a revision hint, atomically with the confirmation update.
+	pushTx, err := db.BeginTx(ctx, nil)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer pushTx.Rollback()
+	if _, err = pushTx.Exec(`INSERT INTO ipo_pos.push_devices(installation_id,user_id,session_id,fcm_token)
+        SELECT '60000000-0000-4000-8000-000000000001',user_id,id,'confirmation-fixture-token'
+        FROM ipo_pos.login_sessions WHERE user_id=$1 AND expires_at>now() ORDER BY expires_at DESC LIMIT 1`, cashierID); err != nil {
+		t.Fatal(err)
+	}
+	if _, err = pushTx.Exec(`UPDATE ipo_pos.transaction_confirmations SET status='uncertain',sent_at=NULL WHERE business_id=$1 AND transaction_id=$2`, business, id); err != nil {
+		t.Fatal(err)
+	}
+	var published bool
+	if err = pushTx.QueryRow(`SELECT EXISTS(SELECT 1 FROM ipo_pos.business_push_outbox q
+        JOIN ipo_pos.business_data_revisions r ON r.business_id=q.business_id AND r.revision=q.revision
+        WHERE q.business_id=$1 AND q.user_id=$2 AND q.installation_id='60000000-0000-4000-8000-000000000001')`, business, cashierID).Scan(&published); err != nil || !published {
+		t.Fatal("confirmation status change did not publish an authorised revision hint", err)
+	}
+	if err = pushTx.Rollback(); err != nil {
+		t.Fatal(err)
+	}
 	base := "/api/businesses/" + business
 	body := cloneMap(request)
 	body["whatsapp_account_id"] = account
@@ -137,6 +160,7 @@ func testConfirmationDelivery(t *testing.T, dsn string, db *sql.DB, cashier test
 	body["quantity"] = "-2.5"
 	body["rate"] = "-250"
 	restartID := queue("pending-after-restart")
+	backlogID := queue("pending-backlog")
 	body["quantity"] = request["quantity"]
 	body["rate"] = request["rate"]
 	restored := open()
@@ -144,6 +168,7 @@ func testConfirmationDelivery(t *testing.T, dsn string, db *sql.DB, cashier test
 		t.Fatal(err)
 	}
 	awaitConfirmation(t, db, business, restartID, "sent")
+	awaitConfirmation(t, db, business, backlogID, "sent")
 	sender.mu.Lock()
 	if sender.body != "Fixture IPO ipo Sell 2.5 CE (20) at -250" {
 		t.Error("sell delivery lost its direction or signed values")
@@ -163,13 +188,13 @@ func testConfirmationDelivery(t *testing.T, dsn string, db *sql.DB, cashier test
 		t.Fatal(err)
 	}
 	defer conn.Close()
-	if err = deliverConfirmation(ctx, conn, user, account, jidText, sender); err != nil {
+	if _, err = deliverConfirmation(ctx, conn, user, account, jidText, sender); err != nil {
 		t.Fatal(err)
 	}
 	sender.mu.Lock()
 	calls := sender.calls
 	sender.mu.Unlock()
-	if calls != 3 {
+	if calls != 4 {
 		t.Fatal("uncertain or sent receipts were resent")
 	}
 
@@ -200,7 +225,7 @@ func testConfirmationDelivery(t *testing.T, dsn string, db *sql.DB, cashier test
 				t.Fatal(err)
 			}
 		}
-		if err = deliverConfirmation(ctx, conn, user, account, currentJID, sender); err != nil {
+		if _, err = deliverConfirmation(ctx, conn, user, account, currentJID, sender); err != nil {
 			t.Fatal(err)
 		}
 		awaitConfirmation(t, db, business, queuedID, expected)
@@ -235,7 +260,7 @@ func testConfirmationDelivery(t *testing.T, dsn string, db *sql.DB, cashier test
 	if _, err = db.Exec(`UPDATE ipo_pos.business_memberships SET disabled_at=now() WHERE business_id=$1 AND user_id=$2`, business, cashierID); err != nil {
 		t.Fatal(err)
 	}
-	if err = deliverConfirmation(ctx, conn, user, account, jidText, sender); err == nil {
+	if _, err = deliverConfirmation(ctx, conn, user, account, jidText, sender); err == nil {
 		t.Fatal("disabled staff remained eligible to send")
 	}
 	if _, err = db.Exec(`UPDATE ipo_pos.business_memberships SET disabled_at=NULL WHERE business_id=$1 AND user_id=$2`, business, cashierID); err != nil {
@@ -244,7 +269,7 @@ func testConfirmationDelivery(t *testing.T, dsn string, db *sql.DB, cashier test
 	sender.mu.Lock()
 	calls = sender.calls
 	sender.mu.Unlock()
-	if calls != 3 {
+	if calls != 4 {
 		t.Fatal("a rejected or interrupted confirmation was sent")
 	}
 	cleanup := open()

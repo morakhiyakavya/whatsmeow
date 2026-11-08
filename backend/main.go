@@ -92,6 +92,7 @@ func run(envPath string, bootstrap bool) error {
 		AND to_regclass('ipo_pos.business_data_revisions') IS NOT NULL
 		AND to_regclass('ipo_pos.business_data_changes') IS NOT NULL
 		AND to_regclass('ipo_pos.business_push_outbox') IS NOT NULL
+		AND EXISTS (SELECT 1 FROM pg_trigger WHERE tgrelid=to_regclass('ipo_pos.transaction_confirmations') AND tgname='confirmation_wake' AND NOT tgisinternal)
 		AND to_regclass('ipo_pos.auth_events') IS NOT NULL
 		AND to_regclass('ipo_pos.ipo_import_runs') IS NOT NULL
 		AND to_regclass('ipo_pos.ipo_dashboard_assumption_versions') IS NOT NULL
@@ -106,7 +107,7 @@ func run(envPath string, bootstrap bool) error {
         AND EXISTS (SELECT 1 FROM pg_constraint WHERE conrelid=to_regclass('ipo_pos.transaction_versions') AND conname='transaction_versions_nonzero_quantity_check')
         AND EXISTS (SELECT 1 FROM pg_constraint WHERE conrelid=to_regclass('ipo_pos.transactions') AND conname='transactions_signed_rate_check')
         AND EXISTS (SELECT 1 FROM pg_constraint WHERE conrelid=to_regclass('ipo_pos.transaction_versions') AND conname='transaction_versions_signed_rate_check')`).Scan(&schemaReady); err != nil || !schemaReady {
-		return errors.New("apply application migrations through database/019_combined_ipo_subscriptions.sql before starting the API")
+		return errors.New("apply application migrations through database/020_confirmation_wakeups.sql before starting the API")
 	}
 	app, err := newAPI(db)
 	if err != nil {
@@ -136,7 +137,7 @@ func run(envPath string, bootstrap bool) error {
 			if err != nil {
 				return err
 			}
-			stopPush := startProfilePush(ctx, app.whatsapp.db, sender)
+			stopPush := startProfilePush(ctx, app.whatsapp.db, sender, app.whatsapp.pushWake)
 			defer stopPush()
 		}
 		app.whatsapp.developmentSignup = config.DevelopmentSignup
@@ -220,6 +221,7 @@ func (a *api) routes() http.Handler {
 	mux.HandleFunc("POST /api/businesses/{businessID}/whatsapp-accounts/{id}/connect", a.protect(false, a.connectWhatsAppAccount))
 	mux.HandleFunc("POST /api/businesses/{businessID}/whatsapp-accounts/{id}/check-number", a.protect(false, a.checkWhatsAppNumber))
 	mux.HandleFunc("POST /api/businesses/{businessID}/whatsapp-accounts/{id}/contact-profile", a.protect(false, a.whatsAppContactProfile))
+	mux.HandleFunc("POST /api/businesses/{businessID}/whatsapp-accounts/{id}/prepare-recipient", a.protect(false, a.whatsAppPrepareRecipient))
 	mux.HandleFunc("GET /api/businesses/{businessID}/whatsapp-accounts/{id}/connection", a.protect(false, a.whatsAppConnection))
 	mux.HandleFunc("GET /api/businesses/{businessID}/whatsapp-accounts/{id}/qr", a.protect(false, a.whatsAppQR))
 	mux.HandleFunc("GET /api/businesses/{businessID}/transactions", a.protect(false, a.listTransactions))

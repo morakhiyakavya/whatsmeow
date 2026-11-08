@@ -8,6 +8,13 @@ None. The three completed tasks are checkpointed in Batch 49 below.
 
 ## Checkpoints
 
+### Batch 52 — SME SHNI and Big HNI capacity
+
+Checkpointed the reviewed backend changes for the user-authorized rollout on 8 November 2026.
+
+- Each eligible SME HNI pool uses its own published share quota and a three-lot minimum allotment. Vedant's quotas yield 209 SHNI and 418 Big HNI slots. Business inputs and position reports share the calculation.
+- The full backend suite, disposable PostgreSQL schema and API checks, Go vet, and whitespace review passed. Paths are `backend/ipo_catalogue.go`, `backend/dashboard_source_basis.go`, `backend/dashboard_source_basis_test.go`, `backend/dashboard_test.go`, `backend/README.md`, and this ledger entry.
+
 ### Batch 51 — SME IPO capacity and board metadata
 
 Checkpointed the reviewed backend portion for the user-authorized rollout on 8 November 2026. Android source remains in the sibling working copy, and existing mixed work stays outside this commit.

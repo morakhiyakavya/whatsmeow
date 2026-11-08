@@ -426,7 +426,8 @@ the published category quota by the minimum allotment size and rounding down.
 Mainboard Retail uses one lot, and supported Mainboard SHNI and BHNI pools use the
 minimum NII allotment size with separately published quotas. For SME issues under
 the rules effective 1 July 2025, Individual uses two lots and the existing `RETAIL`
-forecast key. Automatic SME SHNI and BHNI capacity remains unavailable.
+forecast key. SME SHNI and BHNI use three lots per minimum allotment and their own
+published quotas, following [SEBI Schedule XIV Part A2](https://egazette.gov.in/WriteReadData/2025/261516.pdf#page=108).
 The assumptions endpoint exposes those same estimates as `estimated_application_capacity`.
 Existing business calculation settings remain available for categories outside the
 catalogue model. For a bucket with matching forecast units,

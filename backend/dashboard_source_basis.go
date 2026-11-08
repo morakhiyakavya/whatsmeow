@@ -2,6 +2,7 @@ package main
 
 import (
 	"encoding/json"
+	"math"
 	"math/big"
 	"strconv"
 	"strings"
@@ -47,24 +48,39 @@ func catalogueForecastBasis(snapshot json.RawMessage) map[string]calculationBasi
 			if shares, err := strconv.ParseInt(category.MinShares, 10, 64); err == nil {
 				minimums["retail"] = shares
 			}
-		case facts.IPO.Board == "Mainboard" && category.Category == "shni" && facts.IPO.Opens > "2022-04-01":
-			// Both NII pools use the minimum NII allotment size. Their bid limits differ.
+		case category.Category == "shni" && (facts.IPO.Board == "SME" || facts.IPO.Opens > "2022-04-01"):
 			if shares, err := strconv.ParseInt(category.MinShares, 10, 64); err == nil {
-				minimums["shni"], minimums["bhni"] = shares, shares
+				minimums["shni"] = shares
+				if facts.IPO.Board == "Mainboard" {
+					minimums["bhni"] = shares
+				}
 			}
+		case facts.IPO.Board == "SME" && category.Category == "bhni" && facts.IPO.Lot <= math.MaxInt64/smeNIIMinLots:
+			// Schedule XIV Part A2 uses the common NII allotment minimum for both SME pools.
+			minimums["bhni"] = facts.IPO.Lot * smeNIIMinLots
 		}
 	}
 	for category, minimum := range minimums {
 		sourceCategory, coverage := category, "NSE+BSE"
 		if facts.IPO.Board == "SME" {
-			sourceCategory, coverage = "individual", "NSE only"
+			coverage = "NSE only"
+			if category == "retail" {
+				sourceCategory = "individual"
+			}
 		}
 		var offered string
 		for _, row := range facts.Reservations {
 			label := strings.TrimSpace(strings.ToLower(row.Category))
 			matches := label == category || label == category+" shares offered" || category == "retail" && label == "retail individual investors"
 			if facts.IPO.Board == "SME" {
-				matches = matches || label == "individual" || label == "individual investors" || label == "individual shares offered"
+				switch category {
+				case "retail":
+					matches = matches || label == "individual" || label == "individual investors" || label == "individual shares offered"
+				case "shni":
+					matches = matches || label == "snii" || label == "snii < ₹10l"
+				case "bhni":
+					matches = matches || label == "bnii" || label == "bnii > ₹10l"
+				}
 			}
 			if row.Shares != "" && matches {
 				if offered != "" && offered != row.Shares {

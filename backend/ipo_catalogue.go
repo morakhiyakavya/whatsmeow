@@ -20,6 +20,8 @@ type ipoApplication struct {
 	Rule      string `json:"rule"`
 }
 
+const smeNIIMinLots = 3
+
 func ipoApplications(board, price string, lot int64, opens string) []ipoApplication {
 	out := []ipoApplication{}
 	p, ok := new(big.Rat).SetString(price)
@@ -58,11 +60,8 @@ func ipoApplications(board, price string, lot int64, opens string) []ipoApplicat
 		}
 		two := int64(2)
 		add("individual", 2, &two, "SME from 2025-07-01: exactly 2 lots; amount > INR 200000")
-		add("shni", 3, &smallMax, "SME from 2025-07-01: more than 2 lots; amount <= INR 1000000")
-		min := smallMax + 1
-		if min < 3 {
-			min = 3
-		}
+		add("shni", smeNIIMinLots, &smallMax, "SME from 2025-07-01: more than 2 lots; amount <= INR 1000000")
+		min := max(smallMax+1, smeNIIMinLots)
 		add("bhni", min, nil, "SME from 2025-07-01: more than 2 lots; amount > INR 1000000")
 	}
 	return out

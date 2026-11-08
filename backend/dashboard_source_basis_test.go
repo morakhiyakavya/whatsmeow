@@ -2,6 +2,7 @@ package main
 
 import (
 	"fmt"
+	"maps"
 	"testing"
 )
 
@@ -34,9 +35,6 @@ func TestCatalogueForecastBasisUsesTwoLotsForSMEIndividual(t *testing.T) {
 		name, opens, price, rows string
 		want                     bool
 	}{
-		{"Vedant reservation", "2026-11-02", "94.000000", `"reservations":[
- {"category":"Retail","reserved_shares":"3396000"},{"category":"sNII < ₹10L","reserved_shares":"753600"},
- {"category":"bNII > ₹10L","reserved_shares":"1507200"}]`, true},
 		{"individual reservation", "2025-07-01", "94", `"reservations":[
  {"category":"Individual Investors","reserved_shares":"3396000"}]`, true},
 		{"exchange quota", "2026-11-02", "94", `"subscriptions":[
@@ -53,6 +51,38 @@ func TestCatalogueForecastBasisUsesTwoLotsForSMEIndividual(t *testing.T) {
 			if test.want && (len(basis) != 1 || basis["RETAIL"] != (calculationBasis{"2400", "1415", "applications"})) ||
 				!test.want && len(basis) != 0 {
 				t.Fatal("wrong SME forecast basis", basis)
+			}
+		})
+	}
+}
+
+func TestCatalogueForecastBasisUsesThreeLotsForBothSMENIIPools(t *testing.T) {
+	shni := calculationBasis{"3600", "209", "applications"}
+	bhni := calculationBasis{"3600", "418", "applications"}
+	for _, test := range []struct {
+		name, price, rows string
+		want              map[string]calculationBasis
+	}{
+		{"Vedant reservations", "94.000000", `"reservations":[
+ {"category":"Retail","reserved_shares":"3396000"},{"category":"sNII < ₹10L","reserved_shares":"753600"},
+ {"category":"bNII > ₹10L","reserved_shares":"1507200"},{"category":"NII","reserved_shares":"2260800"}]`,
+			map[string]calculationBasis{"RETAIL": {"2400", "1415", "applications"}, "SHNI": shni, "BHNI": bhni}},
+		{"exchange quotas", "94", `"subscriptions":[
+ {"category":"shni","offered_shares":"753600","coverage":"NSE only"},
+ {"category":"bhni","offered_shares":"1507200","coverage":"NSE only"}]`,
+			map[string]calculationBasis{"SHNI": shni, "BHNI": bhni}},
+		{"total NII cannot supply either quota", "94", `"reservations":[{"category":"NII","reserved_shares":"2260800"}]`, nil},
+		{"conflicting small pool", "94", `"reservations":[
+ {"category":"sNII","reserved_shares":"753600"},{"category":"SHNI Shares Offered","reserved_shares":"7200"},
+ {"category":"bNII","reserved_shares":"1507200"}]`, map[string]calculationBasis{"BHNI": bhni}},
+		{"only big pool meets the bid threshold", "300", `"reservations":[
+ {"category":"sNII","reserved_shares":"753600"},{"category":"bNII","reserved_shares":"1507200"}]`,
+			map[string]calculationBasis{"BHNI": bhni}},
+	} {
+		t.Run(test.name, func(t *testing.T) {
+			facts := fmt.Sprintf(`{"ipo":{"board":"SME","lot_size":1200,"price_high":%q,"opens_on":"2026-11-02"},%s}`, test.price, test.rows)
+			if basis := catalogueForecastBasis([]byte(facts)); !maps.Equal(basis, test.want) {
+				t.Fatalf("SME forecast basis = %v, want %v", basis, test.want)
 			}
 		})
 	}

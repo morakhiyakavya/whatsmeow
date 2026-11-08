@@ -319,6 +319,9 @@ func testLivePositionAPI(t *testing.T, owner *sql.DB, admin, cashier, other test
 		`UPDATE ipo_pos.ipos SET board='SME',lot_size=1200,price_low=88,price_high=94,
  opens_on='2026-11-02',closes_on='2026-11-04',listing_on='2026-11-09' WHERE id=$1`,
 		`UPDATE ipo_pos.ipo_reservations SET reserved_shares=7200 WHERE ipo_id=$1 AND category='Retail Shares Offered'`,
+		`INSERT INTO ipo_pos.ipo_reservations(ipo_id,category,reserved_shares,basis,source_url,observed_at)
+ VALUES($1,'sNII < ₹10L',753600,'shares','https://example.test',now()),
+ ($1,'bNII > ₹10L',1507200,'shares','https://example.test',now())`,
 		`SELECT ipo_pos.capture_ipo_dashboard_basis($1)`,
 	} {
 		if _, err := owner.Exec(query, ipo); err != nil {
@@ -328,14 +331,22 @@ func testLivePositionAPI(t *testing.T, owner *sql.DB, admin, cashier, other test
 	status, body, _ = cashier.request("GET", base+"/ipos/"+ipo+"/analytics-assumptions", nil, "")
 	expectStatus(t, 200, status, body)
 	capacities := body["estimated_application_capacity"].(map[string]any)
-	if len(capacities) != 1 || field(t, capacities, "RETAIL") != "3" {
-		t.Fatal("SME editor did not return individual capacity", body)
+	if len(capacities) != 3 || field(t, capacities, "RETAIL") != "3" ||
+		field(t, capacities, "SHNI") != "209" || field(t, capacities, "BHNI") != "418" {
+		t.Fatal("SME editor did not return each pool's capacity", body)
 	}
 	status, body, _ = cashier.request("GET", path+"?include=categories", nil, "")
 	expectStatus(t, 200, status, body)
 	if field(t, body, "board") != "SME" || field(t, body, "net_expected_shares") != "3600.000000" ||
 		field(t, body, "net_premium_cost") != "5151.25" {
 		t.Fatal("SME report did not use the same individual capacity as the editor", body)
+	}
+	basis := body["calculation_basis"].(map[string]any)
+	for _, code := range []string{"SHNI", "BHNI"} {
+		pool := basis[code].(map[string]any)
+		if field(t, pool, "capacity") != field(t, capacities, code) || field(t, pool, "shares_per_application") != "3600" {
+			t.Fatal("SME report did not use the editor's HNI capacity and three-lot minimum", code, pool)
+		}
 	}
 	if _, err := owner.Exec(`UPDATE ipo_pos.transactions SET status='cancelled',version=version+1,change_reason='Empty fixture book'
  WHERE ipo_id=$1 AND status='confirmed'`, ipo); err != nil {

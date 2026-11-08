@@ -754,7 +754,8 @@ pairing. To explicitly unlink, revoke the device in WhatsApp's Linked devices sc
 Each active account holds a PostgreSQL advisory lock on a dedicated connection.
 Another API process reports `busy` before loading its session keys. Workers discard
 the lock connection on exit, and recheck account/membership/business eligibility and
-database connectivity every 15 seconds. Failed checks stop the connection. Do not
+database connectivity every two seconds, independently of immediate delivery
+wake-ups. Failed checks stop the connection. Do not
 run the standalone viewer using a session simultaneously managed by this API;
 the viewer does not participate in application account locks.
 

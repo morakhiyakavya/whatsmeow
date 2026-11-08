@@ -20,6 +20,8 @@ Checkpointed separately for the user-authorized server publication on 8 November
 
 Server rollout preparation: verified both existing hosts are healthy. Applied migration 020 exactly once to the shared Supabase database using certificate/hostname verification and the existing migration owner. Protected users, businesses, memberships, transactions, history and confirmation records retained fingerprint `5085fb7a90a0fadffda07399aaa5b5b3e745f5d6e2f8d8194c2694d731871c66`; all nine existing confirmations remain sent and runtime delivery UPDATE remains denied. Existing tests are reused; current backend static analysis and changed-file import checks pass. Server deployment verification follows publication; no Android installation or customer message is part of this rollout.
 
+CI recovery follow-up, 8 November 2026: run `42458100680` stopped before either deployment because removing periodic delivery queries exposed slower detection of an idle session-lock connection failure. Restored a separate two-second account/connection health guard; committed receipts still wake delivery immediately, and the 30-second recovery sweep is unchanged. The affected full manual-ledger integration check, including lost-connection recovery, ownership and confirmation delivery, passed locally in 13.568 seconds. Backend static analysis and import checks pass. The existing additive migration is retained and is not rerun. A follow-up source revision must pass the deployment gates before either host is updated.
+
 ### Batch 49 — NSE subscriptions, IPO schedules and reservation integrity
 
 Checkpointed at the three-task threshold. This repository contains the reviewed

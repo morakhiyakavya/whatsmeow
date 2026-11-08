@@ -356,7 +356,8 @@ func (s *whatsAppService) run(user actor, id string, c *accountConnection, resto
 	if connectErr != nil {
 		return "connection_failed"
 	}
-	checks := time.NewTicker(15 * time.Second)
+	// Preserve prompt session-lock connection recovery independently of delivery wake-ups.
+	checks := time.NewTicker(2 * time.Second)
 	defer checks.Stop()
 	var expiry <-chan time.Time
 	var timer *time.Timer

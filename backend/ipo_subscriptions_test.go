@@ -43,14 +43,20 @@ func TestCombinedIPOSubscriptions(t *testing.T) {
 			t.Fatal("published total was summed with overlapping categories", row)
 		}
 	}
-	for _, active := range []string{`null`, `{}`, `{"dataList":[]}`} {
+	for _, active := range []string{`null`, `{}`, `{"dataList":[]}`,
+		`{"dataList":[{"srNo":"Sr.No.","category":"Category","noOfShareOffered":"No. of shares"}]}`,
+		`{"dataList":[{"srNo":"3","category":"Retail","noOfShareOffered":"-1","noOfSharesBid":"unknown"}]}`} {
 		var body map[string]json.RawMessage
 		_ = json.Unmarshal([]byte(combinedIPODetailFixture), &body)
 		body["activeCat"] = json.RawMessage(active)
 		input, _ := json.Marshal(body)
 		missing := ipoSourceIssue{Symbol: "EXAMPLE", Board: "Mainboard"}
-		if err := parseIPODetail(input, &missing); err != nil || len(missing.Subscriptions) != 0 || !missing.DetailOK {
-			t.Fatal("missing combined data must leave subscriptions unavailable while accepting terms", missing, err)
+		if err := parseIPODetail(input, &missing); err != nil || len(missing.Subscriptions) != 1 || !missing.DetailOK {
+			t.Fatal("missing combined data must retain NSE-only categories while accepting terms", missing, err)
+		}
+		row := missing.Subscriptions[0]
+		if row.Coverage != "NSE only" || row.Category != "retail" || *row.Offered != "600" || *row.Bid != "500" || *row.Applications != "25" {
+			t.Fatal("wrong NSE-only fallback", row)
 		}
 	}
 	for _, value := range []string{"", "garbage", "Updated as on 31-Feb-2026 12:00:00"} {
@@ -62,6 +68,33 @@ func TestCombinedIPOSubscriptions(t *testing.T) {
 		if sourceTimestamp(value) == nil {
 			t.Fatal("published timestamp format rejected", value)
 		}
+	}
+}
+
+func TestPartialCombinedIPOSubscriptions(t *testing.T) {
+	ptr := func(s string) *string { return &s }
+	var body map[string]json.RawMessage
+	_ = json.Unmarshal([]byte(combinedIPODetailFixture), &body)
+	body["activeCat"] = json.RawMessage(`{"updateTime":"28-Sep-2026 14:39:00","dataList":[
+ {"srNo":"1","category":"QIB","noOfShareOffered":"100","noOfSharesBid":"200","noOfTotalMeant":"2"}]}`)
+	body["demandGraph"] = json.RawMessage(`{"timestamp":"28-Sep-2026 14:38:00"}`)
+	input, _ := json.Marshal(body)
+	item := ipoSourceIssue{Symbol: "EXAMPLE", Board: "Mainboard"}
+	if err := parseIPODetail(input, &item); err != nil || len(item.Subscriptions) != 2 {
+		t.Fatal("missing per-category fallback", item, err)
+	}
+	for _, row := range item.Subscriptions {
+		if row.Category == "qib" && (row.Coverage != "NSE+BSE" || row.Applications != nil) ||
+			row.Category == "retail" && (row.Coverage != "NSE only" || row.Applications == nil || row.SourceObservedAt == nil || row.SourceObservedAt.UTC().Format(time.RFC3339) != "2026-09-28T09:08:00Z") {
+			t.Fatal("mixed category provenance", row)
+		}
+	}
+	// A combined headline from the feed must not be replaced by NSE-only detail totals.
+	body["bidDetails"] = json.RawMessage(`[{"category":"Total","noOfSharesOffered":"1000","noOfsharesBid":"100"}]`)
+	input, _ = json.Marshal(body)
+	item.Subscriptions = []ipoSubscription{{Category: "total", Coverage: "NSE+BSE", Bid: ptr("2000")}}
+	if err := parseIPODetail(input, &item); err != nil || *item.Subscriptions[0].Bid != "2000" || item.Subscriptions[0].Coverage != "NSE+BSE" {
+		t.Fatal("combined headline replaced by NSE-only total", item, err)
 	}
 }
 
@@ -172,7 +205,7 @@ func TestIPOSubscriptionCoverageUpgrade(t *testing.T) {
 	if err := saveSourceIPOs(context.Background(), db, []ipoSourceIssue{item}); err != nil {
 		t.Fatal(err)
 	}
-	if err := db.QueryRow(`SELECT ` + ipoCatalogueJSON + ` FROM ipo_pos.ipos i WHERE i.symbol='LEGACYSUBFIXTURE'`).Scan(&payload); err != nil || !strings.Contains(string(payload), `"subscriptions": []`) {
-		t.Fatal("legacy NSE-only mainboard demand was exposed as consolidated demand", err, string(payload))
+	if err := db.QueryRow(`SELECT ` + ipoCatalogueJSON + ` FROM ipo_pos.ipos i WHERE i.symbol='LEGACYSUBFIXTURE'`).Scan(&payload); err != nil || !strings.Contains(string(payload), `"coverage": "NSE only"`) || !strings.Contains(string(payload), `"bid_shares": "99"`) {
+		t.Fatal("legacy mainboard fallback lost its NSE-only counts or coverage", err, string(payload))
 	}
 }

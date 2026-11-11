@@ -72,7 +72,7 @@ const ipoCatalogueJSON = ipoJSON + ` || jsonb_build_object(
  'subscriptions',COALESCE((SELECT jsonb_agg(to_jsonb(s)||jsonb_build_object(
  'offered_shares',s.offered_shares::text,'bid_shares',s.bid_shares::text,'applications',s.applications::text,
  'multiple',s.multiple::text,'stale',COALESCE(s.source_observed_at,s.observed_at)<now()-interval '90 minutes') ORDER BY s.category)
- FROM ipo_pos.ipo_subscriptions s WHERE s.ipo_id=i.id AND (i.board='SME' OR s.coverage='NSE+BSE')),'[]'::jsonb),
+ FROM ipo_pos.ipo_subscriptions s WHERE s.ipo_id=i.id),'[]'::jsonb),
  'reservations',COALESCE((SELECT jsonb_agg(to_jsonb(s)||jsonb_build_object('reserved_shares',s.reserved_shares::text,
  'percentage',s.percentage::text) ORDER BY s.category) FROM ipo_pos.ipo_reservations s WHERE s.ipo_id=i.id),'[]'::jsonb),
  'promoter_shareholdings',COALESCE((SELECT jsonb_agg(to_jsonb(s)||jsonb_build_object('pre_percentage',s.pre_percentage::text,

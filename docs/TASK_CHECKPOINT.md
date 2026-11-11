@@ -8,6 +8,15 @@ None. The three completed tasks are checkpointed in Batch 49 below.
 
 ## Checkpoints
 
+### Batch 54 — NSE-only category fallback
+
+Checkpointed the reviewed fallback implementation for the user-authorized deployment on 11 November 2026. Earlier logo, Android and rollout changes remain outside this batch.
+
+- Mainboard categories prefer published NSE+BSE observations and retain labelled NSE-only counts when no combined category observation is available. Catalogue responses expose that coverage, and the shared editor/report capacity calculation accepts NSE-only quotas. Published reservation share counts retain priority. Coverage upgrades still replace fields atomically; NSE-only refreshes cannot overwrite saved combined rows.
+- Focused parser/forecast checks, all migrations/schema assertions, the full disposable PostgreSQL backend suite (30.141 seconds), backend vet and whitespace review passed before checkpoint preparation. Tests cover missing/partial combined categories, headline preservation, coverage labels, upgrade/no-downgrade guards and matching authenticated editor/report results. The exact staged release excludes the unrelated logo increment; deployment CI verifies that revision before either host is replaced.
+- Paths: `backend/dashboard_source_basis.go`, `backend/dashboard_source_basis_test.go`, `backend/dashboard_test.go`, `backend/ipo_catalogue.go`, `backend/ipo_sources.go` (coverage/detail-parser hunks), `backend/ipo_subscriptions_test.go`, `backend/README.md` (fallback descriptions), `docs/IPO_CATALOGUE.md` (fallback descriptions), `docs/TASK_CHECKPOINT.md` (this batch only).
+- No migration, dependency, configuration or Android build is required. Hosted rollout verification is recorded after deployment. NSE-only capacities remain single-exchange estimates; phone rendering is not part of the backend checks. The earlier stopped temporary fixture remains because automatic approval review rejected cleanup. The preceding 32 local tasks retain their mixed-work ownership blocker.
+
 ### Batch 53 — SME application rounding and issue-size metadata
 
 Checkpointed the reviewed backend portion for the user-authorized rollout on 8 November 2026. The Android presentation changes remain in the sibling working copy.

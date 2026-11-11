@@ -25,7 +25,8 @@ Apply migration 013 and runtime grants before starting this version.
 The consolidated subscription increment requires
 [migration 019](../database/019_combined_ipo_subscriptions.sql) after migrations
 001–018. Automatic discovery covers NSE-listed Mainboard and SME IPOs.
-Mainboard demand uses NSE's published combined NSE+BSE table. NSE SME demand
+Mainboard demand prefers NSE's published combined NSE+BSE table, falling back
+per category to labelled NSE-only counts when combined data is unavailable. NSE SME demand
 uses its single-exchange book. Coverage and upstream publication times are
 returned with each observation. See [source coverage](../docs/IPO_CATALOGUE.md#sources-and-preservation).
 The dashboard assumptions increment additionally requires
@@ -423,7 +424,10 @@ two places; shares and rates to six. Negative GMP, quantities and rates are reta
 
 The backend derives planning capacity from the matched catalogue snapshot by dividing
 the published category quota by the minimum allotment size. Mainboard capacity rounds
-down. SME capacity rounds to the nearest whole application, with halves rounded up.
+down. Mainboard subscription quotas prefer NSE+BSE coverage and fall back to
+NSE-only coverage for categories without a combined observation. Separate published
+reservation share counts take precedence over subscription quotas.
+SME capacity rounds to the nearest whole application, with halves rounded up.
 Mainboard Retail uses one lot, and supported Mainboard SHNI and BHNI pools use the
 minimum NII allotment size with separately published quotas. For SME issues under
 the rules effective 1 July 2025, Individual uses two lots and the existing `RETAIL`

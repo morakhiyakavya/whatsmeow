@@ -87,9 +87,9 @@ expected timeline values, derived status and `catalogue_stale`. Related arrays:
 - `subscriptions`: category/label, offered/bid shares, application count, multiple,
   source, coverage, fetch observation time, `source_observed_at` when published,
   and staleness. Staleness uses publication time when available, otherwise fetch
-  observation time. Mainboard rows have `coverage=NSE+BSE`; legacy NSE-only
-  mainboard observations are retained in storage and omitted from this array
-  until consolidated observations replace them. Total is separately published;
+  observation time. Mainboard rows prefer `coverage=NSE+BSE`; categories without
+  combined observations retain and expose their `coverage=NSE only` counts.
+  Total is separately published;
   overlapping NII parent/child rows are never added together.
 - `reservations`: category, reserved shares, percentage, basis, source URL/time.
 - `promoter_shareholdings`: holder, pre/post percentages, source URL/time.
@@ -143,8 +143,10 @@ exchange-published NSE+BSE consolidated book. Header rows are skipped, numeric
 fields use `noOfShareOffered`, `noOfSharesBid` and `noOfTotalMeant`, and
 `activeCat.updateTime` supplies publication time. The current-issue feed also
 provides a published consolidated headline total. Totals and overlapping NII
-parent/child rows remain separate. Missing combined category data remains
-unavailable or retains the previous combined observation.
+parent/child rows remain separate. Categories without usable combined rows fall
+back to `bidDetails`, preserving `NSE only` coverage, application counts and the
+`demandGraph.timestamp` publication time. Existing combined observations are retained
+when a later refresh provides only NSE data; their fields are never mixed.
 
 NSE SME issues use the single-exchange `bidDetails` book, labelled `NSE only`.
 This retains their published application counts when combined-table placeholders
@@ -154,7 +156,9 @@ carried into a combined row. Changing a row's coverage replaces its numeric
 fields atomically; sparse updates within the same coverage retain known values.
 An NSE-only observation cannot overwrite a combined row, and older or undated
 observations cannot overwrite a timestamped combined observation. Mainboard forecast
-capacity uses combined offered-share observations or separate published reservations.
+capacity uses separate published reservation share counts first, then combined
+offered-share observations, then NSE-only category observations when no combined
+observation is available. NSE-only capacity is a single-exchange estimate.
 
 `IPO_LIVE_SOURCE_TEST=1` enables read-only `TestNSECombinedLiveSources`, which checks
 published consolidated demand when a current mainboard issue is available. It

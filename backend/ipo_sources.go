@@ -48,7 +48,7 @@ type ipoSourceIssue struct {
 }
 type ipoSourceClient struct{ http *http.Client }
 
-const ipoSourceCoverage = "NSE-listed IPOs; published NSE+BSE mainboard subscriptions; NSE-only SME subscriptions"
+const ipoSourceCoverage = "NSE-listed IPOs; published NSE+BSE mainboard subscriptions with NSE-only category fallback; NSE-only SME subscriptions"
 
 func newIPOSourceClient() *ipoSourceClient {
 	jar, _ := cookiejar.New(nil)
@@ -362,53 +362,62 @@ func parseIPODetail(data []byte, item *ipoSourceIssue) error {
 	if matches := sharePattern.FindAllStringSubmatch(item.IssueText, -1); len(matches) == 1 {
 		item.IssueShares = sourceNumber(matches[0][1], true)
 	}
-	rows := body.Combined.Rows
-	offeredKey, bidKey, multipleKey := "noOfShareOffered", "noOfSharesBid", "noOfTotalMeant"
-	coverage, published := "NSE+BSE", sourceTimestamp(body.Combined.Updated)
-	if item.Board == "SME" {
-		rows = body.Bids
-		offeredKey, bidKey, multipleKey = "noOfSharesOffered", "noOfsharesBid", "noOfTime"
-		coverage, published = "NSE only", sourceTimestamp(body.Demand.Timestamp)
-	}
 	keys := map[string]string{"1": "qib", "2": "nii", "2.1": "bhni", "2.2": "shni", "3": "retail", "4": "employee", "5": "shareholder", "6": "policyholder"}
-	for _, row := range rows {
-		label, serial := sourceText(row["category"]), sourceText(row["srNo"])
-		key, ok := keys[serial]
-		if strings.EqualFold(label, "Total") {
-			key, ok = "total", true
-		}
-		if !ok || label == "" {
+	for _, coverage := range []string{"NSE only", "NSE+BSE"} {
+		if item.Board == "SME" && coverage == "NSE+BSE" {
 			continue
 		}
-		if item.Board == "SME" && key == "retail" {
-			key = "individual"
+		rows := body.Combined.Rows
+		offeredKey, bidKey, multipleKey := "noOfShareOffered", "noOfSharesBid", "noOfTotalMeant"
+		published := sourceTimestamp(body.Combined.Updated)
+		if coverage == "NSE only" {
+			rows = body.Bids
+			offeredKey, bidKey, multipleKey = "noOfSharesOffered", "noOfsharesBid", "noOfTime"
+			published = sourceTimestamp(body.Demand.Timestamp)
 		}
-		bid := sourceNumber(sourceText(row[bidKey]), true)
-		if bid == nil && item.Board == "SME" {
-			bid = sourceNumber(sourceText(row["noOfshareBid"]), true)
-		}
-		offered := sourceNumber(sourceText(row[offeredKey]), true)
-		multiple := sourceNumber(sourceText(row[multipleKey]), false)
-		if offered == nil || *offered == "0" {
-			multiple = nil
-		}
-		entry := ipoSubscription{Category: key, Label: label, Offered: offered, Bid: bid, Multiple: multiple, Coverage: coverage, SourceObservedAt: published}
-		if item.Board == "SME" {
-			entry.Applications = sourceNumber(sourceText(row["noofapplication"]), true)
-		}
-		if offered == nil && bid == nil && entry.Applications == nil {
-			continue
-		}
-		replaced := false
-		for j := range item.Subscriptions {
-			if item.Subscriptions[j].Category == key {
-				item.Subscriptions[j] = entry
-				replaced = true
-				break
+		for _, row := range rows {
+			label, serial := sourceText(row["category"]), sourceText(row["srNo"])
+			key, ok := keys[serial]
+			if strings.EqualFold(label, "Total") {
+				key, ok = "total", true
 			}
-		}
-		if !replaced {
-			item.Subscriptions = append(item.Subscriptions, entry)
+			if !ok || label == "" {
+				continue
+			}
+			if item.Board == "SME" && key == "retail" {
+				key = "individual"
+			}
+			bid := sourceNumber(sourceText(row[bidKey]), true)
+			if bid == nil && coverage == "NSE only" {
+				bid = sourceNumber(sourceText(row["noOfshareBid"]), true)
+			}
+			offered := sourceNumber(sourceText(row[offeredKey]), true)
+			multiple := sourceNumber(sourceText(row[multipleKey]), false)
+			if offered == nil || *offered == "0" {
+				multiple = nil
+			}
+			entry := ipoSubscription{Category: key, Label: label, Offered: offered, Bid: bid, Multiple: multiple, Coverage: coverage, SourceObservedAt: published}
+			if coverage == "NSE only" {
+				entry.Applications = sourceNumber(sourceText(row["noofapplication"]), true)
+			}
+			if offered == nil && bid == nil && entry.Applications == nil {
+				continue
+			}
+			replaced := false
+			for j := range item.Subscriptions {
+				if item.Subscriptions[j].Category == key {
+					if item.Subscriptions[j].Coverage == "NSE+BSE" && coverage == "NSE only" {
+						replaced = true
+						break
+					}
+					item.Subscriptions[j] = entry
+					replaced = true
+					break
+				}
+			}
+			if !replaced {
+				item.Subscriptions = append(item.Subscriptions, entry)
+			}
 		}
 	}
 	item.DetailOK = true

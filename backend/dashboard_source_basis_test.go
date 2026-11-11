@@ -25,8 +25,29 @@ func TestCatalogueForecastBasisUsesSeparatePublishedQuotas(t *testing.T) {
 	}
 	legacy := []byte(`{"ipo":{"board":"Mainboard","lot_size":12,"price_high":"1119","opens_on":"2026-01-02"},
  "subscriptions":[{"category":"retail","offered_shares":"1200","coverage":"NSE only"}]}`)
-	if len(catalogueForecastBasis(legacy)) != 0 {
-		t.Fatal("NSE-only mainboard quota used as consolidated capacity")
+	if got := catalogueForecastBasis(legacy); got["RETAIL"] != (calculationBasis{"12", "100", "applications"}) || len(got) != 1 {
+		t.Fatal("NSE-only mainboard fallback missing", got)
+	}
+}
+
+func TestCatalogueForecastBasisPrefersCombinedCategoryQuotas(t *testing.T) {
+	for _, rows := range []string{
+		`{"category":"retail","offered_shares":"1200","coverage":"NSE only"},{"category":"retail","offered_shares":"2400","coverage":"NSE+BSE"}`,
+		`{"category":"retail","offered_shares":"2400","coverage":"NSE+BSE"},{"category":"retail","offered_shares":"1200","coverage":"NSE only"}`,
+	} {
+		facts := fmt.Sprintf(`{"ipo":{"board":"Mainboard","lot_size":12},"subscriptions":[%s]}`, rows)
+		if got := catalogueForecastBasis([]byte(facts)); got["RETAIL"].Capacity != "200" {
+			t.Fatal("combined quota must win in either order", got)
+		}
+	}
+	facts := []byte(`{"ipo":{"board":"Mainboard","lot_size":12,"price_high":"1119","opens_on":"2026-11-11"},
+ "subscriptions":[{"category":"retail","offered_shares":"85037327","coverage":"NSE only"},
+ {"category":"shni","offered_shares":"12148189","coverage":"NSE only"},
+ {"category":"bhni","offered_shares":"24296380","coverage":"NSE only"}]}`)
+	want := map[string]calculationBasis{"RETAIL": {"12", "7086443", "applications"},
+		"SHNI": {"180", "67489", "applications"}, "BHNI": {"180", "134979", "applications"}}
+	if got := catalogueForecastBasis(facts); !maps.Equal(got, want) {
+		t.Fatal("wrong Jio fallback capacities", got)
 	}
 }
 

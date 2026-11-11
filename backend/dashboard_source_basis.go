@@ -96,6 +96,9 @@ func catalogueForecastBasis(snapshot json.RawMessage) map[string]calculationBasi
 					offered = row.Shares
 					break
 				}
+				if facts.IPO.Board == "Mainboard" && row.Category == sourceCategory && row.Coverage == "NSE only" {
+					offered = row.Shares
+				}
 			}
 		}
 		if !applicationCountPattern.MatchString(offered) {

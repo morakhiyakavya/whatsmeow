@@ -8,6 +8,12 @@ None. The three completed tasks are checkpointed in Batch 49 below.
 
 ## Checkpoints
 
+### Batch 57 — Mainboard NII reservation labels
+
+- The shared capacity calculator recognises published sNII and bNII reservation labels on Mainboard IPOs. Mahanadi reproduces the missing capacities in the regression test. Mainboard rounding and shareholder forecasting retain their existing rules.
+- Verification passed in the backend Go suite and disposable PostgreSQL ledger integration. The hosted Mahanadi inputs were inspected read-only. The release uses the existing Render and Azure deployment workflow.
+- Paths: `backend/dashboard_source_basis.go`, `backend/dashboard_source_basis_test.go` and this checkpoint. Other pending work remains under the existing mixed-work blocker.
+
 ### Batch 56 — Filing-backed IPO calendar release
 
 - Published Mainboard bidding windows backed by an identifiable SEBI filing appear as tentative. The importer preserves their UUIDs when a matching NSE issue is confirmed. Catalogue and business sync expose the expected close as the tentative selection deadline.

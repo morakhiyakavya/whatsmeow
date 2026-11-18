@@ -30,6 +30,19 @@ func TestCatalogueForecastBasisUsesSeparatePublishedQuotas(t *testing.T) {
 	}
 }
 
+func TestCatalogueForecastBasisUsesMainboardNIISubcategoryReservations(t *testing.T) {
+	facts := []byte(`{"ipo":{"board":"Mainboard","lot_size":110,"price_high":"136.000000","opens_on":"2026-11-19"},
+ "reservations":[{"category":"Retail","reserved_shares":"196896299"},
+ {"category":"sNII < ₹10L","reserved_shares":"28128042"},{"category":"bNII > ₹10L","reserved_shares":"56256086"},
+ {"category":"NII","reserved_shares":"84384128"},{"category":"Share Holders","reserved_shares":"66183630"}],
+ "subscriptions":[{"category":"total","offered_shares":"0","coverage":"NSE+BSE"}]}`)
+	want := map[string]calculationBasis{"RETAIL": {"110", "1789966", "applications"},
+		"SHNI": {"1540", "18264", "applications"}, "BHNI": {"1540", "36529", "applications"}}
+	if got := catalogueForecastBasis(facts); !maps.Equal(got, want) {
+		t.Fatalf("Mahanadi forecast basis = %v, want %v", got, want)
+	}
+}
+
 func TestCatalogueForecastBasisPrefersCombinedCategoryQuotas(t *testing.T) {
 	for _, rows := range []string{
 		`{"category":"retail","offered_shares":"1200","coverage":"NSE only"},{"category":"retail","offered_shares":"2400","coverage":"NSE+BSE"}`,

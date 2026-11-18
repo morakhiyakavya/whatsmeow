@@ -72,15 +72,13 @@ func catalogueForecastBasis(snapshot json.RawMessage) map[string]calculationBasi
 		for _, row := range facts.Reservations {
 			label := strings.TrimSpace(strings.ToLower(row.Category))
 			matches := label == category || label == category+" shares offered" || category == "retail" && label == "retail individual investors"
-			if facts.IPO.Board == "SME" {
-				switch category {
-				case "retail":
-					matches = matches || label == "individual" || label == "individual investors" || label == "individual shares offered"
-				case "shni":
-					matches = matches || label == "snii" || label == "snii < ₹10l"
-				case "bhni":
-					matches = matches || label == "bnii" || label == "bnii > ₹10l"
-				}
+			switch {
+			case category == "retail" && facts.IPO.Board == "SME":
+				matches = matches || label == "individual" || label == "individual investors" || label == "individual shares offered"
+			case category == "shni":
+				matches = matches || label == "snii" || label == "snii < ₹10l"
+			case category == "bhni":
+				matches = matches || label == "bnii" || label == "bnii > ₹10l"
 			}
 			if row.Shares != "" && matches {
 				if offered != "" && offered != row.Shares {

@@ -13,6 +13,7 @@ None. The three completed tasks are checkpointed in Batch 49 below.
 - Switch IPO feed, detail, session and provenance URLs to the exchange's current `www.nseindia.in` host. Refreshed provider-owned rows update their source link. The HTTPS host checks and redirect restrictions stay in force.
 - The backend Go suite and vet passed against the isolated release. The session fixture checks the new host, referer and cookie reuse. Live rollout verification follows through the existing backend workflow.
 - Paths: `backend/ipo_sources.go`, `backend/ipo_import.go`, `backend/ipo_catalogue_test.go`, `backend/ipo_subscriptions_test.go`, `docs/IPO_CATALOGUE.md`, and this ledger entry. The earlier pending local work remains outside the release under its existing ownership blocker.
+- Follow-up: NSE now publishes `Equity` in the live and past feeds. Treat it as Mainboard while retaining SME and filtering non-equity past issues. Focused parsing/session checks, vet and read-only NSE/IPO Watch collection passed with 110 issues, two detail/enrichment results and published combined retail demand for CRYSTALCP. Follow-up paths: `backend/ipo_sources.go` and `backend/ipo_catalogue_test.go`.
 
 ### Batch 54 — NSE-only category fallback
 

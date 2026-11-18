@@ -176,19 +176,22 @@ func parseIPOFeed(data []byte, past bool, now time.Time) ([]ipoSourceIssue, erro
 		name, open, close, band, series := sourceText(row["companyName"]), sourceText(row["issueStartDate"]), sourceText(row["issueEndDate"]), sourceText(row["issuePrice"]), sourceText(row["series"])
 		if past {
 			name, open, close, band, series = sourceText(row["company"]), sourceText(row["ipoStartDate"]), sourceText(row["ipoEndDate"]), sourceText(row["priceRange"]), sourceText(row["securityType"])
-			if series != "EQ" && series != "SME" && series != "BE" {
+		}
+		var board string
+		switch strings.ToUpper(series) {
+		case "EQ", "BE", "EQUITY":
+			board = "Mainboard"
+		case "SME":
+			board = "SME"
+		default:
+			if past {
 				continue
 			}
+			return nil, errors.New("unknown IPO board")
 		}
 		symbol := sourceText(row["symbol"])
 		if !sourceSymbolPattern.MatchString(symbol) || !validText(name, 256) {
 			return nil, errors.New("invalid IPO identity")
-		}
-		board := "Mainboard"
-		if strings.EqualFold(series, "SME") {
-			board = "SME"
-		} else if series != "EQ" && series != "BE" {
-			return nil, errors.New("unknown IPO board")
 		}
 		item := ipoSourceIssue{Symbol: symbol, Name: name, Board: board, Open: sourceDate(open), Close: sourceDate(close), Timeline: map[string]any{}}
 		for _, date := range []struct {

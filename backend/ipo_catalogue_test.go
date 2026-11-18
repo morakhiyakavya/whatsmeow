@@ -88,6 +88,27 @@ func TestIPOSourceParsing(t *testing.T) {
 	}
 }
 
+func TestIPOFeedBoardLabels(t *testing.T) {
+	now := time.Date(2026, time.November, 18, 0, 0, 0, 0, time.UTC)
+	current, err := parseIPOFeed([]byte(`[
+		{"symbol":"SAMPLE","companyName":"Sample Limited","series":"Equity","noOfTime":"2"},
+		{"symbol":"SMESAMPLE","companyName":"SME Sample Limited","series":"SME","noOfTime":"3"}
+	]`), false, now)
+	if err != nil || len(current) != 2 || current[0].Board != "Mainboard" || current[1].Board != "SME" {
+		t.Fatal(current, err)
+	}
+	if current[0].Subscriptions[0].Coverage != "NSE+BSE" || current[1].Subscriptions[0].Coverage != "NSE only" {
+		t.Fatal("incorrect subscription coverage", current)
+	}
+	past, err := parseIPOFeed([]byte(`[
+		{"symbol":"SAMPLE","company":"Sample Limited","securityType":"Equity","ipoEndDate":"01-NOV-2026"},
+		{"symbol":"BOND","company":"Sample Debt Issue","securityType":"DEBT","ipoEndDate":"01-NOV-2026"}
+	]`), true, now)
+	if err != nil || len(past) != 1 || past[0].Symbol != "SAMPLE" || past[0].Board != "Mainboard" {
+		t.Fatal(past, err)
+	}
+}
+
 func TestIPOEnrichment(t *testing.T) {
 	fixture := `<html><h1>Example India IPO</h1>
 <table><tr><th>Investor Category</th><th>Shares</th><th>Percentage</th></tr><tr><td>Retail</td><td>1,000</td><td>35%</td></tr></table>

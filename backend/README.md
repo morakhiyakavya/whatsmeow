@@ -29,6 +29,8 @@ Mainboard demand prefers NSE's published combined NSE+BSE table, falling back
 per category to labelled NSE-only counts when combined data is unavailable. NSE SME demand
 uses its single-exchange book. Coverage and upstream publication times are
 returned with each observation. See [source coverage](../docs/IPO_CATALOGUE.md#sources-and-preservation).
+Migration [022](../database/022_ipo_filing_calendar.sql) adds tentative Mainboard
+calendar entries backed by SEBI filings and dated IPO Watch windows.
 The dashboard assumptions increment additionally requires
 [migration 015](../database/015_dashboard_assumptions.sql) after 014 and refreshed
 runtime grants. The current contact-notification increment below also requires 016.

@@ -104,6 +104,8 @@ func decorateIPO(data json.RawMessage) (json.RawMessage, error) {
 	switch {
 	case stringField("source_status") == "postponed" || stringField("source_status") == "withdrawn":
 		status = stringField("source_status")
+	case stringField("catalogue_source") == "filing" && expectedIPODate(row["timeline"], "opening") != "":
+		status = "upcoming"
 	case listing != "" && listing <= today:
 		status = "listed"
 	case close != "" && close < today:

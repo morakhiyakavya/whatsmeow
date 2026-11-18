@@ -28,6 +28,10 @@ Existing observations keep their original coverage. Apply 019 once as migration
 owner before deploying the new backend. Fresh local/hosted setup and the schema
 runner include it. This source increment is awaiting production migration and deployment.
 
+Apply [migration 022](../database/022_ipo_filing_calendar.sql) for filing-backed
+calendar entries and their expected opening and closing dates. It is independent
+of the separate issuer-logo migration.
+
 Set `IPO_JOB_TOKEN` privately using at least 32 random bytes (43 URL-safe base64
 characters). The setting accepts 43–128 non-whitespace characters. Set
 `IPO_DATABASE_URL` to the trusted worker connection for catalogue writes; when
@@ -130,6 +134,14 @@ errors/credentials. Catalogue/subscription observations become stale after 90 mi
 ## Sources and preservation
 
 NSE current/upcoming/recent-past feeds on `www.nseindia.in` populate the catalogue.
+An additional Mainboard issue can appear as tentative when IPO Watch publishes
+both expected dates and the issuer has a matching SEBI draft or red herring
+filing. The app displays the expected window and links the catalogue record to
+the filing. Tentative issues stay selectable through their expected closing
+day. Confirmed dates, price, lot size and bids come from exchange observations.
+When the importer matches a later NSE issue by legal name, board and a nearby
+opening date, it reuses the provisional record's ID for existing trades.
+
 Details/enrichment
 target open, upcoming within 21 days and closed within seven days. Older products
 remain available. Automatic discovery covers NSE-listed issues, including issues

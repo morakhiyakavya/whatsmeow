@@ -8,6 +8,13 @@ None. The three completed tasks are checkpointed in Batch 49 below.
 
 ## Checkpoints
 
+### Batch 56 — Filing-backed IPO calendar release
+
+- Published Mainboard bidding windows backed by an identifiable SEBI filing appear as tentative. The importer preserves their UUIDs when a matching NSE issue is confirmed. Catalogue and business sync expose the expected close as the tentative selection deadline.
+- The exact release passed hosted setup, migration and schema checks, focused catalogue/import/coverage integration and backend vet. Read-only source verification found Foodlink and recovered Mahanadi during an exchange-list omission. Migration 022 is independent of the uncommitted issuer-logo work.
+- Paths: `backend/ipo_filing_calendar.go`, `backend/ipo_filing_calendar_test.go`, `backend/ipo_catalogue.go`, `backend/ipo_catalogue_test.go`, `backend/ipo_import.go`, `backend/ipo_import_batch_test.go`, `backend/ipo_sources.go`, `backend/resources.go`, `backend/business_sync.go`, `backend/README.md`, `database/022_ipo_filing_calendar.sql`, `database/Setup-Supabase.psql`, `database/Test-Schema.ps1`, `scripts/Setup-LocalDatabase.ps1`, `docs/IPO_CATALOGUE.md`, and this checkpoint.
+- Android distribution follows the existing signed APK workflow. Earlier pending work and the issuer-logo migration are outside this release.
+
 ### Batch 55 — NSE IPO source host
 
 - Switch IPO feed, detail, session and provenance URLs to the exchange's current `www.nseindia.in` host. Refreshed provider-owned rows update their source link. The HTTPS host checks and redirect restrictions stay in force.

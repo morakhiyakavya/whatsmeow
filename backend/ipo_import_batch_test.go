@@ -80,8 +80,8 @@ func TestIPOImportBatchIntegration(t *testing.T) {
 		return len(counter.queries)
 	}
 	single, batch := queriesFor(items[:1]), queriesFor(items[1:])
-	if single != batch || batch > 12 {
-		t.Fatalf("query count grows with IPO count: single=%d batch=%d", single, batch)
+	if single != batch || batch > 13 {
+		t.Fatalf("expected at most 13 fixed database calls including filing adoption: single=%d batch=%d", single, batch)
 	}
 	t.Logf("one IPO and 39 IPOs each use %d database calls, including one BEGIN/COMMIT", batch)
 	// Replaying identical facts must not create extra history versions.

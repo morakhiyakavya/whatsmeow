@@ -171,7 +171,9 @@ const ipoJSON = `to_jsonb(i) || jsonb_build_object('price_low',i.price_low::text
 const ipoLifecycleJoin = ` CROSS JOIN LATERAL (SELECT COALESCE(i.listing_on,CASE
  WHEN i.timeline#>>'{ipo listing,precision}'='date'
  AND pg_input_is_valid(i.timeline#>>'{ipo listing,value}','date')
- THEN (i.timeline#>>'{ipo listing,value}')::date END) AS listing_date) lifecycle `
+ THEN (i.timeline#>>'{ipo listing,value}')::date END,
+ CASE WHEN i.catalogue_source='filing' THEN (i.timeline#>>'{closing,value}')::date
+ ELSE i.closes_on+7 END) AS selectable_until) lifecycle `
 
 func (a *api) listIPOs(w http.ResponseWriter, r *http.Request, user actor) {
 	board, active := r.URL.Query().Get("board"), r.URL.Query().Get("active")
@@ -184,12 +186,11 @@ func (a *api) listIPOs(w http.ResponseWriter, r *http.Request, user actor) {
 		return
 	}
 	at, id := p.args()
-	rows, err := a.db.QueryContext(r.Context(), `SELECT `+ipoCatalogueJSON+`,i.created_at,i.id FROM ipo_pos.ipos i `+ipoLifecycleJoin+`
+	rows, err := a.db.QueryContext(r.Context(), `SELECT `+ipoCatalogueJSON+` || jsonb_build_object('selectable_until',lifecycle.selectable_until),
+        i.created_at,i.id FROM ipo_pos.ipos i `+ipoLifecycleJoin+`
         WHERE archived_at IS NULL AND ($1::timestamptz IS NULL OR (created_at,id)<($1,$2::uuid))
         AND ($3='' OR board=$3) AND COALESCE(source_status,'') NOT IN ('withdrawn','postponed')
-        AND (lifecycle.listing_date>=(now() AT TIME ZONE 'Asia/Kolkata')::date
-        OR (lifecycle.listing_date IS NULL AND (closes_on IS NULL
-        OR closes_on>=(now() AT TIME ZONE 'Asia/Kolkata')::date-7)))
+        AND (lifecycle.selectable_until IS NULL OR lifecycle.selectable_until>=(now() AT TIME ZONE 'Asia/Kolkata')::date)
         ORDER BY created_at DESC,id DESC LIMIT $4`, at, id, board, p.Limit+1)
 	if err != nil {
 		dbFailure(w, err)

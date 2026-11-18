@@ -11,6 +11,7 @@ import (
 	"log"
 	"net/http"
 	"net/url"
+	"slices"
 	"strings"
 	"time"
 
@@ -164,6 +165,14 @@ func runIPOImport(ctx context.Context, db *sql.DB, collect func(context.Context)
 		results["catalogue"] = "empty"
 	}
 	count := 0
+	var filings []ipoSourceIssue
+	items = slices.DeleteFunc(items, func(item ipoSourceIssue) bool {
+		if item.FilingURL == "" {
+			return false
+		}
+		filings = append(filings, item)
+		return true
+	})
 	if status != "succeeded" {
 		collectSpan.Status = sentry.SpanStatusInternalError
 	}
@@ -182,6 +191,15 @@ func runIPOImport(ctx context.Context, db *sql.DB, collect func(context.Context)
 			if saveCtx.Err() != nil {
 				break
 			}
+		}
+	}
+	if len(filings) > 0 {
+		saved, err := saveFilingIPOs(save.Context(), db, filings)
+		count += saved
+		if err != nil {
+			results["filing storage"] = "failed"
+			saveErr = errors.Join(saveErr, err)
+			status = "partial"
 		}
 	}
 	finishOperation(save, saveErr)
@@ -227,7 +245,7 @@ func persistSourceIPOs(ctx context.Context, db *sql.DB, items []ipoSourceIssue, 
 
 const sourceIPORows = `WITH source AS (
  SELECT s.*,i.id FROM jsonb_to_recordset($1::jsonb) AS s(
- "Symbol" text,"Name" text,"Board" text,"SourceURL" text,"SourceStatus" text,
+ "Symbol" text,"Name" text,"Board" text,"SourceURL" text,"SourceStatus" text,"IssuerKey" text,
  "Open" text,"Close" text,"Listing" text,"Low" text,"High" text,"Lot" bigint,
  "Registrar" text,"IssueText" text,"IssueShares" text,"IssueAmount" text,
  "DetailOK" boolean,"EnrichmentOK" boolean,"EnrichmentURL" text,"Timeline" jsonb,
@@ -241,13 +259,14 @@ func saveSourceIPOs(ctx context.Context, db *sql.DB, items []ipoSourceIssue) err
 	type sourceRow struct {
 		ipoSourceIssue
 		SourceURL string
+		IssuerKey string
 	}
 	rows := make([]sourceRow, len(items))
 	for n, item := range items {
 		if !sourceSymbolPattern.MatchString(item.Symbol) || !validText(item.Name, 256) || (item.Board != "SME" && item.Board != "Mainboard") {
 			return errors.New("invalid source identity")
 		}
-		rows[n] = sourceRow{item, nseIPOBaseURL + "/market-data/issue-information?symbol=" + url.QueryEscape(item.Symbol)}
+		rows[n] = sourceRow{item, nseIPOBaseURL + "/market-data/issue-information?symbol=" + url.QueryEscape(item.Symbol), issuerKey(item.Name)}
 	}
 	encoded, err := json.Marshal(rows)
 	if err != nil {
@@ -258,6 +277,19 @@ func saveSourceIPOs(ctx context.Context, db *sql.DB, items []ipoSourceIssue) err
 		return err
 	}
 	defer tx.Rollback()
+	// Adopt only the matching provisional issue and keep its ID for existing trades.
+	if _, err := tx.ExecContext(ctx, sourceIPORows+`UPDATE ipo_pos.ipos i
+	 SET code='NSE:'||s."Symbol",catalogue_source='nse',source_issue_id=s."Symbol",symbol=s."Symbol",exchange='NSE',
+	   name=s."Name",issuer_name=s."Name",timeline=i.timeline-'opening'-'closing'
+	 FROM source s JOIN (SELECT "IssuerKey","Board" FROM source
+	   GROUP BY "IssuerKey","Board" HAVING count(*)=1) unique_issuers USING ("IssuerKey","Board")
+	 WHERE i.catalogue_source='filing' AND i.source_issue_id=s."IssuerKey"
+	   AND i.board=s."Board" AND i.archived_at IS NULL AND s.id IS NULL
+	   AND s."Open" IS NOT NULL
+	   AND abs(s."Open"::date-(i.timeline#>>'{opening,value}')::date) <= 90`,
+		string(encoded)); err != nil {
+		return err
+	}
 	// Only provider-owned rows match this key. Manual products are never joined by name.
 	result, err := tx.ExecContext(ctx, sourceIPORows+`INSERT INTO ipo_pos.ipos AS i(code,name,issuer_name,opens_on,closes_on,listing_on,price_low,price_high,
 	 catalogue_source,source_issue_id,symbol,exchange,board,source_url,last_seen_at,source_status,issue_size_text)

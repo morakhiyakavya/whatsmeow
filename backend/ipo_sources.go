@@ -43,6 +43,7 @@ type ipoSourceIssue struct {
 	Shareholdings                   []ipoShareholding
 	Lockins                         []ipoLockin
 	Timeline                        map[string]any
+	FilingURL                       string
 	EnrichmentURL                   string
 	DetailOK, EnrichmentOK          bool
 }
@@ -66,7 +67,7 @@ func newIPOSourceClient() *ipoSourceClient {
 
 func (s *ipoSourceClient) get(ctx context.Context, target string) (body []byte, resultErr error) {
 	u, err := url.Parse(target)
-	if err != nil || u.Scheme != "https" || u.User != nil || (u.Host != nseIPOHost && u.Host != "ipowatch.in") {
+	if err != nil || u.Scheme != "https" || u.User != nil || (u.Host != nseIPOHost && u.Host != "ipowatch.in" && u.Host != sebiIPOHost) {
 		return nil, errors.New("invalid source host")
 	}
 	span := startOperation(ctx, "http.client", "ipo.source_request")
@@ -286,10 +287,11 @@ func (s *ipoSourceClient) collect(ctx context.Context) ([]ipoSourceIssue, map[st
 	}
 	sort.Slice(items, func(i, j int) bool { return items[i].Symbol < items[j].Symbol })
 	var enrichmentLinks map[string]string
-	if len(items) > 0 {
-		if data, err := s.get(ctx, ipoEnrichmentIndex); err == nil {
-			enrichmentLinks, _ = parseIPOEnrichmentLinks(strings.NewReader(string(data)))
-		}
+	index, indexErr := s.get(ctx, ipoEnrichmentIndex)
+	if indexErr == nil {
+		enrichmentLinks, _ = parseIPOEnrichmentLinks(strings.NewReader(string(index)))
+	} else {
+		results["filing calendar"] = indexErr.Error()
 	}
 	today := time.Now().In(time.FixedZone("IST", 19800))
 	for i := range items {
@@ -318,6 +320,11 @@ func (s *ipoSourceClient) collect(ctx context.Context) ([]ipoSourceIssue, map[st
 			results["deadline"] = "failed"
 			break
 		}
+	}
+	if indexErr == nil {
+		filingCtx, cancel := context.WithTimeout(ctx, 30*time.Second)
+		defer cancel()
+		items = s.collectFilingCalendar(filingCtx, index, items, today.Format(time.DateOnly), results)
 	}
 	return items, results
 }

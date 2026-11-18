@@ -170,6 +170,9 @@ func TestIPOSourceSession(t *testing.T) {
 	s := newIPOSourceClient()
 	warmed := false
 	s.http.Transport = ipoTransport(func(r *http.Request) (*http.Response, error) {
+		if r.URL.String() == ipoEnrichmentIndex {
+			return &http.Response{StatusCode: 200, Body: io.NopCloser(strings.NewReader(ipoFilingCalendarFixture(nil))), Header: make(http.Header)}, nil
+		}
 		if r.URL.Host != "www.nseindia.in" {
 			t.Fatalf("unexpected NSE host: %s", r.URL.Host)
 		}
@@ -205,6 +208,10 @@ func TestIPOLiveSources(t *testing.T) {
 	}
 	details, enrichment, reservations, holdings, lockins := 0, 0, 0, 0, 0
 	for _, item := range items {
+		if item.FilingURL != "" {
+			timeline, _ := json.Marshal(item.Timeline)
+			t.Logf("filing preview: %s, %s to %s", item.Name, expectedIPODate(timeline, "opening"), expectedIPODate(timeline, "closing"))
+		}
 		if item.DetailOK {
 			details++
 		}

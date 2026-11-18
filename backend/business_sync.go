@@ -40,7 +40,7 @@ func (a *api) syncBusinessData(w http.ResponseWriter, r *http.Request, user acto
    WHEN 'transaction' THEN (SELECT `+transactionJSON+` FROM ipo_pos.transactions t WHERE t.business_id=$1 AND t.id=c.record_id)
    WHEN 'assumptions' THEN (SELECT `+assumptionJSON+` FROM ipo_pos.ipo_dashboard_assumption_versions v
     WHERE v.business_id=$1 AND v.ipo_id=c.record_id ORDER BY v.version DESC LIMIT 1)
-	   WHEN 'ipo' THEN (SELECT `+ipoCatalogueJSON+` || jsonb_build_object('selectable_until',COALESCE(lifecycle.listing_date,i.closes_on+7),'source_basis',
+	   WHEN 'ipo' THEN (SELECT `+ipoCatalogueJSON+` || jsonb_build_object('selectable_until',lifecycle.selectable_until,'source_basis',
     (SELECT to_jsonb(b) FROM ipo_pos.ipo_dashboard_basis_versions b WHERE b.ipo_id=i.id ORDER BY b.version DESC LIMIT 1))
     FROM ipo_pos.ipos i `+ipoLifecycleJoin+` WHERE i.id=c.record_id) END AS data FROM visible c
  ) SELECT jsonb_build_object('revision',v.revision::text,'unchanged',v.revision=$2::bigint,

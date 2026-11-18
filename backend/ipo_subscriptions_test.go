@@ -99,7 +99,7 @@ func TestPartialCombinedIPOSubscriptions(t *testing.T) {
 }
 
 func TestNSECatalogueScope(t *testing.T) {
-	for _, host := range []string{"https://api.bseindia.com/BseIndiaAPI/api/", "https://user:password@www.nseindia.com/"} {
+	for _, host := range []string{"https://api.bseindia.com/BseIndiaAPI/api/", "https://user:password@www.nseindia.in/"} {
 		if _, err := newIPOSourceClient().get(context.Background(), host); err == nil {
 			t.Fatal("unsupported collector host accepted", host)
 		}
@@ -113,8 +113,8 @@ func TestNSECombinedLiveSources(t *testing.T) {
 	ctx, cancel := context.WithTimeout(context.Background(), time.Minute)
 	defer cancel()
 	client := newIPOSourceClient()
-	_, _ = client.get(ctx, "https://www.nseindia.com/")
-	data, err := client.get(ctx, "https://www.nseindia.com/api/ipo-current-issue")
+	_, _ = client.get(ctx, nseIPOBaseURL+"/")
+	data, err := client.get(ctx, nseIPOBaseURL+"/api/ipo-current-issue")
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -126,7 +126,7 @@ func TestNSECombinedLiveSources(t *testing.T) {
 		if item.Board != "Mainboard" {
 			continue
 		}
-		data, err := client.get(ctx, "https://www.nseindia.com/api/ipo-detail?symbol="+url.QueryEscape(item.Symbol)+"&series=EQ")
+		data, err := client.get(ctx, nseIPOBaseURL+"/api/ipo-detail?symbol="+url.QueryEscape(item.Symbol)+"&series=EQ")
 		if err == nil {
 			err = parseIPODetail(data, &item)
 		}

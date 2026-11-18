@@ -8,6 +8,12 @@ None. The three completed tasks are checkpointed in Batch 49 below.
 
 ## Checkpoints
 
+### Batch 55 — NSE IPO source host
+
+- Switch IPO feed, detail, session and provenance URLs to the exchange's current `www.nseindia.in` host. Refreshed provider-owned rows update their source link. The HTTPS host checks and redirect restrictions stay in force.
+- The backend Go suite and vet passed against the isolated release. The session fixture checks the new host, referer and cookie reuse. Live rollout verification follows through the existing backend workflow.
+- Paths: `backend/ipo_sources.go`, `backend/ipo_import.go`, `backend/ipo_catalogue_test.go`, `backend/ipo_subscriptions_test.go`, `docs/IPO_CATALOGUE.md`, and this ledger entry. The earlier pending local work remains outside the release under its existing ownership blocker.
+
 ### Batch 54 — NSE-only category fallback
 
 Checkpointed the reviewed fallback implementation for the user-authorized deployment on 11 November 2026. Earlier logo, Android and rollout changes remain outside this batch.

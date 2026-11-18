@@ -247,7 +247,7 @@ func saveSourceIPOs(ctx context.Context, db *sql.DB, items []ipoSourceIssue) err
 		if !sourceSymbolPattern.MatchString(item.Symbol) || !validText(item.Name, 256) || (item.Board != "SME" && item.Board != "Mainboard") {
 			return errors.New("invalid source identity")
 		}
-		rows[n] = sourceRow{item, "https://www.nseindia.com/market-data/issue-information?symbol=" + url.QueryEscape(item.Symbol)}
+		rows[n] = sourceRow{item, nseIPOBaseURL + "/market-data/issue-information?symbol=" + url.QueryEscape(item.Symbol)}
 	}
 	encoded, err := json.Marshal(rows)
 	if err != nil {
@@ -267,6 +267,7 @@ func saveSourceIPOs(ctx context.Context, db *sql.DB, items []ipoSourceIssue) err
 	 opens_on=COALESCE(excluded.opens_on,i.opens_on),closes_on=COALESCE(excluded.closes_on,i.closes_on),
 	 listing_on=COALESCE(excluded.listing_on,i.listing_on),price_low=COALESCE(excluded.price_low,i.price_low),
 	 price_high=COALESCE(excluded.price_high,i.price_high),board=excluded.board,last_seen_at=excluded.last_seen_at,
+	 source_url=excluded.source_url,
 	 source_status=COALESCE(excluded.source_status,i.source_status),issue_size_text=COALESCE(i.issue_size_text,excluded.issue_size_text)
 	 WHERE i.name=excluded.name AND (i.closes_on IS NULL OR excluded.opens_on IS NULL OR excluded.opens_on<=i.closes_on+interval '90 days')
 	 `, string(encoded))

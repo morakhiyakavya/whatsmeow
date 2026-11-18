@@ -119,7 +119,7 @@ respect strict lower boundaries, fixing the upstream exact-boundary rounding.
 SME rules apply only from 1 July 2025: Individual Investor is exactly two lots
 above INR 200000; NII is more than two lots, with the applicable INR 1000000 split.
 Older SME rules or missing price/lot/opening inputs yield unavailable calculations.
-See [NSE FAQ](https://www.nseindia.com/static/trade/e-ipo-faqs) and
+See [NSE FAQ](https://www.nseindia.in/static/trade/e-ipo-faqs) and
 [circular IPO68604](https://nsearchives.nseindia.com/content/circulars/IPO68604.pdf).
 
 `GET /api/businesses/{businessID}/ipos/import-status` returns `latest_run`,
@@ -129,7 +129,8 @@ errors/credentials. Catalogue/subscription observations become stale after 90 mi
 
 ## Sources and preservation
 
-NSE current/upcoming/recent-past feeds populate the catalogue. Details/enrichment
+NSE current/upcoming/recent-past feeds on `www.nseindia.in` populate the catalogue.
+Details/enrichment
 target open, upcoming within 21 days and closed within seven days. Older products
 remain available. Automatic discovery covers NSE-listed issues, including issues
 also listing on BSE. The importer contacts NSE and IPO Watch. Provider keys match only provider-owned rows; manual

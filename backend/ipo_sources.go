@@ -48,6 +48,10 @@ type ipoSourceIssue struct {
 }
 type ipoSourceClient struct{ http *http.Client }
 
+const nseIPOHost = "www.nseindia.in"
+const nseIPOBaseURL = "https://" + nseIPOHost
+const nseIPOPage = nseIPOBaseURL + "/market-data/all-upcoming-issues-ipo"
+
 const ipoSourceCoverage = "NSE-listed IPOs; published NSE+BSE mainboard subscriptions with NSE-only category fallback; NSE-only SME subscriptions"
 
 func newIPOSourceClient() *ipoSourceClient {
@@ -62,7 +66,7 @@ func newIPOSourceClient() *ipoSourceClient {
 
 func (s *ipoSourceClient) get(ctx context.Context, target string) (body []byte, resultErr error) {
 	u, err := url.Parse(target)
-	if err != nil || u.Scheme != "https" || u.User != nil || (u.Host != "www.nseindia.com" && u.Host != "ipowatch.in") {
+	if err != nil || u.Scheme != "https" || u.User != nil || (u.Host != nseIPOHost && u.Host != "ipowatch.in") {
 		return nil, errors.New("invalid source host")
 	}
 	span := startOperation(ctx, "http.client", "ipo.source_request")
@@ -75,9 +79,9 @@ func (s *ipoSourceClient) get(ctx context.Context, target string) (body []byte, 
 	}
 	req.Header.Set("User-Agent", "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/128.0 Safari/537.36 WhatsAppPOS-IPO-Catalogue/1.0")
 	req.Header.Set("Accept", "application/json,text/html")
-	if u.Host == "www.nseindia.com" {
+	if u.Host == nseIPOHost {
 		req.Header.Set("Accept-Language", "en-US,en;q=0.9")
-		req.Header.Set("Referer", "https://www.nseindia.com/market-data/all-upcoming-issues-ipo")
+		req.Header.Set("Referer", nseIPOPage)
 	}
 	res, err := s.http.Do(req)
 	if err != nil {
@@ -195,7 +199,7 @@ func parseIPOFeed(data []byte, past bool, now time.Time) ([]ipoSourceIssue, erro
 				if !expectedDatePattern.MatchString(date.value) {
 					return nil, errors.New("invalid IPO dates")
 				}
-				item.Timeline[date.key] = map[string]string{"value": date.value, "precision": "text", "status": "expected", "source_url": "https://www.nseindia.com/market-data/all-upcoming-issues-ipo"}
+				item.Timeline[date.key] = map[string]string{"value": date.value, "precision": "text", "status": "expected", "source_url": nseIPOPage}
 			}
 		}
 		if status := strings.ToLower(sourceText(row["status"])); status == "active" || status == "postponed" || status == "withdrawn" {
@@ -245,13 +249,13 @@ func parseIPOFeed(data []byte, past bool, now time.Time) ([]ipoSourceIssue, erro
 func (s *ipoSourceClient) collect(ctx context.Context) ([]ipoSourceIssue, map[string]string) {
 	results := map[string]string{"coverage": ipoSourceCoverage}
 	// NSE issues API-session cookies on its public homepage.
-	_, _ = s.get(ctx, "https://www.nseindia.com/")
+	_, _ = s.get(ctx, nseIPOBaseURL+"/")
 	bySymbol := map[string]ipoSourceIssue{}
 	for _, feed := range []struct {
 		key, path string
 		past      bool
 	}{{"past", "/api/public-past-issues", true}, {"upcoming", "/api/all-upcoming-issues?category=ipo", false}, {"current", "/api/ipo-current-issue", false}} {
-		data, err := s.get(ctx, "https://www.nseindia.com"+feed.path)
+		data, err := s.get(ctx, nseIPOBaseURL+feed.path)
 		var rows []ipoSourceIssue
 		if err == nil {
 			rows, err = parseIPOFeed(data, feed.past, time.Now())
@@ -293,7 +297,7 @@ func (s *ipoSourceClient) collect(ctx context.Context) ([]ipoSourceIssue, map[st
 		if item.Open != nil && *item.Open > today.AddDate(0, 0, 21).Format("2006-01-02") {
 			continue
 		}
-		data, err := s.get(ctx, "https://www.nseindia.com/api/ipo-detail?symbol="+url.QueryEscape(item.Symbol)+"&series="+map[string]string{"SME": "SME", "Mainboard": "EQ"}[item.Board])
+		data, err := s.get(ctx, nseIPOBaseURL+"/api/ipo-detail?symbol="+url.QueryEscape(item.Symbol)+"&series="+map[string]string{"SME": "SME", "Mainboard": "EQ"}[item.Board])
 		if err == nil {
 			err = parseIPODetail(data, item)
 		}

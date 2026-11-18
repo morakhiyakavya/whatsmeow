@@ -131,7 +131,7 @@ func TestIPOSourceFailureAndHostBounds(t *testing.T) {
 	if len(items) != 0 || results["current"] != "source HTTP 503" || results["upcoming"] != "source HTTP 503" || results["past"] != "source HTTP 503" {
 		t.Fatal(items, results)
 	}
-	for _, host := range []string{"http://www.nseindia.com/api", "https://attacker.invalid/a", "https://www.nseindia.com.attacker.invalid/"} {
+	for _, host := range []string{"http://www.nseindia.in/api", "https://www.nseindia.com/api", "https://attacker.invalid/a", "https://www.nseindia.in.attacker.invalid/"} {
 		if _, err := s.get(context.Background(), host); err == nil {
 			t.Fatal("source host not bounded", host)
 		}
@@ -149,6 +149,9 @@ func TestIPOSourceSession(t *testing.T) {
 	s := newIPOSourceClient()
 	warmed := false
 	s.http.Transport = ipoTransport(func(r *http.Request) (*http.Response, error) {
+		if r.URL.Host != "www.nseindia.in" {
+			t.Fatalf("unexpected NSE host: %s", r.URL.Host)
+		}
 		headers := make(http.Header)
 		body := "[]"
 		if r.URL.Path == "/" {
@@ -157,7 +160,7 @@ func TestIPOSourceSession(t *testing.T) {
 			body = "<html></html>"
 		} else {
 			cookie, err := r.Cookie("nse_session")
-			if !warmed || err != nil || cookie.Value != "fixture" || r.Referer() != "https://www.nseindia.com/market-data/all-upcoming-issues-ipo" || r.Header.Get("Accept-Language") == "" {
+			if !warmed || err != nil || cookie.Value != "fixture" || r.Referer() != "https://www.nseindia.in/market-data/all-upcoming-issues-ipo" || r.Header.Get("Accept-Language") == "" {
 				t.Fatal("NSE API request lacks the established site session")
 			}
 		}

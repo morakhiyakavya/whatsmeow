@@ -2,6 +2,7 @@ package main
 
 import (
 	"bytes"
+	"context"
 	"crypto/sha256"
 	"database/sql"
 	"encoding/json"
@@ -31,8 +32,9 @@ type transactionCreate struct {
 }
 type transactionEdit struct {
 	transactionFields
-	ExpectedVersion int    `json:"expected_version"`
-	Reason          string `json:"change_reason"`
+	ExpectedVersion   int     `json:"expected_version"`
+	Reason            string  `json:"change_reason"`
+	WhatsAppAccountID *string `json:"whatsapp_account_id,omitempty"`
 }
 
 func (f *transactionFields) validate(w http.ResponseWriter) bool {
@@ -166,7 +168,7 @@ func (a *api) createTransaction(w http.ResponseWriter, r *http.Request, user act
 				return
 			}
 		}
-		if err = confirmationResponse(r, tx, user, createdID, &data); err != nil {
+		if err = confirmationResponse(r, tx, user, createdID, 1, &data); err != nil {
 			dbFailure(w, err)
 			return
 		}
@@ -204,18 +206,52 @@ func (a *api) editTransaction(w http.ResponseWriter, r *http.Request, user actor
 	if !decode(w, r, &input) || !input.validate(w) {
 		return
 	}
-	input.Reason = strings.TrimSpace(input.Reason)
-	if input.ExpectedVersion < 1 || input.ExpectedVersion >= 2147483647 || !validText(input.Reason, 2048) {
-		fail(w, 400, "invalid_revision", "Supply expected_version and a nonempty change_reason")
+	if input.ExpectedVersion < 1 || input.ExpectedVersion >= 2147483647 {
+		fail(w, 400, "invalid_revision", "Supply a valid expected_version")
 		return
 	}
+	input.Reason = strings.TrimSpace(input.Reason)
+	if input.Reason == "" {
+		input.Reason = "Manual edit"
+	}
+	if !validText(input.Reason, 2048) {
+		fail(w, 400, "invalid_reason", "change_reason must contain at most 2048 bytes")
+		return
+	}
+	if !optionalUUID(input.WhatsAppAccountID) {
+		fail(w, 400, "invalid_sender", "Supply a valid whatsapp_account_id")
+		return
+	}
+	tx, err := a.db.BeginTx(r.Context(), nil)
+	if err != nil {
+		dbFailure(w, err)
+		return
+	}
+	defer tx.Rollback()
 	var data json.RawMessage
-	err := a.db.QueryRowContext(r.Context(), `UPDATE ipo_pos.transactions AS t SET
+	err = tx.QueryRowContext(r.Context(), `UPDATE ipo_pos.transactions AS t SET
         ipo_id=$4,customer_id=$5,occurred_at=$6,form_type_code=$7,category=$8,ce_pe_value=$9,quantity=$10,rate=$11,
         salesperson_user_id=$12,conversation_id=$13,changed_by_user_id=$14,automation_run_id=NULL,
-        version=version+1,change_reason=$15 WHERE business_id=$1 AND id=$2 AND version=$3 RETURNING `+transactionJSON,
+        version=version+1,change_reason=$15 WHERE business_id=$1 AND id=$2 AND version=$3
+        AND created_by_user_id=$14 AND status='confirmed' RETURNING `+transactionJSON,
 		user.BusinessID, id, input.ExpectedVersion, input.IPOID, input.CustomerID, input.OccurredAt, input.FormType, input.Category, input.CEPE, input.Quantity, input.Rate, input.StaffID, input.ConversationID, user.UserID, input.Reason).Scan(&data)
-	a.finishUpdate(w, r, user, id, data, err)
+	if !checkUpdate(w, r, tx, user, id, true, err) {
+		return
+	}
+	if input.WhatsAppAccountID != nil {
+		if !queueConfirmation(w, r, tx, user, id, strings.ToLower(*input.WhatsAppAccountID)) {
+			return
+		}
+		if err = confirmationResponse(r, tx, user, id, input.ExpectedVersion+1, &data); err != nil {
+			dbFailure(w, err)
+			return
+		}
+	}
+	if err = tx.Commit(); err != nil {
+		dbFailure(w, err)
+		return
+	}
+	writeJSON(w, 200, data)
 }
 
 func (a *api) cancelTransaction(w http.ResponseWriter, r *http.Request, user actor) {
@@ -239,28 +275,34 @@ func (a *api) cancelTransaction(w http.ResponseWriter, r *http.Request, user act
 	err := a.db.QueryRowContext(r.Context(), `UPDATE ipo_pos.transactions AS t SET status='cancelled',version=version+1,
         changed_by_user_id=$4,automation_run_id=NULL,change_reason=$5
         WHERE business_id=$1 AND id=$2 AND version=$3 AND status='confirmed' RETURNING `+transactionJSON, user.BusinessID, id, input.ExpectedVersion, user.UserID, input.Reason).Scan(&data)
-	a.finishUpdate(w, r, user, id, data, err)
+	if checkUpdate(w, r, a.db, user, id, false, err) {
+		writeJSON(w, 200, data)
+	}
 }
 
-func (a *api) finishUpdate(w http.ResponseWriter, r *http.Request, user actor, id string, data json.RawMessage, err error) {
+func checkUpdate(w http.ResponseWriter, r *http.Request, db interface {
+	QueryRowContext(context.Context, string, ...any) *sql.Row
+}, user actor, id string, creatorOnly bool, err error) bool {
 	if errors.Is(err, sql.ErrNoRows) {
-		var exists bool
-		if err = a.db.QueryRowContext(r.Context(), "SELECT EXISTS(SELECT 1 FROM ipo_pos.transactions WHERE business_id=$1 AND id=$2)", user.BusinessID, id).Scan(&exists); err != nil {
-			dbFailure(w, err)
-			return
-		}
-		if !exists {
+		var creator sql.NullString
+		err = db.QueryRowContext(r.Context(), "SELECT created_by_user_id FROM ipo_pos.transactions WHERE business_id=$1 AND id=$2", user.BusinessID, id).Scan(&creator)
+		switch {
+		case errors.Is(err, sql.ErrNoRows):
 			fail(w, 404, "not_found", "Transaction not found")
-			return
+		case err != nil:
+			dbFailure(w, err)
+		case creatorOnly && (!creator.Valid || creator.String != user.UserID):
+			fail(w, 403, "not_transaction_creator", "Only the staff member who recorded this transaction can edit it")
+		default:
+			fail(w, 409, "version_conflict", "Transaction changed or is already cancelled; fetch the current record before retrying")
 		}
-		fail(w, 409, "version_conflict", "Transaction changed or is already cancelled; fetch the current record before retrying")
-		return
+		return false
 	}
 	if err != nil {
 		dbFailure(w, err)
-		return
+		return false
 	}
-	writeJSON(w, 200, data)
+	return true
 }
 
 func (a *api) listTransactions(w http.ResponseWriter, r *http.Request, user actor) {

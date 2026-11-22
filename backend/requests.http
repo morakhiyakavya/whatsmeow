@@ -246,12 +246,12 @@ Content-Type: application/json
 
 {"ipo_id":"{{ipo}}","customer_id":"{{customer}}","occurred_at":"2026-10-04T10:00:00+05:30","form_type_code":"CE","category":"subject_1","ce_pe_value":"20","quantity":"-2.5","rate":"-250"}
 
-### Correct quantity: total = 812.50. Repeating with version 1 returns 409.
+### Creator corrects quantity without a reason or WhatsApp. Total is 812.50. Repeating with version 1 returns 409.
 PUT {{base}}/api/businesses/{{business}}/transactions/{{transaction}}
 Authorization: Bearer {{token}}
 Content-Type: application/json
 
-{"ipo_id":"{{ipo}}","customer_id":"{{customer}}","occurred_at":"2026-10-04T10:00:00+05:30","form_type_code":"CE","category":"subject_1","ce_pe_value":"20","quantity":"3.25","rate":"250","expected_version":1,"change_reason":"Corrected form quantity"}
+{"ipo_id":"{{ipo}}","customer_id":"{{customer}}","occurred_at":"2026-10-04T10:00:00+05:30","form_type_code":"CE","category":"subject_1","ce_pe_value":"20","quantity":"3.25","rate":"250","expected_version":1}
 
 ### Cancel while retaining the record and every snapshot
 POST {{base}}/api/businesses/{{business}}/transactions/{{transaction}}/cancel

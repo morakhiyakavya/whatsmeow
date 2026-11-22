@@ -5,6 +5,7 @@ import (
 	"encoding/json"
 	"errors"
 	"net/http"
+	"strconv"
 
 	"github.com/getsentry/sentry-go"
 )
@@ -17,8 +18,17 @@ func (a *api) getConfirmation(w http.ResponseWriter, r *http.Request, user actor
 	if !ok {
 		return
 	}
+	version := int64(1)
+	if raw := r.URL.Query().Get("version"); raw != "" {
+		n, err := strconv.ParseInt(raw, 10, 32)
+		if err != nil || n < 1 {
+			fail(w, 400, "invalid_version", "Supply a positive transaction version")
+			return
+		}
+		version = n
+	}
 	queryJSON(w, r, a.db, 200, `SELECT `+confirmationJSON+` FROM ipo_pos.transaction_confirmations q
-        WHERE business_id=$1 AND transaction_id=$2`, user.BusinessID, id)
+        WHERE business_id=$1 AND transaction_id=$2 AND transaction_version=$3`, user.BusinessID, id, version)
 }
 
 func queueConfirmation(w http.ResponseWriter, r *http.Request, tx *sql.Tx, user actor, id, account string) bool {
@@ -41,7 +51,7 @@ func queueConfirmation(w http.ResponseWriter, r *http.Request, tx *sql.Tx, user 
         (business_id,transaction_id,transaction_version,whatsapp_account_id,created_by_user_id,
         sender_device_jid,recipient_phone_number,body)
         SELECT t.business_id,t.id,t.version,$3,$4,$5,c.phone_number,
-        format('%s ipo %s %s %s%s%s at %s',
+        CASE WHEN t.version=1 THEN '' ELSE 'Trade updated: ' END || format('%s ipo %s %s %s%s%s at %s',
             replace(replace(i.name,E'\n',' '),E'\r',' '),
             CASE WHEN t.quantity > 0 THEN 'Buy' ELSE 'Sell' END,
             trim_scale(abs(t.quantity))::text,
@@ -72,8 +82,8 @@ func queueConfirmation(w http.ResponseWriter, r *http.Request, tx *sql.Tx, user 
 	return true
 }
 
-func confirmationResponse(r *http.Request, tx *sql.Tx, user actor, id string, data *json.RawMessage) error {
+func confirmationResponse(r *http.Request, tx *sql.Tx, user actor, id string, version int, data *json.RawMessage) error {
 	return tx.QueryRowContext(r.Context(), `SELECT $1::jsonb || jsonb_build_object('whatsapp_confirmation',`+confirmationJSON+`)
-        FROM ipo_pos.transaction_confirmations q WHERE q.business_id=$2 AND q.transaction_id=$3`,
-		string(*data), user.BusinessID, id).Scan(data)
+        FROM ipo_pos.transaction_confirmations q WHERE q.business_id=$2 AND q.transaction_id=$3 AND q.transaction_version=$4`,
+		string(*data), user.BusinessID, id, version).Scan(data)
 }

@@ -819,6 +819,7 @@ Previously saved confirmations retain their original body, including on retries.
 The recipient is the selected customer's stored phone. The sender is the creating
 staff member's requested linked WhatsApp account. The receipt is a snapshot of the
 initial transaction; contact uploads and later transaction edits do not rewrite its body.
+An opted-in edit creates a separate `Trade updated:` message for the saved revision.
 
 Read its latest status:
 
@@ -827,7 +828,8 @@ GET /api/businesses/{businessID}/transactions/{transactionID}/confirmation
 Authorization: Bearer YOUR_ACCESS_TOKEN
 ```
 
-No requested confirmation returns HTTP 404. The response includes the body,
+Add `?version=<revision>` to read an edit's status; the default is version 1.
+A revision with no confirmation returns HTTP 404. The response includes the body,
 recipient, sender account ID, transaction version, status, message ID when assigned,
 error code and timestamps. It omits the private protocol session binding. Authorised
 business colleagues can inspect this receipt; pairing secrets remain owner-only.
@@ -873,12 +875,16 @@ transaction. Lack of an eligible connected worker can leave a receipt pending.
 
 ## 11. Correct or cancel a saved transaction
 
-Fetch the current transaction first with `GET .../transactions/{transactionID}`. To edit it, use
-`PUT .../transactions/{transactionID}` with the complete editable transaction fields, the current
-`expected_version` and a nonempty `change_reason`. This is a full replacement of
-editable fields, not a partial patch. Do not include `whatsapp_account_id` in an edit.
+Only the original creator can edit a confirmed transaction. On Android, only that person
+sees **Edit trade** on Transactions. Fetch the current transaction first with
+`GET .../transactions/{transactionID}`. To edit it, use
+`PUT .../transactions/{transactionID}` with the complete editable transaction fields and the current
+`expected_version`. The audit history records `Manual edit` when `change_reason` is omitted or blank.
+Include `whatsapp_account_id` only to request a separate WhatsApp
+update from the creator's paired account. The Android checkbox starts unchecked.
+If the sender or recipient cannot be used, the edit and message request are both rejected.
 
-To cancel:
+To cancel, supply the current `expected_version` and a nonempty `change_reason`.
 
 ```http
 POST /api/businesses/{businessID}/transactions/{transactionID}/cancel
@@ -910,9 +916,10 @@ Errors have the form:
 | 400 validation/unsupported JSON | Correct the fields or batch; do not repeatedly submit unchanged invalid data |
 | 401 invalid/expired session | Sign in again; preserve an unresolved transaction's original retry key/payload for the same staff user |
 | 403 business access or `invalid_sender` | Verify selected business and account ownership; do not switch to a colleague's credentials |
-| 404 missing record/confirmation | Verify selected IDs; a transaction created without a receipt has no confirmation record |
-| 409 `sender_unpaired` | Pair the requested account; this rejected creation did not save a transaction |
-| 409 `recipient_missing` | The selected customer needs a saved phone; the rejected creation did not save a transaction; customer editing is not implemented yet |
+| 403 `not_transaction_creator` | The original creator must make the edit |
+| 404 missing record/confirmation | Verify selected IDs and revision; a revision saved without a message has no confirmation record |
+| 409 `sender_unpaired` | Pair the requested account; the rejected write did not save the transaction |
+| 409 `recipient_missing` | Select a customer with a saved phone or save without a message; the rejected write did not save the transaction |
 | 409 `idempotency_conflict` | Reconcile the original intended transaction; do not silently create another |
 | 409 `version_conflict` | Fetch current transaction and review the competing change |
 | 429 login rate limit | Honour `Retry-After`; current login limit is 10 attempts/minute/source IP |

@@ -8,6 +8,12 @@ None. The three completed tasks are checkpointed in Batch 49 below.
 
 ## Checkpoints
 
+### Batch 58 — Transaction edits and revision-specific WhatsApp updates
+
+The signed-in creator can edit a confirmed trade with an optional audit reason and can request a separate WhatsApp update for the saved revision. The previous receipt remains available. The worker's revision-specific writes were pushed first as `fed3914afb6865d1de9e441ea4a55ede3774d9d9` and accept the existing schema.
+
+Verification used the full backend API suite and hosted schema setup against disposable PostgreSQL, Go vet, and source formatting checks. The tests cover blank reasons, creator and business restrictions, stale versions, rollback on an invalid sender and isolated simulated delivery. Production rollout requires the revision-aware worker to replace the old worker before migration 023 and the API release. No live trade or message was used for tests.
+
 ### Batch 57 — Mainboard NII reservation labels
 
 - The shared capacity calculator recognises published sNII and bNII reservation labels on Mainboard IPOs. Mahanadi reproduces the missing capacities in the regression test. Mainboard rounding and shareholder forecasting retain their existing rules.

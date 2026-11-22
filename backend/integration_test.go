@@ -278,24 +278,36 @@ func TestManualLedgerIntegration(t *testing.T) {
 	edit["ce_pe_value"] = "40.5"
 	edit["category"] = "subject_2"
 	edit["expected_version"] = 1
-	edit["change_reason"] = "Corrected quantity"
 	status, object, _ = client.request("PUT", base+"/transactions/"+transactionID, edit, "")
+	expectStatus(t, 403, status, object)
+	edit["change_reason"] = strings.Repeat("a", 2049)
+	status, object, _ = cashier.request("PUT", base+"/transactions/"+transactionID, edit, "")
+	expectStatus(t, 400, status, object)
+	delete(edit, "change_reason")
+	status, object, _ = cashier.request("PUT", base+"/transactions/"+transactionID, edit, "")
 	expectStatus(t, 200, status, object)
-	if field(t, object, "total_amount") != "812.50" || object["version"] != float64(2) || field(t, object, "origin") != "manual" {
+	if field(t, object, "total_amount") != "812.50" || object["version"] != float64(2) || field(t, object, "origin") != "manual" || object["created_by_user_id"] != cashierID || field(t, object, "change_reason") != "Manual edit" {
 		t.Fatal("edited calculation/version incorrect")
 	}
-	status, object, _ = client.request("PUT", base+"/transactions/"+transactionID, edit, "")
+	status, object, _ = cashier.request("GET", base+"/transactions/"+transactionID+"/confirmation", nil, "")
+	expectStatus(t, 404, status, object)
+	status, object, _ = cashier.request("PUT", base+"/transactions/"+transactionID, edit, "")
 	expectStatus(t, 409, status, object)
 	status, object, _ = cashier.request("POST", base+"/transactions", request, "order-1")
 	expectStatus(t, 200, status, object)
 	if object["version"] != float64(2) {
 		t.Fatal("creation replay overwrote edited transaction")
 	}
+	status, object, _ = cashier.request("POST", base+"/transactions/"+transactionID+"/cancel", map[string]any{"expected_version": 2}, "")
+	expectStatus(t, 400, status, object)
 	status, object, _ = cashier.request("POST", base+"/transactions/"+transactionID+"/cancel", map[string]any{"expected_version": 2, "change_reason": "Customer cancelled"}, "")
 	expectStatus(t, 200, status, object)
 	if field(t, object, "status") != "cancelled" || object["version"] != float64(3) {
 		t.Fatal("cancellation did not preserve history")
 	}
+	edit["expected_version"] = 3
+	status, object, _ = cashier.request("PUT", base+"/transactions/"+transactionID, edit, "")
+	expectStatus(t, 409, status, object)
 	status, object, _ = cashier.request("POST", base+"/transactions/"+transactionID+"/cancel", map[string]any{"expected_version": 3, "change_reason": "Retry"}, "")
 	expectStatus(t, 409, status, object)
 	status, object, _ = client.request("GET", base+"/transactions/"+transactionID+"/history?limit=2", nil, "")
@@ -303,6 +315,9 @@ func TestManualLedgerIntegration(t *testing.T) {
 	history := object["items"].([]any)
 	if len(history) != 2 || object["next_before_version"] != float64(2) {
 		t.Fatal("history pagination incorrect")
+	}
+	if field(t, history[1].(map[string]any), "change_reason") != "Manual edit" {
+		t.Fatal("edit audit entry missing from history")
 	}
 	status, object, _ = client.request("GET", base+"/transactions/"+transactionID+"/history?before_version=2", nil, "")
 	expectStatus(t, 200, status, object)
@@ -412,6 +427,8 @@ func TestManualLedgerIntegration(t *testing.T) {
 	t.Run("Passwordless and multi-device sessions", func(t *testing.T) { testPasswordless(t, dsn, admin, db, app, client, other, businessID) })
 	t.Run("Development signup through login", func(t *testing.T) { testDevelopmentSignup(t, dsn, admin, db, app, client, businessID) })
 	status, object, _ = other.request("GET", "/api/businesses/"+otherBusiness+"/transactions/"+transactionID, nil, "")
+	expectStatus(t, 404, status, object)
+	status, object, _ = other.request("PUT", "/api/businesses/"+otherBusiness+"/transactions/"+transactionID, edit, "")
 	expectStatus(t, 404, status, object)
 	status, object, _ = other.request("GET", "/api/businesses/"+otherBusiness+"/transactions/"+transactionID+"/history", nil, "")
 	expectStatus(t, 404, status, object)

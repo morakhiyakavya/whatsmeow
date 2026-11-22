@@ -390,7 +390,7 @@ their own contributions. Permission collection remains the mobile app's responsi
 
 The platform supports businesses with multiple staff rather than only one independent shop per user.
 
-Staff records include a name and contact number. The initial roles are **admin** and **cashier**, assigned within each business. The manual API implements a baseline permission matrix: both roles can create/view customers and create/view/edit/cancel transactions; admins also create/view staff and create IPO catalogue entries. The deployed assumptions settings endpoints enforce admin-only GMP, forecast and pricing-factor edits, with cashier read/history access. Their user screens remain pending.
+Staff records include a name and contact number. The initial roles are **admin** and **cashier**, assigned within each business. Both roles can create/view customers and create/view/cancel transactions. Only the original creator can edit a confirmed trade. Admins can also create/view staff and create IPO catalogue entries. The deployed assumptions settings endpoints enforce admin-only GMP, forecast and pricing-factor edits, with cashier read/history access. Their user screens remain pending.
 
 Passwordless first-device login now approves WhatsApp phone-number linking for a
 provisioned staff user. In `APP_ENV=development`, new numbers can sign up through
@@ -454,7 +454,7 @@ This should make it possible to answer: **Which messages caused this transaction
 
 `transactions` holds the current record. `transaction_versions` preserves complete snapshots, including the original version.
 
-Every edit should preserve the earlier state and record the new state, change time, change actor, and reason. Original creation source should remain intact even when a cashier corrects an automatically created transaction.
+Every edit preserves the earlier state and records the new state, change time, change actor, and either the supplied reason or `Manual edit`. The creator can explicitly opt in to send a WhatsApp update for that revision. Automatically created records have no staff creator, so they cannot be edited through the creator-only transaction editor.
 
 Repeated message delivery, retried AI jobs, and repeated API requests must not create duplicate records. Separate orders in the same conversation must still be allowed; identifying whether messages refer to the same order is an explicit part of the detection workflow.
 

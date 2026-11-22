@@ -197,6 +197,55 @@ func testConfirmationDelivery(t *testing.T, dsn string, db *sql.DB, cashier test
 	if calls != 4 {
 		t.Fatal("uncertain or sent receipts were resent")
 	}
+	t.Run("Send only the requested current revision", func(t *testing.T) {
+		updatedID := queue("edit-confirmation")
+		path := base + "/transactions/" + updatedID
+		edit := cloneMap(body)
+		edit["expected_version"], edit["change_reason"], edit["rate"] = 1, "  ", "275"
+		edit["whatsapp_account_id"] = "00000000-0000-0000-0000-000000000001"
+		code, result, _ := cashier.request("PUT", path, edit, "")
+		expectStatus(t, 403, code, result)
+		edit["whatsapp_account_id"] = account
+		code, result, _ = cashier.request("PUT", path, edit, "")
+		expectStatus(t, 200, code, result)
+		if field(t, result, "change_reason") != "Manual edit" {
+			t.Fatal("a blank edit reason should use the default audit entry")
+		}
+		receipt := result["whatsapp_confirmation"].(map[string]any)
+		if receipt["status"] != "pending" || receipt["transaction_version"] != float64(2) ||
+			receipt["body"] != "Trade updated: Fixture IPO ipo Buy 2.5 CE (20) at 275" {
+			t.Fatalf("wrong revision receipt: %v", receipt)
+		}
+		code, result, _ = cashier.request("PUT", path, edit, "")
+		expectStatus(t, 409, code, result)
+		sender.fail = false
+		for range 2 {
+			if worked, deliveryErr := deliverConfirmation(ctx, conn, user, account, jidText, sender); !worked || deliveryErr != nil {
+				t.Fatal("could not process queued revision", deliveryErr)
+			}
+		}
+		sender.mu.Lock()
+		if sender.calls != 5 || sender.body != receipt["body"] {
+			t.Error("worker sent a superseded or duplicate message")
+		}
+		sender.fail = true
+		sender.mu.Unlock()
+		code, result, _ = cashier.request("GET", path+"/confirmation?version=2", nil, "")
+		expectStatus(t, 200, code, result)
+		if result["status"] != "sent" || result["transaction_version"] != float64(2) {
+			t.Fatal("could not read the latest revision's delivery")
+		}
+		code, result, _ = cashier.request("GET", path+"/confirmation", nil, "")
+		expectStatus(t, 200, code, result)
+		if result["error_code"] != "transaction_changed" || result["transaction_version"] != float64(1) {
+			t.Fatal("superseded confirmation was not retained")
+		}
+		code, result, _ = cashier.request("POST", base+"/transactions", body, "edit-confirmation")
+		expectStatus(t, 200, code, result)
+		if result["whatsapp_confirmation"].(map[string]any)["transaction_version"] != float64(1) {
+			t.Fatal("creation replay returned the edit confirmation")
+		}
+	})
 
 	for _, kind := range []string{"cancelled", "edited", "recipient", "sender"} {
 		queuedID := queue("blocked-" + kind)
@@ -269,7 +318,7 @@ func testConfirmationDelivery(t *testing.T, dsn string, db *sql.DB, cashier test
 	sender.mu.Lock()
 	calls = sender.calls
 	sender.mu.Unlock()
-	if calls != 4 {
+	if calls != 5 {
 		t.Fatal("a rejected or interrupted confirmation was sent")
 	}
 	cleanup := open()

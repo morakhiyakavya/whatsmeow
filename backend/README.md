@@ -210,6 +210,11 @@ After migration 004, apply `005_transaction_confirmations.sql` and grant
 `SELECT, INSERT ON ipo_pos.transaction_confirmations` to the API role. Delivery
 updates belong to the trusted WhatsApp worker, not the request role.
 
+Apply `023_trade_edit_confirmations.sql` after 022 and before deploying the updated API.
+It keys confirmation intents by transaction version, retaining existing receipts and
+grants. Replace old WhatsApp workers before allowing opted-in edits to queue, since
+old workers update confirmations by transaction ID alone.
+
 After migration 005, apply `006_passwordless_sessions.sql` and grant `UPDATE ON
 ipo_pos.login_sessions`, `INSERT, UPDATE, DELETE ON ipo_pos.device_login_tokens`,
 `SELECT ON ipo_pos.login_attempts, ipo_pos.device_login_tokens`,
@@ -318,7 +323,8 @@ for WhatsApp-only authentication; it defaults to false.
 | View IPOs and form types | Yes | Yes |
 | Create IPOs in the shared catalogue | Yes | No |
 | View/create staff in their business | Yes | No |
-| View/create/edit/cancel transactions and view history | Yes | Yes |
+| View/create/cancel transactions and view history | Yes | Yes |
+| Edit confirmed transactions | Original creator only | Original creator only |
 
 There is no separate signup endpoint or client-supplied actor identity. Login attempts are
 limited to 10 per minute per source IP, with bounded process memory. The server
@@ -382,9 +388,13 @@ business). The first request returns 201; identical retries by its creator retur
 payloads/actors using that key return 409. The original normalized request hash
 is retained even after edits. A legitimate second order must use a new key.
 
-Edits and cancellations require `expected_version` and a nonempty `change_reason`.
+Edits and cancellations require `expected_version`. For an edit, `change_reason`
+is optional and defaults to `Manual edit` when omitted or blank. Cancellation
+requires a nonempty `change_reason`.
 A successful write advances the version and produces its snapshot atomically.
 A stale version returns 409; a record outside the selected business returns 404.
+Only the recorded creator can edit a confirmed transaction. Other staff, including
+admins, receive 403 for edit requests within the same business.
 Retries cannot create extra versions. Cancellation preserves amount and history;
 use `status=confirmed` when listing current active transactions.
 
@@ -898,9 +908,14 @@ clients cannot supply an arbitrary message body. The receipt is a snapshot of th
 initial transaction; later edits do not silently rewrite it. Replays reuse the transaction and
 confirmation and reject changed data or a different sender under the same key.
 
-The POST response includes `whatsapp_confirmation` when requested. GET
-`/api/businesses/{businessID}/transactions/{id}/confirmation` reads the latest status
-and receipt under normal business permissions; no confirmation returns 404.
+For an edit, omitting `whatsapp_account_id` sends no update. Including it in the PUT
+body applies the same sender and recipient checks and saves a separate confirmation
+with the new revision. The message starts with `Trade updated:` and describes the
+saved values. An invalid sender or missing customer phone rejects the entire edit.
+The POST and PUT responses include `whatsapp_confirmation` when requested.
+GET `/api/businesses/{businessID}/transactions/{id}/confirmation` reads the original
+confirmation. Use `?version=<revision>` for a specific edit. A missing confirmation
+returns 404.
 The queued intent survives restart. A committed insert wakes the trusted account
 worker through PostgreSQL `LISTEN`/`NOTIFY`; it drains pending receipts serially
 without a timer between messages and sends with a 20-second timeout. Its

@@ -232,6 +232,7 @@ func (a *api) routes() http.Handler {
 	mux.HandleFunc("POST /api/businesses/{businessID}/transactions/{id}/cancel", a.protect(false, a.cancelTransaction))
 	mux.HandleFunc("GET /api/businesses/{businessID}/transactions/{id}/history", a.protect(false, a.transactionHistory))
 	mux.HandleFunc("GET /api/businesses/{businessID}/transactions/{id}/confirmation", a.protect(false, a.getConfirmation))
+	mux.HandleFunc("POST /api/businesses/{businessID}/transactions/{id}/confirmation/retry", a.protect(false, a.retryConfirmation))
 	observed := http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		started := time.Now()
 		defer func() {

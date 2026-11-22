@@ -18,17 +18,47 @@ func (a *api) getConfirmation(w http.ResponseWriter, r *http.Request, user actor
 	if !ok {
 		return
 	}
+	version, ok := confirmationVersion(w, r)
+	if !ok {
+		return
+	}
+	queryJSON(w, r, a.db, 200, `SELECT `+confirmationJSON+` FROM ipo_pos.transaction_confirmations q
+        WHERE business_id=$1 AND transaction_id=$2 AND transaction_version=$3`, user.BusinessID, id, version)
+}
+
+func confirmationVersion(w http.ResponseWriter, r *http.Request) (int64, bool) {
 	version := int64(1)
 	if raw := r.URL.Query().Get("version"); raw != "" {
 		n, err := strconv.ParseInt(raw, 10, 32)
 		if err != nil || n < 1 {
 			fail(w, 400, "invalid_version", "Supply a positive transaction version")
-			return
+			return 0, false
 		}
 		version = n
 	}
-	queryJSON(w, r, a.db, 200, `SELECT `+confirmationJSON+` FROM ipo_pos.transaction_confirmations q
-        WHERE business_id=$1 AND transaction_id=$2 AND transaction_version=$3`, user.BusinessID, id, version)
+	return version, true
+}
+
+func (a *api) retryConfirmation(w http.ResponseWriter, r *http.Request, user actor) {
+	id, ok := transactionID(w, r)
+	if !ok {
+		return
+	}
+	version, ok := confirmationVersion(w, r)
+	if !ok {
+		return
+	}
+	var data []byte
+	if err := a.db.QueryRowContext(r.Context(),
+		`SELECT ipo_pos.retry_transaction_confirmation($1,$2,$3,$4)`, user.BusinessID, id, version, user.UserID).Scan(&data); err != nil {
+		dbFailure(w, err)
+		return
+	}
+	if len(data) == 0 {
+		fail(w, 409, "confirmation_not_retryable", "This WhatsApp message cannot be retried. Check the message status and original trade details.")
+		return
+	}
+	writeJSON(w, 200, json.RawMessage(data))
 }
 
 func queueConfirmation(w http.ResponseWriter, r *http.Request, tx *sql.Tx, user actor, id, account string) bool {

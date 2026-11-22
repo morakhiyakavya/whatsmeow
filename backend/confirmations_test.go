@@ -34,6 +34,38 @@ func testConfirmationAPI(t *testing.T, db, runtime *sql.DB, admin, cashier, othe
 	if field(t, receipt, "body") != "Fixture IPO ipo Buy 2.5 CE (20) at 250" {
 		t.Fatal("receipt was not composed from the persisted sale")
 	}
+	t.Run("retry only requeues an unsent receipt for its owner", func(t *testing.T) {
+		status, obj, _ := cashier.request("POST", base+"/transactions", body, "pos-confirmation-retry")
+		expectStatus(t, 201, status, obj)
+		retryID := field(t, obj, "id")
+		path := base + "/transactions/" + retryID + "/confirmation/retry?version=1"
+		status, obj, _ = cashier.request("POST", path, nil, "")
+		expectStatus(t, 409, status, obj)
+		if _, err := db.Exec(`UPDATE ipo_pos.transaction_confirmations SET status='failed',error_code='recipient_changed',
+			recipient_phone_number='+919000001011' WHERE transaction_id=$1`, retryID); err != nil {
+			t.Fatal(err)
+		}
+		status, obj, _ = cashier.request("POST", path, nil, "")
+		expectStatus(t, 409, status, obj)
+		if _, err := db.Exec(`UPDATE ipo_pos.transaction_confirmations SET recipient_phone_number='+919000001010' WHERE transaction_id=$1`, retryID); err != nil {
+			t.Fatal(err)
+		}
+		status, obj, _ = admin.request("POST", path, nil, "")
+		expectStatus(t, 409, status, obj)
+		status, obj, _ = cashier.request("POST", path, nil, "")
+		expectStatus(t, 200, status, obj)
+		if field(t, obj, "status") != "pending" || field(t, obj, "transaction_id") != retryID || obj["sender_device_jid"] != nil {
+			t.Fatalf("retry did not return the original queued confirmation: %v", obj)
+		}
+		status, obj, _ = cashier.request("POST", path, nil, "")
+		expectStatus(t, 409, status, obj)
+		if _, err := db.Exec(`UPDATE ipo_pos.transaction_confirmations SET status='uncertain',
+			wa_message_id='retry-fixture-unconfirmed',attempted_at=now() WHERE transaction_id=$1`, retryID); err != nil {
+			t.Fatal(err)
+		}
+		status, obj, _ = cashier.request("POST", path, nil, "")
+		expectStatus(t, 409, status, obj)
+	})
 	var wg sync.WaitGroup
 	for range 6 {
 		wg.Go(func() {

@@ -916,6 +916,12 @@ The POST and PUT responses include `whatsapp_confirmation` when requested.
 GET `/api/businesses/{businessID}/transactions/{id}/confirmation` reads the original
 confirmation. Use `?version=<revision>` for a specific edit. A missing confirmation
 returns 404.
+POST `/api/businesses/{businessID}/transactions/{id}/confirmation/retry` requeues an
+unsent confirmation for its original sender. It accepts the same optional `version`
+and returns the updated confirmation. A failed receipt is eligible only if it has
+no recorded send attempt and the original trade version, recipient and paired sender
+are still valid. Ineligible or already queued receipts return 409. Apply migration
+024 and refresh the restricted API grants before enabling the retry route.
 The queued intent survives restart. A committed insert wakes the trusted account
 worker through PostgreSQL `LISTEN`/`NOTIFY`; it drains pending receipts serially
 without a timer between messages and sends with a 20-second timeout. Its
@@ -939,9 +945,9 @@ Statuses are `pending`, `sending`, `sent`, `uncertain`, `failed` and `cancelled`
 The message ID is persisted before sending. A send error, mismatched acknowledgement,
 or worker restart after an interrupted attempt produces `uncertain`; it is never
 automatically resent. The transaction remains saved. An uncertain result may have reached
-the customer and needs review. There is currently no manual resend endpoint; this
-conservative single-attempt policy avoids blind duplicates. Receipt IDs must also
-be used by the future detector to recognise confirmations for existing transactions.
+the customer and needs review. The retry endpoint only requeues messages that have
+never been attempted. Receipt IDs must also be used by the future detector to
+recognise confirmations for existing transactions.
 
 Migration 005 rollback requires backing
 up pending/attempted delivery records and dropping its table after reverting callers;

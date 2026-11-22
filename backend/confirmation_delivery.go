@@ -86,7 +86,7 @@ func deliverConfirmation(ctx context.Context, conn *sql.Conn, user actor, accoun
 	if code != "" {
 		span.SetData("delivery.outcome", code)
 		if _, err = tx.ExecContext(readyCtx, `UPDATE ipo_pos.transaction_confirmations SET status=$3,error_code=$4
-            WHERE business_id=$1 AND transaction_id=$2`, user.BusinessID, id, terminal, code); err != nil {
+			WHERE business_id=$1 AND transaction_id=$2 AND transaction_version=$5`, user.BusinessID, id, terminal, code, receiptVersion); err != nil {
 			return worked, err
 		}
 		return worked, tx.Commit()
@@ -94,7 +94,7 @@ func deliverConfirmation(ctx context.Context, conn *sql.Conn, user actor, accoun
 	messageID := client.GenerateMessageID()
 	if _, err = tx.ExecContext(readyCtx, `UPDATE ipo_pos.transaction_confirmations
         SET status='sending',wa_message_id=$3,attempted_at=now()
-        WHERE business_id=$1 AND transaction_id=$2`, user.BusinessID, id, messageID); err != nil {
+        WHERE business_id=$1 AND transaction_id=$2 AND transaction_version=$4`, user.BusinessID, id, messageID, receiptVersion); err != nil {
 		return worked, err
 	}
 	if err = tx.Commit(); err != nil {
@@ -119,7 +119,7 @@ func deliverConfirmation(ctx context.Context, conn *sql.Conn, user actor, accoun
 	persist := startOperation(finishCtx, "db.persist", "confirmation.persist")
 	_, err = conn.ExecContext(persist.Context(), `UPDATE ipo_pos.transaction_confirmations
         SET status=$3,error_code=$4,sent_at=CASE WHEN $3='sent' THEN now() END
-        WHERE business_id=$1 AND transaction_id=$2 AND status='sending'`, user.BusinessID, id, outcome, failure)
+        WHERE business_id=$1 AND transaction_id=$2 AND transaction_version=$5 AND status='sending'`, user.BusinessID, id, outcome, failure, receiptVersion)
 	finishOperation(persist, err)
 	if err == nil && outcome == "sent" {
 		sentry.NewMeter(ctx).Distribution("server.confirmation.total", max(0, time.Since(created).Seconds()), sentry.WithUnit(sentry.UnitSecond))

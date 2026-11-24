@@ -177,10 +177,10 @@ func TestIPOEnrichmentIndexOncePerRefresh(t *testing.T) {
 			body = fmt.Sprintf(`{"issueInfo":{"symbol":%q,"dataList":[{"title":"Lot Size","value":"100"}]}}`, r.URL.Query().Get("symbol"))
 		case "/upcoming-ipo-list/":
 			indexRequests++
-			body = `<a href="/published-alpha-ipo/">Example Alpha</a><a href="/published-beta-ipo/">Example Beta</a>`
+			body = `<a href="/published-alpha-ipo/">Example Alpha</a><a href="/published-beta-ipo-details/"><div class="card ipo-link-name">Example Beta</div><span>Upcoming</span><span>26 Nov</span></a>`
 		case "/published-alpha-ipo/":
 			body = enrichmentFixture("Example Alpha")
-		case "/published-beta-ipo/":
+		case "/published-beta-ipo-details/":
 			body = enrichmentFixture("Example Beta")
 		case "/api/public-past-issues", "/api/all-upcoming-issues":
 		default:

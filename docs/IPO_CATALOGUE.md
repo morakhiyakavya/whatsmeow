@@ -184,6 +184,8 @@ excluded from upstream's code licence and require the operator's arrangements.
 
 Each refresh reads the published [IPO calendar](https://ipowatch.in/upcoming-ipo-list/)
 once and extracts only issuer names and IPO page links. It does not import GMP.
+Discovery accepts both `-ipo/` and `-ipo-details/` pages and reads the issuer label
+inside redesigned cards so status, dates and prices do not change the name match.
 Link discovery ignores foreign hosts, non-HTTPS URLs, credentials, queries, encoded
 paths and GMP pages. Conflicting URLs for the same normalized name are rejected;
 candidate discovery never bypasses the page's separate issuer verification.

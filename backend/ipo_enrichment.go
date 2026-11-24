@@ -7,6 +7,7 @@ import (
 	"math/big"
 	"net/url"
 	"regexp"
+	"slices"
 	"strings"
 	"unicode"
 
@@ -99,7 +100,7 @@ func parseIPOEnrichmentLinks(reader io.Reader) (map[string]string, error) {
 		return nil, errors.New("invalid enrichment index HTML")
 	}
 	base, _ := url.Parse(ipoEnrichmentIndex)
-	pagePath := regexp.MustCompile(`^/[a-z0-9-]+-ipo/?$`)
+	pagePath := regexp.MustCompile(`^/[a-z0-9-]+-ipo(?:-details)?/?$`)
 	links := map[string]string{}
 	var visit func(*html.Node)
 	visit = func(n *html.Node) {
@@ -114,7 +115,16 @@ func parseIPOEnrichmentLinks(reader io.Reader) (map[string]string, error) {
 				}
 				target.Fragment = ""
 				target.Path = strings.TrimRight(target.Path, "/") + "/"
-				key := enrichmentLinkKey(htmlText(n))
+				name := n
+				for child := range n.Descendants() {
+					if slices.ContainsFunc(child.Attr, func(attr html.Attribute) bool {
+						return attr.Key == "class" && slices.Contains(strings.Fields(attr.Val), "ipo-link-name")
+					}) {
+						name = child
+						break
+					}
+				}
+				key := enrichmentLinkKey(htmlText(name))
 				if len(key) < 5 {
 					continue
 				}

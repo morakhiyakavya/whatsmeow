@@ -189,7 +189,8 @@ inside redesigned cards so status, dates and prices do not change the name match
 Link discovery ignores foreign hosts, non-HTTPS URLs, credentials, queries, encoded
 paths and GMP pages. Conflicting URLs for the same normalized name are rejected;
 candidate discovery never bypasses the page's separate issuer verification.
-Verified symbol/legal-name/URL mappings handle TONBO's shortened title, MKSONS's
+Verified symbol/legal-name/URL mappings handle FOODLINK's omitted India qualifier,
+TONBO's shortened title, MKSONS's
 punctuation-dependent URL and ZETWERK's shorter name/URL. An alias works only for
 that exact issuer and source page. Other issues use a discovered link first and
 the existing generated URLs as fallback, with duplicate requests removed.
@@ -199,7 +200,7 @@ Import results retain specific errors such as `source HTTP 403`, `source HTTP 40
 `enrichment issuer unverified` and `enrichment fields unavailable`. Transport
 details remain private. Failed refreshes continue preserving prior observations.
 `IPO_LIVE_SOURCE_TEST=1` also enables read-only `TestIPOEnrichmentLiveMappings` for
-the three verified mappings; it requires reservation and promoter rows from each.
+the verified mappings; it requires reservation and promoter rows from each.
 
 ## Rollout and verification
 

@@ -20,9 +20,10 @@ var errIPOEnrichmentPageMissing = errors.New("enrichment page missing")
 
 // Verified source titles are aliases only for this NSE issuer and source URL.
 var ipoEnrichmentMappings = map[string]struct{ name, title, url string }{
-	"TONBO":   {"Tonbo Imaging India Limited", "Tonbo Imaging", "https://ipowatch.in/tonbo-imaging-india-ipo/"},
-	"MKSONS":  {"M. K. Sons Fine Jewels Limited", "M.K.Sons Fine Jewels", "https://ipowatch.in/mksons-fine-jewels-ipo/"},
-	"ZETWERK": {"Zetwerk Manufacturing Businesses Limited", "Zetwerk Manufacturing", "https://ipowatch.in/zetwerk-ipo/"},
+	"FOODLINK": {"Foodlink F&B Holdings (India) Limited", "Foodlink F&B Holdings", "https://ipowatch.in/foodlink-fb-holdings-ipo-details/"},
+	"TONBO":    {"Tonbo Imaging India Limited", "Tonbo Imaging", "https://ipowatch.in/tonbo-imaging-india-ipo/"},
+	"MKSONS":   {"M. K. Sons Fine Jewels Limited", "M.K.Sons Fine Jewels", "https://ipowatch.in/mksons-fine-jewels-ipo/"},
+	"ZETWERK":  {"Zetwerk Manufacturing Businesses Limited", "Zetwerk Manufacturing", "https://ipowatch.in/zetwerk-ipo/"},
 }
 
 func htmlText(n *html.Node) string {

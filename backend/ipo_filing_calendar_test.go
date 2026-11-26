@@ -71,7 +71,10 @@ func TestIPOFilingCalendarIntegration(t *testing.T) {
 	today := time.Now().In(time.FixedZone("IST", 19800))
 	open, close := today.AddDate(0, 0, 2).Format(time.DateOnly), today.AddDate(0, 0, 4).Format(time.DateOnly)
 	item := ipoSourceIssue{Name: "Calendar Fixture Limited", Board: "Mainboard",
-		FilingURL: "https://www.sebi.gov.in/filings/public-issues/nov-2026/calendar-fixture_001.html",
+		FilingURL:     "https://www.sebi.gov.in/filings/public-issues/nov-2026/calendar-fixture_001.html",
+		EnrichmentURL: "https://ipowatch.in/calendar-fixture-ipo/",
+		EnrichmentOK:  true,
+		Reservations:  []ipoReservation{{Category: "Shareholder", Basis: "shares", Shares: new("100000")}},
 		Timeline: map[string]any{
 			"opening": map[string]string{"value": open, "precision": "date", "status": "expected"},
 			"closing": map[string]string{"value": close, "precision": "date", "status": "expected"},
@@ -98,6 +101,13 @@ func TestIPOFilingCalendarIntegration(t *testing.T) {
 		Scan(&id, &eligible); err != nil || eligible != close {
 		t.Fatal(id, eligible, err)
 	}
+	var reserved, availability string
+	if err := db.QueryRow(`SELECT `+shareholderQuotaSQL+`, b.shareholder_availability
+ FROM ipo_pos.ipos i JOIN ipo_pos.ipo_dashboard_basis_versions b ON i.id=b.ipo_id
+ WHERE i.id=$1 ORDER BY b.version DESC LIMIT 1`, id).Scan(&reserved, &availability); err != nil ||
+		reserved != "100000" || availability != "available" {
+		t.Fatal("pre-open reservation unavailable", reserved, availability, err)
+	}
 	live := ipoSourceIssue{Symbol: "CALFIX", Name: item.Name, Board: item.Board, Open: &open, Close: &close}
 	if err := saveSourceIPOs(ctx, db, []ipoSourceIssue{live}); err != nil {
 		t.Fatal(err)
@@ -112,5 +122,8 @@ func TestIPOFilingCalendarIntegration(t *testing.T) {
 		AND opens_on IS NOT NULL AND NOT timeline ? 'opening'`, item.Name).
 		Scan(&currentID, &count); err != nil || currentID != id || count != 1 {
 		t.Fatal("provisional IPO wasn't adopted exactly once", currentID, count, err)
+	}
+	if err := db.QueryRow(`SELECT `+shareholderQuotaSQL+` FROM ipo_pos.ipos i WHERE i.id=$1`, id).Scan(&reserved); err != nil || reserved != "100000" {
+		t.Fatal("adopting the IPO lost the pre-open quota", reserved, err)
 	}
 }

@@ -117,6 +117,67 @@ func TestLivePositionIncompleteInputs(t *testing.T) {
 	}
 }
 
+func testPreOpenShareholderForecast(t *testing.T, owner *sql.DB, admin, cashier testClient, base string) {
+	t.Helper()
+	status, body, _ := admin.request("POST", base+"/ipos", map[string]string{
+		"code": "PREOPEN-SHAREHOLDER", "name": "Pre-open shareholder",
+	}, "")
+	expectStatus(t, 201, status, body)
+	ipoID := field(t, body, "id")
+	assumptions := base + "/ipos/" + ipoID + "/analytics-assumptions"
+	report := base + "/dashboard/ipos/" + ipoID
+	input := map[string]any{
+		"expected_version": 0, "expected_applications": map[string]any{}, "subject2_pricing_factor": "0.8",
+		"change_reason": "Planning before bids open", "shareholder_forecast": shareholderForecast{"400000", "400"},
+	}
+	status, body, _ = admin.request("PUT", assumptions, input, "")
+	expectStatus(t, 400, status, body)
+	if field(t, body["error"].(map[string]any), "code") != "shareholder_quota_missing" {
+		t.Fatal("forecast should wait for a published reservation", body)
+	}
+	for _, statement := range []string{
+		`UPDATE ipo_pos.ipos SET opens_on=current_date+4,closes_on=current_date+8,listing_on=current_date+11 WHERE id=$1`,
+		`INSERT INTO ipo_pos.ipo_reservations(ipo_id,category,reserved_shares,basis,source_url,observed_at)
+ VALUES($1,'Shareholder Reservation Portion',100000,'shares','https://example.test',now())`,
+		`SELECT ipo_pos.capture_ipo_dashboard_basis($1)`,
+	} {
+		if _, err := owner.Exec(statement, ipoID); err != nil {
+			t.Fatal(err)
+		}
+	}
+	status, body, _ = cashier.request("GET", assumptions, nil, "")
+	expectStatus(t, 200, status, body)
+	if field(t, body, "shareholder_reserved_shares") != "100000" {
+		t.Fatal("pre-open reservation missing", body)
+	}
+	status, body, _ = admin.request("PUT", assumptions, input, "")
+	expectStatus(t, 200, status, body)
+	status, body, _ = cashier.request("GET", assumptions, nil, "")
+	expectStatus(t, 200, status, body)
+	if field(t, body, "shareholder_expected_shares_per_bid") != "100.000000" ||
+		field(t, body["shareholder_forecast"].(map[string]any), "expected_bid_shares") != "400000" {
+		t.Fatal("saved forecast unavailable", body)
+	}
+	status, body, _ = cashier.request("GET", report, nil, "")
+	expectStatus(t, 200, status, body)
+	if field(t, body, "shareholder_expected_shares_per_bid") != "100.000000" || body["empty"] != true {
+		t.Fatal("forecast needs live bids or trades", body)
+	}
+	delete(input, "shareholder_forecast")
+	input["expected_version"] = 1
+	status, body, _ = admin.request("PUT", assumptions, input, "")
+	expectStatus(t, 200, status, body)
+	if body["shareholder_forecast"] == nil {
+		t.Fatal("an older client's write erased the share forecast", body)
+	}
+	input["expected_version"], input["shareholder_forecast"] = 2, shareholderForecast{}
+	status, body, _ = admin.request("PUT", assumptions, input, "")
+	expectStatus(t, 200, status, body)
+	if body["shareholder_forecast"] != nil {
+		t.Fatal("explicitly cleared forecast was retained", body)
+	}
+}
+
 func testLivePositionAPI(t *testing.T, owner *sql.DB, admin, cashier, other testClient, base, otherBase string, request map[string]any) {
 	t.Helper()
 	status, body, _ := admin.request("POST", base+"/ipos", map[string]string{"code": "ANALYTICS-BOOK", "name": "Analytics book"}, "")

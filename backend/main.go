@@ -100,6 +100,7 @@ func run(envPath string, bootstrap bool) error {
 		AND to_regclass('ipo_pos.ipo_dashboard_basis_versions') IS NOT NULL
 		AND EXISTS (SELECT 1 FROM information_schema.columns WHERE table_schema='ipo_pos' AND table_name='ipo_subscriptions' AND column_name='source_observed_at')
 		AND EXISTS (SELECT 1 FROM information_schema.columns WHERE table_schema='ipo_pos' AND table_name='ipo_dashboard_assumption_versions' AND column_name='calculation_basis')
+		AND EXISTS (SELECT 1 FROM information_schema.columns WHERE table_schema='ipo_pos' AND table_name='ipo_dashboard_assumption_versions' AND column_name='shareholder_expected_bid_shares')
 		AND EXISTS (SELECT 1 FROM ipo_pos.form_types WHERE code='SHAREHOLDER')
 		AND EXISTS (SELECT 1 FROM information_schema.columns WHERE table_schema='ipo_pos' AND table_name='login_attempts' AND column_name='recovery_hash')
         AND to_regclass('ipo_pos.device_login_tokens') IS NOT NULL AND to_regclass('ipo_pos.whatsapp_number_checks') IS NOT NULL

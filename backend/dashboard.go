@@ -45,39 +45,42 @@ type positionBucket struct {
 }
 
 type livePosition struct {
-	BusinessID              string                      `json:"business_id"`
-	IPOID                   string                      `json:"ipo_id"`
-	Code                    string                      `json:"code"`
-	Name                    string                      `json:"name"`
-	Board                   *string                     `json:"board"`
-	Currency                string                      `json:"currency"`
-	ViewKind                string                      `json:"view_kind"`
-	CalculationVersion      int                         `json:"calculation_version"`
-	CalculatedAt            time.Time                   `json:"calculated_at"`
-	Date                    string                      `json:"date"`
-	Count                   int64                       `json:"transaction_count"`
-	Empty                   bool                        `json:"empty"`
-	Status                  string                      `json:"calculation_status"`
-	ProfitLossBasis         *string                     `json:"profit_loss_basis"`
-	GMP                     *string                     `json:"gmp"`
-	Revision                string                      `json:"revision"`
-	Factor                  string                      `json:"subject2_pricing_factor"`
-	Applications            applicationForecasts        `json:"expected_applications"`
-	Basis                   map[string]calculationBasis `json:"calculation_basis"`
-	AdditionalCost          string                      `json:"additional_cost"`
-	AssumptionVersion       int                         `json:"assumption_version"`
-	AssumptionsRecordedAt   *time.Time                  `json:"assumptions_recorded_at"`
-	BasisVersion            *int                        `json:"basis_version"`
-	SourceLastSeenAt        *time.Time                  `json:"source_last_seen_at"`
-	SourceStale             bool                        `json:"source_stale"`
-	ShareholderAvailability string                      `json:"shareholder_availability"`
-	NetRecordedAmount       string                      `json:"net_recorded_amount"`
-	KnownShares             string                      `json:"known_net_shares"`
-	KnownExpectedShares     string                      `json:"known_net_expected_shares"`
-	DirectShares            string                      `json:"net_direct_shares"`
-	PendingShares           *string                     `json:"net_pending_shares"`
-	KnownPremiumCost        string                      `json:"known_net_premium_cost"`
-	Categories              []positionBucket            `json:"categories,omitempty"`
+	BusinessID                string                      `json:"business_id"`
+	IPOID                     string                      `json:"ipo_id"`
+	Code                      string                      `json:"code"`
+	Name                      string                      `json:"name"`
+	Board                     *string                     `json:"board"`
+	Currency                  string                      `json:"currency"`
+	ViewKind                  string                      `json:"view_kind"`
+	CalculationVersion        int                         `json:"calculation_version"`
+	CalculatedAt              time.Time                   `json:"calculated_at"`
+	Date                      string                      `json:"date"`
+	Count                     int64                       `json:"transaction_count"`
+	Empty                     bool                        `json:"empty"`
+	Status                    string                      `json:"calculation_status"`
+	ProfitLossBasis           *string                     `json:"profit_loss_basis"`
+	GMP                       *string                     `json:"gmp"`
+	Revision                  string                      `json:"revision"`
+	Factor                    string                      `json:"subject2_pricing_factor"`
+	Applications              applicationForecasts        `json:"expected_applications"`
+	Basis                     map[string]calculationBasis `json:"calculation_basis"`
+	AdditionalCost            string                      `json:"additional_cost"`
+	AssumptionVersion         int                         `json:"assumption_version"`
+	AssumptionsRecordedAt     *time.Time                  `json:"assumptions_recorded_at"`
+	BasisVersion              *int                        `json:"basis_version"`
+	SourceLastSeenAt          *time.Time                  `json:"source_last_seen_at"`
+	SourceStale               bool                        `json:"source_stale"`
+	ShareholderAvailability   string                      `json:"shareholder_availability"`
+	ShareholderForecast       *shareholderForecast        `json:"shareholder_forecast,omitempty"`
+	ShareholderReservedShares string                      `json:"shareholder_reserved_shares,omitempty"`
+	ShareholderExpectedPerBid *string                     `json:"shareholder_expected_shares_per_bid,omitempty"`
+	NetRecordedAmount         string                      `json:"net_recorded_amount"`
+	KnownShares               string                      `json:"known_net_shares"`
+	KnownExpectedShares       string                      `json:"known_net_expected_shares"`
+	DirectShares              string                      `json:"net_direct_shares"`
+	PendingShares             *string                     `json:"net_pending_shares"`
+	KnownPremiumCost          string                      `json:"known_net_premium_cost"`
+	Categories                []positionBucket            `json:"categories,omitempty"`
 	positionMeasures
 }
 
@@ -101,6 +104,9 @@ const livePositionSQL = `WITH buckets AS (
  'expected_applications',jsonb_build_object('RETAIL',a.retail_expected_applications::text,'SHNI',a.shni_expected_applications::text,
  'BHNI',a.bhni_expected_applications::text,'SHAREHOLDER',a.shareholder_expected_applications::text),
  'basis_version',b.version,'shareholder_availability',COALESCE(b.shareholder_availability,'unknown'),
+ 'shareholder_reserved_shares',` + shareholderQuotaSQL + `,
+ 'shareholder_forecast',CASE WHEN a.shareholder_expected_bid_shares IS NOT NULL THEN
+ jsonb_build_object('expected_bid_shares',a.shareholder_expected_bid_shares::text,'shares_per_bid',a.shareholder_shares_per_bid::text) END,
  'forecast_snapshot',` + matchingForecastSnapshot + `,
  'source_last_seen_at',i.last_seen_at,'source_stale',i.last_seen_at IS NULL OR i.last_seen_at<now()-interval '90 minutes',
  'categories',COALESCE((SELECT jsonb_agg(to_jsonb(buckets) ORDER BY form_type_code,category) FROM buckets),'[]'::jsonb))
@@ -165,6 +171,9 @@ func (a *api) getLivePosition(w http.ResponseWriter, r *http.Request, user actor
 	}
 	for code, basis := range catalogueForecastBasis(result.ForecastSnapshot) {
 		result.Basis[code] = basis
+	}
+	if estimate, _ := result.ShareholderForecast.estimate(result.ShareholderReservedShares); estimate != nil {
+		result.ShareholderExpectedPerBid = positionString(estimate, 6)
 	}
 	if err := calculateLivePosition(&result.livePosition); err != nil {
 		dbFailure(w, err)

@@ -5,6 +5,40 @@ import (
 	"testing"
 )
 
+func TestShareholderShareForecastUsesClosingDemand(t *testing.T) {
+	for _, tc := range []struct {
+		name, demand, expectedShares, premium string
+	}{
+		{"oversubscribed", "400000", "200.000000", ""},
+		{"fully subscribed", "100000", "800.000000", "1200.00"},
+		{"undersubscribed", "80000", "800.000000", "1200.00"},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			position := livePosition{
+				Factor: "0.8", ShareholderReservedShares: "100000",
+				ShareholderForecast: &shareholderForecast{tc.demand, "400"},
+				Applications:        applicationForecasts{Shareholder: new("1")},
+				Basis:               map[string]calculationBasis{"SHAREHOLDER": {"25", "1", "applications"}},
+			}
+			bucket := positionBucket{Form: "SHAREHOLDER", Subject: "subject_2", AgreedAmount: "1200"}
+			if err := forecastPositionBucket(&position, &bucket, big.NewRat(2, 1), big.NewRat(10, 1)); err != nil {
+				t.Fatal(err)
+			}
+			if bucket.ExpectedShares == nil || *bucket.ExpectedShares != tc.expectedShares {
+				t.Fatal("share forecast did not use reserved shares and estimated closing demand", bucket.ExpectedShares)
+			}
+			if tc.premium == "" {
+				if bucket.PremiumCost != nil || bucket.Subject2Rate != nil || len(bucket.Reasons) != 1 ||
+					bucket.Reasons[0].Code != "shareholder_success_rate_unavailable" {
+					t.Fatal("pro-rata fill was treated as the probability of a successful form", bucket)
+				}
+			} else if bucket.PremiumCost == nil || *bucket.PremiumCost != tc.premium {
+				t.Fatal("full fill did not include the full agreed premium", bucket)
+			}
+		})
+	}
+}
+
 func samplePosition(t *testing.T) livePosition {
 	t.Helper()
 	p := livePosition{GMP: new("200"), Factor: "0.8", AdditionalCost: "25", ShareholderAvailability: "available",

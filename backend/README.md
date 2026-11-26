@@ -457,7 +457,16 @@ rounding the face amounts first can change the expected cost. Ratios outside
 0–1 remain unavailable rather than being capped. Retail 199 reuses the Retail
 forecast total and requires its own explicit share/capacity basis.
 
-Shareholder `bid_amount_crore` mode uses shares bid per application and matching
+For new shareholder forecasts, the published reservation supplies the share quota
+before bidding opens, including on filing-based IPOs with imported reservations.
+Business admins enter expected total shares bid at close
+and planned shares per form in `shareholder_forecast`. The estimate per form
+is the bid size multiplied by the quota divided by expected total shares bid,
+capped at the full bid. It is available without subscription data or trades.
+The share fill does not supply a Subject 2 win probability for an oversubscribed
+forecast. An empty object clears the share forecast. Omission preserves it.
+
+Legacy Shareholder `bid_amount_crore` mode uses shares bid per application and matching
 reserved/expected bid amounts in crore, not application counts. The result is a
 proportionate share estimate; never probability-discount an already supplied
 allotment result again. Legacy allotted applications remain unavailable until a

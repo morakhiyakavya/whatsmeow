@@ -324,7 +324,20 @@ func (s *ipoSourceClient) collect(ctx context.Context) ([]ipoSourceIssue, map[st
 	if indexErr == nil {
 		filingCtx, cancel := context.WithTimeout(ctx, 30*time.Second)
 		defer cancel()
+		exchangeCount := len(items)
 		items = s.collectFilingCalendar(filingCtx, index, items, today.Format(time.DateOnly), results)
+		for i := exchangeCount; i < len(items); i++ {
+			item := &items[i]
+			if filingCtx.Err() != nil {
+				break
+			}
+			// Filing-only IPOs can publish reservations before the exchange lists the issue.
+			if err := s.enrich(filingCtx, item, enrichmentLinks); err == nil {
+				results["filing enrichment:"+item.Name] = "ok"
+			} else if err != errIPOEnrichmentPageMissing {
+				results["filing enrichment:"+item.Name] = err.Error()
+			}
+		}
 	}
 	return items, results
 }

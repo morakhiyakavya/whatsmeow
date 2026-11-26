@@ -252,6 +252,20 @@ const sourceIPORows = `WITH source AS (
  "Subscriptions" jsonb,"Reservations" jsonb,"Shareholdings" jsonb,"Lockins" jsonb)
  LEFT JOIN ipo_pos.ipos i ON i.catalogue_source='nse' AND i.source_issue_id=s."Symbol") `
 
+const pruneIPOReservationsSQL = `DELETE FROM ipo_pos.ipo_reservations r USING source s
+ WHERE r.ipo_id=s.id AND s."EnrichmentOK" AND jsonb_array_length(s."Reservations")>0
+ AND r.source_url LIKE 'https://ipowatch.in/%'
+ AND NOT EXISTS (SELECT 1 FROM jsonb_array_elements(s."Reservations") entry
+ WHERE entry->>'Category'=r.category)`
+
+const upsertIPOReservationsSQL = `INSERT INTO ipo_pos.ipo_reservations(ipo_id,category,reserved_shares,percentage,basis,source_url,observed_at)
+ SELECT DISTINCT ON (s.id,x."Category") s.id,x."Category",x."Shares",x."Percentage",x."Basis",s."EnrichmentURL",clock_timestamp()
+ FROM source s CROSS JOIN LATERAL jsonb_array_elements(s."Reservations") WITH ORDINALITY AS entry(value,position)
+ CROSS JOIN LATERAL jsonb_to_record(entry.value) AS x("Category" text,"Shares" numeric,"Percentage" numeric,"Basis" text)
+ WHERE s."EnrichmentOK" ORDER BY s.id,x."Category",entry.position DESC
+ ON CONFLICT(ipo_id,category) DO UPDATE SET reserved_shares=excluded.reserved_shares,
+ percentage=excluded.percentage,basis=excluded.basis,source_url=excluded.source_url,observed_at=excluded.observed_at`
+
 func saveSourceIPOs(ctx context.Context, db *sql.DB, items []ipoSourceIssue) error {
 	if len(items) == 0 {
 		return nil
@@ -335,18 +349,8 @@ func saveSourceIPOs(ctx context.Context, db *sql.DB, items []ipoSourceIssue) err
 		 WHERE i.id=s.id AND s."Timeline"<>'{}'::jsonb`,
 		`UPDATE ipo_pos.ipos i SET issue_size_amount=COALESCE(s."IssueAmount"::numeric,i.issue_size_amount)
 		 FROM source s WHERE i.id=s.id AND s."EnrichmentOK"`,
-		`DELETE FROM ipo_pos.ipo_reservations r USING source s
-		 WHERE r.ipo_id=s.id AND s."EnrichmentOK" AND jsonb_array_length(s."Reservations")>0
-		 AND r.source_url LIKE 'https://ipowatch.in/%'
-		 AND NOT EXISTS (SELECT 1 FROM jsonb_array_elements(s."Reservations") entry
-		 WHERE entry->>'Category'=r.category)`,
-		`INSERT INTO ipo_pos.ipo_reservations(ipo_id,category,reserved_shares,percentage,basis,source_url,observed_at)
-		 SELECT DISTINCT ON (s.id,x."Category") s.id,x."Category",x."Shares",x."Percentage",x."Basis",s."EnrichmentURL",clock_timestamp()
-		 FROM source s CROSS JOIN LATERAL jsonb_array_elements(s."Reservations") WITH ORDINALITY AS entry(value,position)
-		 CROSS JOIN LATERAL jsonb_to_record(entry.value) AS x("Category" text,"Shares" numeric,"Percentage" numeric,"Basis" text)
-		 WHERE s."EnrichmentOK" ORDER BY s.id,x."Category",entry.position DESC
-		 ON CONFLICT(ipo_id,category) DO UPDATE SET reserved_shares=excluded.reserved_shares,
-		 percentage=excluded.percentage,basis=excluded.basis,source_url=excluded.source_url,observed_at=excluded.observed_at`,
+		pruneIPOReservationsSQL,
+		upsertIPOReservationsSQL,
 		`INSERT INTO ipo_pos.ipo_promoter_shareholdings(ipo_id,holder,pre_percentage,post_percentage,source_url,observed_at)
 		 SELECT DISTINCT ON (s.id,x."Holder") s.id,x."Holder",x."Pre",x."Post",s."EnrichmentURL",clock_timestamp()
 		 FROM source s CROSS JOIN LATERAL jsonb_array_elements(s."Shareholdings") WITH ORDINALITY AS entry(value,position)

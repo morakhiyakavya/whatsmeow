@@ -144,18 +144,28 @@ const storedIPOIssuerKey = `regexp_replace(regexp_replace(lower(i.name), '\m(lim
 
 func saveFilingIPOs(ctx context.Context, db *sql.DB, items []ipoSourceIssue) (int, error) {
 	type filingIPO struct {
-		Key, Name, Board, URL string
-		Timeline              map[string]any
+		Key, Name, Board, URL, EnrichmentURL string
+		Timeline                             map[string]any
+		EnrichmentOK                         bool
+		Reservations                         []ipoReservation
 	}
 	rows := make([]filingIPO, 0, len(items))
 	for _, item := range items {
-		rows = append(rows, filingIPO{issuerKey(item.Name), item.Name, item.Board, item.FilingURL, item.Timeline})
+		rows = append(rows, filingIPO{
+			Key: issuerKey(item.Name), Name: item.Name, Board: item.Board, URL: item.FilingURL, Timeline: item.Timeline,
+			EnrichmentOK: item.EnrichmentOK, EnrichmentURL: item.EnrichmentURL, Reservations: item.Reservations,
+		})
 	}
 	encoded, err := json.Marshal(rows)
 	if err != nil {
 		return 0, err
 	}
-	result, err := db.ExecContext(ctx, `INSERT INTO ipo_pos.ipos AS saved
+	tx, err := db.BeginTx(ctx, nil)
+	if err != nil {
+		return 0, err
+	}
+	defer tx.Rollback()
+	result, err := tx.ExecContext(ctx, `INSERT INTO ipo_pos.ipos AS saved
 	 (code,name,issuer_name,catalogue_source,source_issue_id,board,source_url,last_seen_at,timeline)
 	 SELECT 'FILING:'||x."Key",x."Name",x."Name",'filing',x."Key",x."Board",x."URL",clock_timestamp(),x."Timeline"
 	 FROM jsonb_to_recordset($1::jsonb) AS x("Key" text,"Name" text,"Board" text,"URL" text,"Timeline" jsonb)
@@ -169,7 +179,25 @@ func saveFilingIPOs(ctx context.Context, db *sql.DB, items []ipoSourceIssue) (in
 		return 0, err
 	}
 	count, err := result.RowsAffected()
-	return int(count), err
+	if err != nil {
+		return 0, err
+	}
+	const filingReservations = `WITH source AS (
+ SELECT x.*, i.id FROM jsonb_to_recordset($1::jsonb) AS x(
+ "Key" text,"Board" text,"EnrichmentOK" boolean,"EnrichmentURL" text,"Reservations" jsonb)
+ JOIN ipo_pos.ipos i ON i.catalogue_source='filing' AND i.source_issue_id=x."Key" AND i.board=x."Board"
+ WHERE i.archived_at IS NULL AND x."EnrichmentOK" AND jsonb_typeof(x."Reservations")='array'
+ ) `
+	for _, query := range []string{
+		pruneIPOReservationsSQL,
+		upsertIPOReservationsSQL,
+		`SELECT ipo_pos.capture_ipo_dashboard_basis(id) FROM source ORDER BY id`,
+	} {
+		if _, err := tx.ExecContext(ctx, filingReservations+query, string(encoded)); err != nil {
+			return 0, err
+		}
+	}
+	return int(count), tx.Commit()
 }
 
 func expectedIPODate(data json.RawMessage, key string) string {

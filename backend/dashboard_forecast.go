@@ -7,6 +7,9 @@ func forecastPositionBucket(p *livePosition, b *positionBucket, quantity, gmp *b
 	if b.Subject == "subject_2" {
 		b.PremiumCost = nil
 	}
+	if b.Form == "SHAREHOLDER" && p.ShareholderForecast != nil {
+		return forecastShareholderBucket(p, b, quantity, gmp)
+	}
 	pool := b.Form
 	if pool == "RETAIL_199" {
 		pool = "RETAIL"

@@ -1,6 +1,7 @@
 package main
 
 import (
+	"database/sql"
 	"encoding/json"
 	"errors"
 	"math/big"
@@ -27,6 +28,7 @@ type assumptionInput struct {
 	Reason          string                      `json:"change_reason"`
 	Basis           map[string]calculationBasis `json:"calculation_basis"`
 	AdditionalCost  *string                     `json:"additional_cost"`
+	Shareholder     *shareholderForecast        `json:"shareholder_forecast"`
 }
 
 type calculationBasis struct {
@@ -57,6 +59,9 @@ type mapCalculationBasis map[string]calculationBasis
 var applicationCountPattern = regexp.MustCompile(`^[0-9]{1,24}$`)
 
 func (in *assumptionInput) normalize() error {
+	if err := in.Shareholder.normalize(); err != nil {
+		return err
+	}
 	if err := mapCalculationBasis(in.Basis).normalize(); err != nil {
 		return err
 	}
@@ -118,7 +123,9 @@ const assumptionJSON = `jsonb_build_object('business_id',v.business_id,'ipo_id',
  'expected_applications',jsonb_build_object('RETAIL',v.retail_expected_applications::text,
  'SHNI',v.shni_expected_applications::text,'BHNI',v.bhni_expected_applications::text,
  'SHAREHOLDER',v.shareholder_expected_applications::text),'recorded_at',v.recorded_at,
- 'changed_by_user_id',v.changed_by_user_id,'change_reason',v.change_reason,'calculation_basis',v.calculation_basis,'additional_cost',v.additional_cost::text)`
+ 'changed_by_user_id',v.changed_by_user_id,'change_reason',v.change_reason,'calculation_basis',v.calculation_basis,'additional_cost',v.additional_cost::text,
+ 'shareholder_forecast',CASE WHEN v.shareholder_expected_bid_shares IS NOT NULL THEN
+ jsonb_build_object('expected_bid_shares',v.shareholder_expected_bid_shares::text,'shares_per_bid',v.shareholder_shares_per_bid::text) END)`
 
 func analyticsIPO(w http.ResponseWriter, r *http.Request) (string, bool) {
 	id := r.PathValue("ipoID")
@@ -135,16 +142,19 @@ func (a *api) getAnalyticsAssumptions(w http.ResponseWriter, r *http.Request, us
 		return
 	}
 	var data, snapshot json.RawMessage
+	var shareholderQuota string
 	err := a.db.QueryRowContext(r.Context(), `SELECT coalesce((SELECT `+assumptionJSON+`
  FROM ipo_pos.ipo_dashboard_assumption_versions v WHERE business_id=$1 AND ipo_id=i.id
  ORDER BY version DESC LIMIT 1),jsonb_build_object('business_id',$1::uuid,'ipo_id',i.id,
  'version',0,'gmp',null,'subject2_pricing_factor','0.8','expected_applications',
  jsonb_build_object('RETAIL',null,'SHNI',null,'BHNI',null,'SHAREHOLDER',null),
- 'recorded_at',null,'changed_by_user_id',null,'change_reason',null,'calculation_basis','{}'::jsonb,'additional_cost','0.00')) || jsonb_build_object(
+ 'recorded_at',null,'changed_by_user_id',null,'change_reason',null,'calculation_basis','{}'::jsonb,'additional_cost','0.00',
+ 'shareholder_forecast',null)) || jsonb_build_object(
  'source_basis',to_jsonb(b),'catalogue_last_seen_at',i.last_seen_at,'issue_size_shares',i.issue_size_shares::text),
- COALESCE(`+matchingForecastSnapshot+`,'{}'::jsonb)
+ COALESCE(`+matchingForecastSnapshot+`,'{}'::jsonb),
+ COALESCE(`+shareholderQuotaSQL+`,'')
  FROM ipo_pos.ipos i LEFT JOIN LATERAL (SELECT * FROM ipo_pos.ipo_dashboard_basis_versions
- WHERE ipo_id=i.id ORDER BY version DESC LIMIT 1) b ON true WHERE i.id=$2`, user.BusinessID, id).Scan(&data, &snapshot)
+ WHERE ipo_id=i.id ORDER BY version DESC LIMIT 1) b ON true WHERE i.id=$2`, user.BusinessID, id).Scan(&data, &snapshot, &shareholderQuota)
 	if err != nil {
 		dbFailure(w, err)
 		return
@@ -159,6 +169,15 @@ func (a *api) getAnalyticsAssumptions(w http.ResponseWriter, r *http.Request, us
 		capacities[code] = basis.Capacity
 	}
 	result["estimated_application_capacity"], _ = json.Marshal(capacities)
+	result["shareholder_reserved_shares"], _ = json.Marshal(shareholderQuota)
+	var forecast *shareholderForecast
+	if err := json.Unmarshal(result["shareholder_forecast"], &forecast); err != nil {
+		dbFailure(w, err)
+		return
+	}
+	if estimate, _ := forecast.estimate(shareholderQuota); estimate != nil {
+		result["shareholder_expected_shares_per_bid"], _ = json.Marshal(positionString(estimate, 6))
+	}
 	writeJSON(w, 200, result)
 }
 
@@ -181,18 +200,30 @@ func (a *api) putAnalyticsAssumptions(w http.ResponseWriter, r *http.Request, us
 		encoded, _ := json.Marshal(input.Basis)
 		basis = string(encoded)
 	}
+	var expectedBidShares, sharesPerBid *string
+	if input.Shareholder != nil && input.Shareholder.ExpectedBidShares != "" {
+		expectedBidShares, sharesPerBid = &input.Shareholder.ExpectedBidShares, &input.Shareholder.SharesPerBid
+	}
 	err := a.db.QueryRowContext(r.Context(), `INSERT INTO ipo_pos.ipo_dashboard_assumption_versions AS v
  (business_id,ipo_id,version,gmp,subject2_pricing_factor,retail_expected_applications,
  shni_expected_applications,bhni_expected_applications,shareholder_expected_applications,
- changed_by_user_id,change_reason,calculation_basis,additional_cost) VALUES($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,
- COALESCE($12::jsonb,(SELECT calculation_basis FROM ipo_pos.ipo_dashboard_assumption_versions
- WHERE business_id=$1 AND ipo_id=$2 ORDER BY version DESC LIMIT 1),'{}'::jsonb),
- COALESCE($13::numeric,(SELECT additional_cost FROM ipo_pos.ipo_dashboard_assumption_versions
- WHERE business_id=$1 AND ipo_id=$2 ORDER BY version DESC LIMIT 1),0))
+ changed_by_user_id,change_reason,calculation_basis,additional_cost,shareholder_expected_bid_shares,shareholder_shares_per_bid)
+ SELECT $1,i.id,$3,$4,$5,$6,$7,$8,$9,$10,$11,
+ COALESCE($12::jsonb,previous.calculation_basis,'{}'::jsonb),
+ COALESCE($13::numeric,previous.additional_cost,0),
+ CASE WHEN $14::boolean THEN $15::numeric ELSE previous.shareholder_expected_bid_shares END,
+ CASE WHEN $14::boolean THEN $16::numeric ELSE previous.shareholder_shares_per_bid END
+ FROM ipo_pos.ipos i LEFT JOIN LATERAL (SELECT calculation_basis,additional_cost,shareholder_expected_bid_shares,shareholder_shares_per_bid
+ FROM ipo_pos.ipo_dashboard_assumption_versions WHERE business_id=$1 AND ipo_id=i.id ORDER BY version DESC LIMIT 1) previous ON true
+ WHERE i.id=$2 AND ($15::numeric IS NULL OR `+shareholderQuotaSQL+` IS NOT NULL)
  RETURNING `+assumptionJSON, user.BusinessID, id, *input.ExpectedVersion+1, input.GMP,
-		input.Factor, input.Applications.Retail, input.Applications.SHNI, input.Applications.BHNI,
-		input.Applications.Shareholder, user.UserID, input.Reason, basis, input.AdditionalCost).Scan(&data)
+		input.Factor, input.Applications.Retail, input.Applications.SHNI, input.Applications.BHNI, input.Applications.Shareholder, user.UserID,
+		input.Reason, basis, input.AdditionalCost, input.Shareholder != nil, expectedBidShares, sharesPerBid).Scan(&data)
 	if err != nil {
+		if expectedBidShares != nil && errors.Is(err, sql.ErrNoRows) {
+			fail(w, 400, "shareholder_quota_missing", "A published shareholder share quota is needed to save this forecast")
+			return
+		}
 		var pgErr *pgconn.PgError
 		if errors.As(err, &pgErr) && pgErr.Code == "40001" {
 			fail(w, 409, "version_conflict", "Assumptions changed; fetch the current version before retrying")

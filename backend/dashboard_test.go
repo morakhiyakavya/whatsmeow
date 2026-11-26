@@ -370,6 +370,11 @@ func testLivePositionAPI(t *testing.T, owner *sql.DB, admin, cashier, other test
 		field(t, body["expected_applications"].(map[string]any), "RETAIL") != "4" {
 		t.Fatal("official capacity did not join the existing demand forecast", body)
 	}
+	retailBid := body["retail_199_bid"].(map[string]any)
+	if retailBid["lots"] != float64(16) || retailBid["shares"] != "192" || retailBid["amount"] != "192000.00" ||
+		len(body["estimated_application_capacity"].(map[string]any)) != 1 {
+		t.Fatal("Big Retail bid size or shared Retail capacity is incorrect", body)
+	}
 	status, body, _ = cashier.request("GET", path+"?include=categories", nil, "")
 	expectStatus(t, 200, status, body)
 	if field(t, body, "net_expected_shares") != "18.000000" || field(t, body, "net_direct_shares") != "111.000000" ||
@@ -396,8 +401,35 @@ func testLivePositionAPI(t *testing.T, owner *sql.DB, admin, cashier, other test
 	if field(t, body, "net_expected_shares") != "18.000000" || field(t, body, "net_premium_cost") != "5151.25" {
 		t.Fatal("report did not use the same NSE-only capacity as the editor", body)
 	}
+	bigRetailTrade := cloneMap(application)
+	bigRetailTrade["form_type_code"], bigRetailTrade["category"], bigRetailTrade["quantity"] = "RETAIL_199", "subject_1", "1"
+	status, body, _ = cashier.request("POST", base+"/transactions", bigRetailTrade, "analytics-big-retail")
+	expectStatus(t, 201, status, body)
+	bigRetailTradeID := field(t, body, "id")
+	status, body, _ = cashier.request("GET", path, nil, "")
+	expectStatus(t, 200, status, body)
+	if body["net_pending_shares"] != "138.000000" || body["net_expected_shares"] != "27.000000" {
+		t.Fatal("Big Retail did not use one minimum lot at the shared Retail allotment chance", body)
+	}
+	if _, err := owner.Exec(`UPDATE ipo_pos.ipos SET archived_at=NULL WHERE id=$1`, ipo); err != nil {
+		t.Fatal(err)
+	}
+	inputs["expected_version"] = 3
+	inputs["calculation_basis"] = map[string]any{
+		"RETAIL_199": map[string]string{"shares_per_application": "24", "capacity": "1", "unit": "applications"},
+	}
+	status, body, _ = admin.request("PUT", base+"/ipos/"+ipo+"/analytics-assumptions", inputs, "")
+	expectStatus(t, 200, status, body)
+	status, body, _ = cashier.request("GET", path, nil, "")
+	expectStatus(t, 200, status, body)
+	if body["net_pending_shares"] != "135.000000" {
+		t.Fatal("existing Big Retail settings did not take precedence", body)
+	}
+	status, body, _ = cashier.request("POST", base+"/transactions/"+bigRetailTradeID+"/cancel",
+		map[string]any{"expected_version": 1, "change_reason": "Cancel Big Retail fixture"}, "")
+	expectStatus(t, 200, status, body)
 	for _, query := range []string{
-		`UPDATE ipo_pos.ipos SET board='SME',lot_size=1200,price_low=88,price_high=94,issue_size_shares=6030000,
+		`UPDATE ipo_pos.ipos SET board='SME',lot_size=1200,price_low=88,price_high=94,issue_size_shares=6030000,archived_at=now(),
  opens_on='2026-11-02',closes_on='2026-11-04',listing_on='2026-11-09' WHERE id=$1`,
 		`UPDATE ipo_pos.ipo_reservations SET reserved_shares=7200 WHERE ipo_id=$1 AND category='Retail Shares Offered'`,
 		`INSERT INTO ipo_pos.ipo_reservations(ipo_id,category,reserved_shares,basis,source_url,observed_at)
@@ -414,7 +446,7 @@ func testLivePositionAPI(t *testing.T, owner *sql.DB, admin, cashier, other test
 	capacities := body["estimated_application_capacity"].(map[string]any)
 	if len(capacities) != 3 || field(t, capacities, "RETAIL") != "3" ||
 		field(t, capacities, "SHNI") != "209" || field(t, capacities, "BHNI") != "419" ||
-		field(t, body, "issue_size_shares") != "6030000" {
+		field(t, body, "issue_size_shares") != "6030000" || body["retail_199_bid"] != nil {
 		t.Fatal("SME editor did not return each pool's capacity", body)
 	}
 	status, body, _ = cashier.request("GET", path+"?include=categories", nil, "")

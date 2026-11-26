@@ -44,6 +44,26 @@ func TestIPOApplications(t *testing.T) {
 	}
 }
 
+func TestMaximumRetailBidUsesEachIssuesPriceAndLotSize(t *testing.T) {
+	for _, test := range []struct {
+		board, price string
+		lot          int64
+		want         *retail199Bid
+	}{
+		{"Mainboard", "1118", 12, &retail199Bid{14, "168", "187824.00"}},
+		{"Mainboard", "136", 110, &retail199Bid{13, "1430", "194480.00"}},
+		{"Mainboard", "1000", 200, &retail199Bid{1, "200", "200000.00"}},
+		{"Mainboard", "1000.01", 200, nil},
+		{"Mainboard", "", 110, nil},
+		{"SME", "94", 1200, nil},
+	} {
+		got := maximumRetailBid(test.board, test.price, test.lot)
+		if (got == nil) != (test.want == nil) || got != nil && *got != *test.want {
+			t.Fatalf("%s at %s with lot %d: got %v, want %v", test.board, test.price, test.lot, got, test.want)
+		}
+	}
+}
+
 func TestIPOSourceParsing(t *testing.T) {
 	input := `[{"symbol":"EXAMPLE","companyName":"Example India Limited","series":"EQ","issueStartDate":"15-OCT-2026","issueEndDate":"19-Oct-2026","issuePrice":"Rs. 90 to Rs. 100","noOfTime":"0","noOfSharesOffered":"1E6","noOfsharesBid":"0"}]`
 	items, err := parseIPOFeed([]byte(input), false, time.Now())

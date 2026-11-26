@@ -42,8 +42,11 @@ func catalogueForecastBasis(snapshot json.RawMessage) map[string]calculationBasi
 	if facts.IPO.Board == "Mainboard" {
 		minimums["retail"] = facts.IPO.Lot
 	}
+	hasRetailBid := false
 	for _, category := range ipoApplications(facts.IPO.Board, facts.IPO.Price, facts.IPO.Lot, facts.IPO.Opens) {
 		switch {
+		case category.Category == "retail":
+			hasRetailBid = true
 		case category.Category == "individual":
 			if shares, err := strconv.ParseInt(category.MinShares, 10, 64); err == nil {
 				minimums["retail"] = shares
@@ -110,6 +113,10 @@ func catalogueForecastBasis(snapshot json.RawMessage) map[string]calculationBasi
 		if capacity.Sign() > 0 {
 			basis[strings.ToUpper(category)] = calculationBasis{strconv.FormatInt(minimum, 10), capacity.String(), "applications"}
 		}
+	}
+	if retail, ok := basis["RETAIL"]; hasRetailBid && ok {
+		// A max-size retail bid shares the minimum-lot allotment forecast with other Retail bids.
+		basis["RETAIL_199"] = retail
 	}
 	return basis
 }

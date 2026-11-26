@@ -454,7 +454,11 @@ catalogue model. For a bucket with matching forecast units,
 Subject 1 cost retains saved transaction amounts. Subject 2 expected cost uses the
 sum of unrounded signed quantity-times-rate agreements multiplied by that ratio;
 rounding the face amounts first can change the expected cost. Ratios outside
-0–1 remain unavailable rather than being capped. Retail 199 reuses the Retail
+0–1 remain unavailable rather than being capped. Mainboard Retail 199 uses the same
+Retail forecast total, one-lot allotment and shared capacity when the forecast fits
+this model. A saved Retail 199 calculation basis takes precedence. The assumptions
+response includes `retail_199_bid` with the maximum Retail bid's lots, shares and
+rupee amount when the issue's price band and lot size are available. Retail 199 reuses the Retail
 forecast total and requires its own explicit share/capacity basis.
 
 For new shareholder forecasts, the published reservation supplies the share quota

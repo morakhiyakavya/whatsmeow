@@ -12,8 +12,8 @@ func TestCatalogueForecastBasisUsesSeparatePublishedQuotas(t *testing.T) {
  "subscriptions":[{"category":"shni","offered_shares":"1800","coverage":"NSE+BSE"},{"category":"bhni","offered_shares":"3600","coverage":"NSE+BSE"}]}`)
 	basis := catalogueForecastBasis(facts)
 	if basis["RETAIL"] != (calculationBasis{"12", "100", "applications"}) ||
-		basis["SHNI"] != (calculationBasis{"180", "10", "applications"}) ||
-		basis["BHNI"] != (calculationBasis{"180", "20", "applications"}) || len(basis) != 3 {
+		basis["RETAIL_199"] != basis["RETAIL"] || basis["SHNI"] != (calculationBasis{"180", "10", "applications"}) ||
+		basis["BHNI"] != (calculationBasis{"180", "20", "applications"}) || len(basis) != 4 {
 		t.Fatal("wrong catalogue forecast basis", basis)
 	}
 	for _, snapshot := range []string{`{}`, `{"ipo":{"board":"Mainboard","lot_size":12},"reservations":[
@@ -25,7 +25,7 @@ func TestCatalogueForecastBasisUsesSeparatePublishedQuotas(t *testing.T) {
 	}
 	legacy := []byte(`{"ipo":{"board":"Mainboard","lot_size":12,"price_high":"1119","opens_on":"2026-01-02"},
  "subscriptions":[{"category":"retail","offered_shares":"1200","coverage":"NSE only"}]}`)
-	if got := catalogueForecastBasis(legacy); got["RETAIL"] != (calculationBasis{"12", "100", "applications"}) || len(got) != 1 {
+	if got := catalogueForecastBasis(legacy); got["RETAIL"] != (calculationBasis{"12", "100", "applications"}) || got["RETAIL_199"] != got["RETAIL"] || len(got) != 2 {
 		t.Fatal("NSE-only mainboard fallback missing", got)
 	}
 }
@@ -36,7 +36,7 @@ func TestCatalogueForecastBasisUsesMainboardNIISubcategoryReservations(t *testin
  {"category":"sNII < ₹10L","reserved_shares":"28128042"},{"category":"bNII > ₹10L","reserved_shares":"56256086"},
  {"category":"NII","reserved_shares":"84384128"},{"category":"Share Holders","reserved_shares":"66183630"}],
  "subscriptions":[{"category":"total","offered_shares":"0","coverage":"NSE+BSE"}]}`)
-	want := map[string]calculationBasis{"RETAIL": {"110", "1789966", "applications"},
+	want := map[string]calculationBasis{"RETAIL": {"110", "1789966", "applications"}, "RETAIL_199": {"110", "1789966", "applications"},
 		"SHNI": {"1540", "18264", "applications"}, "BHNI": {"1540", "36529", "applications"}}
 	if got := catalogueForecastBasis(facts); !maps.Equal(got, want) {
 		t.Fatalf("Mahanadi forecast basis = %v, want %v", got, want)
@@ -49,7 +49,7 @@ func TestCatalogueForecastBasisPrefersCombinedCategoryQuotas(t *testing.T) {
 		`{"category":"retail","offered_shares":"2400","coverage":"NSE+BSE"},{"category":"retail","offered_shares":"1200","coverage":"NSE only"}`,
 	} {
 		facts := fmt.Sprintf(`{"ipo":{"board":"Mainboard","lot_size":12},"subscriptions":[%s]}`, rows)
-		if got := catalogueForecastBasis([]byte(facts)); got["RETAIL"].Capacity != "200" {
+		if got := catalogueForecastBasis([]byte(facts)); got["RETAIL"].Capacity != "200" || len(got) != 1 {
 			t.Fatal("combined quota must win in either order", got)
 		}
 	}
@@ -57,7 +57,7 @@ func TestCatalogueForecastBasisPrefersCombinedCategoryQuotas(t *testing.T) {
  "subscriptions":[{"category":"retail","offered_shares":"85037327","coverage":"NSE only"},
  {"category":"shni","offered_shares":"12148189","coverage":"NSE only"},
  {"category":"bhni","offered_shares":"24296380","coverage":"NSE only"}]}`)
-	want := map[string]calculationBasis{"RETAIL": {"12", "7086443", "applications"},
+	want := map[string]calculationBasis{"RETAIL": {"12", "7086443", "applications"}, "RETAIL_199": {"12", "7086443", "applications"},
 		"SHNI": {"180", "67489", "applications"}, "BHNI": {"180", "134979", "applications"}}
 	if got := catalogueForecastBasis(facts); !maps.Equal(got, want) {
 		t.Fatal("wrong Jio fallback capacities", got)

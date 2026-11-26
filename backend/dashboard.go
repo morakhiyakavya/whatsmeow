@@ -170,6 +170,9 @@ func (a *api) getLivePosition(w http.ResponseWriter, r *http.Request, user actor
 		return
 	}
 	for code, basis := range catalogueForecastBasis(result.ForecastSnapshot) {
+		if _, explicit := result.Basis[code]; code == "RETAIL_199" && explicit {
+			continue
+		}
 		result.Basis[code] = basis
 	}
 	if estimate, _ := result.ShareholderForecast.estimate(result.ShareholderReservedShares); estimate != nil {

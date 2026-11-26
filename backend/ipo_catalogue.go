@@ -67,6 +67,27 @@ func ipoApplications(board, price string, lot int64, opens string) []ipoApplicat
 	return out
 }
 
+type retail199Bid struct {
+	Lots   int64  `json:"lots"`
+	Shares string `json:"shares"`
+	Amount string `json:"amount"`
+}
+
+func maximumRetailBid(board, price string, lot int64) *retail199Bid {
+	if board != "Mainboard" {
+		return nil
+	}
+	for _, category := range ipoApplications(board, price, lot, "") {
+		if category.Category == "retail" {
+			lots := *category.MaxLots
+			shares := new(big.Int).Mul(big.NewInt(lots), big.NewInt(lot))
+			pricePerShare, _ := new(big.Rat).SetString(category.Price)
+			return &retail199Bid{lots, shares.String(), pricePerShare.Mul(pricePerShare, new(big.Rat).SetInt(shares)).FloatString(2)}
+		}
+	}
+	return nil
+}
+
 const ipoCatalogueJSON = ipoJSON + ` || jsonb_build_object(
  'issue_size_shares',i.issue_size_shares::text,'issue_size_amount',i.issue_size_amount::text,
  'subscriptions',COALESCE((SELECT jsonb_agg(to_jsonb(s)||jsonb_build_object(

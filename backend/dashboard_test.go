@@ -178,6 +178,67 @@ func testPreOpenShareholderForecast(t *testing.T, owner *sql.DB, admin, cashier 
 	}
 }
 
+func testRetailBidForecastAPI(t *testing.T, owner *sql.DB, admin, cashier testClient, base string) {
+	t.Helper()
+	status, body, _ := admin.request("POST", base+"/ipos", map[string]string{
+		"code": "PREOPEN-RETAIL", "name": "Pre-open Retail",
+	}, "")
+	expectStatus(t, 201, status, body)
+	ipoID := field(t, body, "id")
+	for _, statement := range []string{
+		`UPDATE ipo_pos.ipos SET opens_on=current_date+4,closes_on=current_date+8,listing_on=current_date+11,
+ board='Mainboard',lot_size=50,price_low=595,price_high=600 WHERE id=$1`,
+		`INSERT INTO ipo_pos.ipo_reservations(ipo_id,category,reserved_shares,basis,source_url,observed_at)
+ VALUES($1,'Retail',10000,'shares','https://example.test',now())`,
+		`SELECT ipo_pos.capture_ipo_dashboard_basis($1)`,
+	} {
+		if _, err := owner.Exec(statement, ipoID); err != nil {
+			t.Fatal(err)
+		}
+	}
+	path := base + "/ipos/" + ipoID + "/analytics-assumptions"
+	input := map[string]any{
+		"expected_version": 0, "expected_applications": map[string]any{"RETAIL": "100"},
+		"subject2_pricing_factor": "0.8", "change_reason": "Forecast before bidding",
+		"bid_forecasts": bidForecasts{"RETAIL": {"15000", "05"}},
+	}
+	status, body, _ = admin.request("PUT", path, input, "")
+	expectStatus(t, 200, status, body)
+	status, body, _ = cashier.request("GET", path, nil, "")
+	expectStatus(t, 200, status, body)
+	terms := body["allotment_pool_terms"].(map[string]any)["RETAIL"].(map[string]any)
+	if terms["minimum_allotment_shares"] != float64(50) || terms["max_bid_lots"] != float64(6) {
+		t.Fatal("editor did not receive published bid limits", terms)
+	}
+	saved := body["bid_forecasts"].(map[string]any)["RETAIL"].(map[string]any)
+	if field(t, saved, "bid_lots") != "5" || field(t, saved, "expected_bid_shares") != "15000" {
+		t.Fatal("editor did not receive saved demand", saved)
+	}
+	status, body, _ = cashier.request("GET", base+"/dashboard/ipos/"+ipoID, nil, "")
+	expectStatus(t, 200, status, body)
+	estimates := body["allotment_estimates"].(map[string]any)
+	retail := estimates["RETAIL"].(map[string]any)
+	bigRetail := estimates["RETAIL_199"].(map[string]any)
+	if body["empty"] != true || retail["method"] != "proportionate" ||
+		retail["expected_shares_per_form"] != "150.000000" || retail["allotment_chance"] != "1.000000" ||
+		bigRetail["expected_shares_per_form"] != "175.000000" {
+		t.Fatal("pre-open estimates need only terms and saved inputs", body)
+	}
+	delete(input, "bid_forecasts")
+	input["expected_version"] = 1
+	status, body, _ = admin.request("PUT", path, input, "")
+	expectStatus(t, 200, status, body)
+	if len(body["bid_forecasts"].(map[string]any)) != 1 {
+		t.Fatal("older write erased the bid forecast", body)
+	}
+	input["expected_version"], input["bid_forecasts"] = 2, bidForecasts{}
+	status, body, _ = admin.request("PUT", path, input, "")
+	expectStatus(t, 200, status, body)
+	if len(body["bid_forecasts"].(map[string]any)) != 0 {
+		t.Fatal("explicitly cleared bid forecast was retained", body)
+	}
+}
+
 func testLivePositionAPI(t *testing.T, owner *sql.DB, admin, cashier, other testClient, base, otherBase string, request map[string]any) {
 	t.Helper()
 	status, body, _ := admin.request("POST", base+"/ipos", map[string]string{"code": "ANALYTICS-BOOK", "name": "Analytics book"}, "")
@@ -472,7 +533,7 @@ func testLivePositionAPI(t *testing.T, owner *sql.DB, admin, cashier, other test
 		t.Fatal("empty/cancelled book is not explicit", body)
 	}
 	encoded, err := json.Marshal(body)
-	if err != nil || !strings.Contains(string(encoded), `"calculation_version":3`) {
+	if err != nil || !strings.Contains(string(encoded), `"calculation_version":4`) {
 		t.Fatal("calculation provenance missing")
 	}
 }

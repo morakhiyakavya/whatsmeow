@@ -448,18 +448,30 @@ published quotas, following [SEBI Schedule XIV Part A2](https://egazette.gov.in/
 The assumptions endpoint exposes those same estimates as `estimated_application_capacity`.
 It also exposes `issue_size_shares` when known, so the app can show each SME reservation
 as a percentage of the full issue while preserving the published snapshot.
-Existing business calculation settings remain available for categories outside the
-catalogue model. For a bucket with matching forecast units,
-`ratio = capacity / expected total` and `shares = signed quantity * shares per application * ratio`.
-Subject 1 cost retains saved transaction amounts. Subject 2 expected cost uses the
-sum of unrounded signed quantity-times-rate agreements multiplied by that ratio;
-rounding the face amounts first can change the expected cost. Ratios outside
-0–1 remain unavailable rather than being capped. Mainboard Retail 199 uses the same
-Retail forecast total, one-lot allotment and shared capacity when the forecast fits
-this model. A saved Retail 199 calculation basis takes precedence. The assumptions
-response includes `retail_199_bid` with the maximum Retail bid's lots, shares and
-rupee amount when the issue's price band and lot size are available. Retail 199 reuses the Retail
-forecast total and requires its own explicit share/capacity basis.
+For catalogue-backed Retail and HNI pools, the editor supplies the published quota
+and bid limits in `allotment_pool_terms`. Business admins keep the expected form
+count and can add closing demand in shares and planned lots through `bid_forecasts`.
+For example, `{"RETAIL":{"expected_bid_shares":"15000","bid_lots":"5"}}`.
+Apply [migration 026](../database/026_bid_forecasts.sql) before deploying this backend.
+Omitting the object preserves the saved inputs. An empty object clears them.
+The category minimum bid is the default. Retail 199 uses the maximum Retail bid and
+shares the Retail pool, unless a saved Retail 199 calculation basis takes precedence.
+SME Individual demand follows from its fixed two-lot bid. The assumptions response
+also includes `retail_199_bid` with the issue's maximum Retail bid and rupee amount.
+
+The report estimates a lottery if the quota falls short of all minimum allotments.
+It fills the entire bid if estimated total demand fits. Otherwise it allots the
+minimum first and distributes surplus against bids above that minimum, rounding
+additional SME NII shares down to whole trading lots. With missing extra demand it
+can show the expected minimum for a larger bid and mark the extra shares as unknown.
+If both eligible NII pools have demand estimates, the model can move unused shares
+between them up to the other pool's shortfall. A forecast is available per form before
+trades are saved. Signed position quantities multiply that per-form estimate.
+
+Subject 1 cost retains the saved trade amounts. Subject 2 expected cost multiplies
+unrounded trade amounts by the chance of getting any allotment, which reaches 100%
+when the forecast quota covers every minimum. Existing manual calculation settings
+remain available for categories outside the catalogue model.
 
 For new shareholder forecasts, the published reservation supplies the share quota
 before bidding opens, including on filing-based IPOs with imported reservations.

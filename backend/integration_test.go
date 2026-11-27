@@ -394,6 +394,7 @@ func TestManualLedgerIntegration(t *testing.T) {
 	t.Run("Live position report", func(t *testing.T) {
 		testLivePositionAPI(t, admin, client, cashier, other, base, "/api/businesses/"+otherBusiness, request)
 		testPreOpenShareholderForecast(t, admin, client, cashier, base)
+		testRetailBidForecastAPI(t, admin, client, cashier, base)
 	})
 	t.Run("Signed transactions", func(t *testing.T) {
 		testSignedTransactionAPI(t, cashier, base, request)

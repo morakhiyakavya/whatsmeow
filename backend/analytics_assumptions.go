@@ -29,6 +29,7 @@ type assumptionInput struct {
 	Basis           map[string]calculationBasis `json:"calculation_basis"`
 	AdditionalCost  *string                     `json:"additional_cost"`
 	Shareholder     *shareholderForecast        `json:"shareholder_forecast"`
+	BidForecasts    bidForecasts                `json:"bid_forecasts"`
 }
 
 type calculationBasis struct {
@@ -59,6 +60,9 @@ type mapCalculationBasis map[string]calculationBasis
 var applicationCountPattern = regexp.MustCompile(`^[0-9]{1,24}$`)
 
 func (in *assumptionInput) normalize() error {
+	if err := in.BidForecasts.normalize(); err != nil {
+		return err
+	}
 	if err := in.Shareholder.normalize(); err != nil {
 		return err
 	}
@@ -120,10 +124,11 @@ func (in *assumptionInput) normalize() error {
 
 const assumptionJSON = `jsonb_build_object('business_id',v.business_id,'ipo_id',v.ipo_id,
  'version',v.version,'gmp',v.gmp::text,'subject2_pricing_factor',v.subject2_pricing_factor::text,
- 'expected_applications',jsonb_build_object('RETAIL',v.retail_expected_applications::text,
- 'SHNI',v.shni_expected_applications::text,'BHNI',v.bhni_expected_applications::text,
- 'SHAREHOLDER',v.shareholder_expected_applications::text),'recorded_at',v.recorded_at,
+ 'expected_applications',jsonb_build_object('RETAIL',trunc(v.retail_expected_applications)::text,
+ 'SHNI',trunc(v.shni_expected_applications)::text,'BHNI',trunc(v.bhni_expected_applications)::text,
+ 'SHAREHOLDER',trunc(v.shareholder_expected_applications)::text),'recorded_at',v.recorded_at,
  'changed_by_user_id',v.changed_by_user_id,'change_reason',v.change_reason,'calculation_basis',v.calculation_basis,'additional_cost',v.additional_cost::text,
+ 'bid_forecasts',v.bid_forecasts,
  'shareholder_forecast',CASE WHEN v.shareholder_expected_bid_shares IS NOT NULL THEN
  jsonb_build_object('expected_bid_shares',v.shareholder_expected_bid_shares::text,'shares_per_bid',v.shareholder_shares_per_bid::text) END)`
 
@@ -150,7 +155,7 @@ func (a *api) getAnalyticsAssumptions(w http.ResponseWriter, r *http.Request, us
  'version',0,'gmp',null,'subject2_pricing_factor','0.8','expected_applications',
  jsonb_build_object('RETAIL',null,'SHNI',null,'BHNI',null,'SHAREHOLDER',null),
  'recorded_at',null,'changed_by_user_id',null,'change_reason',null,'calculation_basis','{}'::jsonb,'additional_cost','0.00',
- 'shareholder_forecast',null)) || jsonb_build_object(
+ 'shareholder_forecast',null,'bid_forecasts','{}'::jsonb)) || jsonb_build_object(
  'source_basis',to_jsonb(b),'catalogue_last_seen_at',i.last_seen_at,'issue_size_shares',i.issue_size_shares::text),
  COALESCE(`+matchingForecastSnapshot+`,'{}'::jsonb),COALESCE(i.board,''),COALESCE(i.price_high::text,''),COALESCE(i.lot_size,0),
  COALESCE(`+shareholderQuotaSQL+`,'')
@@ -166,12 +171,15 @@ func (a *api) getAnalyticsAssumptions(w http.ResponseWriter, r *http.Request, us
 		return
 	}
 	capacities := map[string]string{}
-	for code, basis := range catalogueForecastBasis(snapshot) {
-		if code != "RETAIL_199" {
-			capacities[code] = basis.Capacity
+	pools := catalogueAllotmentPools(snapshot)
+	for code, pool := range pools {
+		if capacity := pool.basis().Capacity; capacity != "0" && code != "RETAIL_199" {
+			capacities[code] = capacity
 		}
 	}
 	result["estimated_application_capacity"], _ = json.Marshal(capacities)
+	delete(pools, "RETAIL_199")
+	result["allotment_pool_terms"], _ = json.Marshal(pools)
 	if bid := maximumRetailBid(board, price, lot); bid != nil {
 		result["retail_199_bid"], _ = json.Marshal(bid)
 	}
@@ -201,10 +209,14 @@ func (a *api) putAnalyticsAssumptions(w http.ResponseWriter, r *http.Request, us
 		return
 	}
 	var data json.RawMessage
-	var basis any
+	var basis, bidInputs any
 	if input.Basis != nil {
 		encoded, _ := json.Marshal(input.Basis)
 		basis = string(encoded)
+	}
+	if input.BidForecasts != nil {
+		encoded, _ := json.Marshal(input.BidForecasts)
+		bidInputs = string(encoded)
 	}
 	var expectedBidShares, sharesPerBid *string
 	if input.Shareholder != nil && input.Shareholder.ExpectedBidShares != "" {
@@ -213,18 +225,19 @@ func (a *api) putAnalyticsAssumptions(w http.ResponseWriter, r *http.Request, us
 	err := a.db.QueryRowContext(r.Context(), `INSERT INTO ipo_pos.ipo_dashboard_assumption_versions AS v
  (business_id,ipo_id,version,gmp,subject2_pricing_factor,retail_expected_applications,
  shni_expected_applications,bhni_expected_applications,shareholder_expected_applications,
- changed_by_user_id,change_reason,calculation_basis,additional_cost,shareholder_expected_bid_shares,shareholder_shares_per_bid)
+ changed_by_user_id,change_reason,calculation_basis,additional_cost,shareholder_expected_bid_shares,shareholder_shares_per_bid,bid_forecasts)
  SELECT $1,i.id,$3,$4,$5,$6,$7,$8,$9,$10,$11,
  COALESCE($12::jsonb,previous.calculation_basis,'{}'::jsonb),
  COALESCE($13::numeric,previous.additional_cost,0),
  CASE WHEN $14::boolean THEN $15::numeric ELSE previous.shareholder_expected_bid_shares END,
- CASE WHEN $14::boolean THEN $16::numeric ELSE previous.shareholder_shares_per_bid END
- FROM ipo_pos.ipos i LEFT JOIN LATERAL (SELECT calculation_basis,additional_cost,shareholder_expected_bid_shares,shareholder_shares_per_bid
+ CASE WHEN $14::boolean THEN $16::numeric ELSE previous.shareholder_shares_per_bid END,
+ COALESCE($17::jsonb,previous.bid_forecasts,'{}'::jsonb)
+ FROM ipo_pos.ipos i LEFT JOIN LATERAL (SELECT calculation_basis,additional_cost,shareholder_expected_bid_shares,shareholder_shares_per_bid,bid_forecasts
  FROM ipo_pos.ipo_dashboard_assumption_versions WHERE business_id=$1 AND ipo_id=i.id ORDER BY version DESC LIMIT 1) previous ON true
  WHERE i.id=$2 AND ($15::numeric IS NULL OR `+shareholderQuotaSQL+` IS NOT NULL)
  RETURNING `+assumptionJSON, user.BusinessID, id, *input.ExpectedVersion+1, input.GMP,
 		input.Factor, input.Applications.Retail, input.Applications.SHNI, input.Applications.BHNI, input.Applications.Shareholder, user.UserID,
-		input.Reason, basis, input.AdditionalCost, input.Shareholder != nil, expectedBidShares, sharesPerBid).Scan(&data)
+		input.Reason, basis, input.AdditionalCost, input.Shareholder != nil, expectedBidShares, sharesPerBid, bidInputs).Scan(&data)
 	if err != nil {
 		if expectedBidShares != nil && errors.Is(err, sql.ErrNoRows) {
 			fail(w, 400, "shareholder_quota_missing", "A published shareholder share quota is needed to save this forecast")

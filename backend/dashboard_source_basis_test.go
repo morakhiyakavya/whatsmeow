@@ -1,10 +1,21 @@
 package main
 
 import (
+	"encoding/json"
 	"fmt"
 	"maps"
 	"testing"
 )
+
+func catalogueForecastBasis(snapshot json.RawMessage) map[string]calculationBasis {
+	result := map[string]calculationBasis{}
+	for code, pool := range catalogueAllotmentPools(snapshot) {
+		if basis := pool.basis(); basis.Capacity != "0" {
+			result[code] = basis
+		}
+	}
+	return result
+}
 
 func TestCatalogueForecastBasisUsesSeparatePublishedQuotas(t *testing.T) {
 	facts := []byte(`{"ipo":{"board":"Mainboard","lot_size":12,"price_high":"1119","opens_on":"2026-01-02"},

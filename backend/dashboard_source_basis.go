@@ -15,7 +15,28 @@ const matchingForecastSnapshot = `CASE WHEN b.snapshot->'ipo'->>'board'=i.board
  AND b.snapshot->'ipo'->>'opens_on' IS NOT DISTINCT FROM i.opens_on::text
  THEN b.snapshot END`
 
-func catalogueForecastBasis(snapshot json.RawMessage) map[string]calculationBasis {
+type allotmentPool struct {
+	ReservedShares   string `json:"reserved_shares"`
+	MinimumShares    int64  `json:"minimum_allotment_shares"`
+	LotSize          int64  `json:"lot_size"`
+	MinBidLots       int64  `json:"min_bid_lots"`
+	MaxBidLots       *int64 `json:"max_bid_lots,omitempty"`
+	sme              bool
+	transferEligible bool
+	fixedBidLots     *int64
+}
+
+func (p allotmentPool) basis() calculationBasis {
+	shares, _ := new(big.Int).SetString(p.ReservedShares, 10)
+	if p.sme {
+		// Published SME capacity is an estimate. The forecast tests the exact quota separately.
+		shares.Add(shares, big.NewInt(p.MinimumShares/2))
+	}
+	capacity := shares.Quo(shares, big.NewInt(p.MinimumShares))
+	return calculationBasis{strconv.FormatInt(p.MinimumShares, 10), capacity.String(), "applications"}
+}
+
+func catalogueAllotmentPools(snapshot json.RawMessage) map[string]allotmentPool {
 	var facts struct {
 		IPO struct {
 			Board string `json:"board"`
@@ -33,21 +54,20 @@ func catalogueForecastBasis(snapshot json.RawMessage) map[string]calculationBasi
 			Coverage string `json:"coverage"`
 		} `json:"subscriptions"`
 	}
-	basis := map[string]calculationBasis{}
+	pools := map[string]allotmentPool{}
 	if json.Unmarshal(snapshot, &facts) != nil || facts.IPO.Lot <= 0 {
-		return basis
+		return pools
 	}
-	// shortcut: estimate applications from published quotas until actual allotment models are available.
 	minimums := map[string]int64{}
+	bidSizes := map[string]ipoApplication{"retail": {MinLots: 1}}
 	if facts.IPO.Board == "Mainboard" {
 		minimums["retail"] = facts.IPO.Lot
 	}
-	hasRetailBid := false
 	for _, category := range ipoApplications(facts.IPO.Board, facts.IPO.Price, facts.IPO.Lot, facts.IPO.Opens) {
+		bidSizes[category.Category] = category
 		switch {
-		case category.Category == "retail":
-			hasRetailBid = true
 		case category.Category == "individual":
+			bidSizes["retail"] = category
 			if shares, err := strconv.ParseInt(category.MinShares, 10, 64); err == nil {
 				minimums["retail"] = shares
 			}
@@ -71,7 +91,7 @@ func catalogueForecastBasis(snapshot json.RawMessage) map[string]calculationBasi
 				sourceCategory = "individual"
 			}
 		}
-		var offered string
+		var offered, offeredCoverage string
 		for _, row := range facts.Reservations {
 			label := strings.TrimSpace(strings.ToLower(row.Category))
 			matches := label == category || label == category+" shares offered" || category == "retail" && label == "retail individual investors"
@@ -95,28 +115,28 @@ func catalogueForecastBasis(snapshot json.RawMessage) map[string]calculationBasi
 			for _, row := range facts.Subscriptions {
 				if row.Category == sourceCategory && row.Coverage == coverage {
 					offered = row.Shares
+					offeredCoverage = row.Coverage
 					break
 				}
 				if facts.IPO.Board == "Mainboard" && row.Category == sourceCategory && row.Coverage == "NSE only" {
 					offered = row.Shares
+					offeredCoverage = row.Coverage
 				}
 			}
 		}
-		if !applicationCountPattern.MatchString(offered) {
+		if !applicationCountPattern.MatchString(offered) || strings.TrimLeft(offered, "0") == "" || bidSizes[category].MinLots <= 0 {
 			continue
 		}
-		shares, _ := new(big.Int).SetString(offered, 10)
-		if facts.IPO.Board == "SME" {
-			shares.Add(shares, big.NewInt(minimum/2))
-		}
-		capacity := shares.Quo(shares, big.NewInt(minimum))
-		if capacity.Sign() > 0 {
-			basis[strings.ToUpper(category)] = calculationBasis{strconv.FormatInt(minimum, 10), capacity.String(), "applications"}
+		sme := facts.IPO.Board == "SME"
+		pools[strings.ToUpper(category)] = allotmentPool{
+			ReservedShares: strings.TrimLeft(offered, "0"), MinimumShares: minimum, LotSize: facts.IPO.Lot,
+			MinBidLots: bidSizes[category].MinLots, MaxBidLots: bidSizes[category].MaxLots, sme: sme,
+			transferEligible: (category == "shni" || category == "bhni") && (sme || offeredCoverage != "NSE only"),
 		}
 	}
-	if retail, ok := basis["RETAIL"]; hasRetailBid && ok {
-		// A max-size retail bid shares the minimum-lot allotment forecast with other Retail bids.
-		basis["RETAIL_199"] = retail
+	if retail, ok := pools["RETAIL"]; facts.IPO.Board == "Mainboard" && ok && retail.MaxBidLots != nil {
+		retail.fixedBidLots = retail.MaxBidLots
+		pools["RETAIL_199"] = retail
 	}
-	return basis
+	return pools
 }

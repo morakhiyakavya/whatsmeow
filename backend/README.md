@@ -454,16 +454,20 @@ count and can add closing demand in shares and planned lots through `bid_forecas
 For example, `{"RETAIL":{"expected_bid_shares":"15000","bid_lots":"5"}}`.
 Apply [migration 026](../database/026_bid_forecasts.sql) before deploying this backend.
 Omitting the object preserves the saved inputs. An empty object clears them.
-The category minimum bid is the default. Retail 199 uses the maximum Retail bid and
-shares the Retail pool, unless a saved Retail 199 calculation basis takes precedence.
-SME Individual demand follows from its fixed two-lot bid. The assumptions response
-also includes `retail_199_bid` with the issue's maximum Retail bid and rupee amount.
+With only expected forms saved, the report estimates demand using the category's
+minimum eligible bid. Mainboard Retail uses one lot. Retail 199 uses the maximum
+Retail bid; its estimate assumes the other forms in the same pool bid one lot
+each, unless a saved Retail 199 calculation basis takes precedence. SME Individual
+demand follows from its fixed two-lot bid. The assumptions response also includes
+`retail_199_bid` with the issue's maximum Retail bid and rupee amount.
 
 The report estimates a lottery if the quota falls short of all minimum allotments.
 It fills the entire bid if estimated total demand fits. Otherwise it allots the
 minimum first and distributes surplus against bids above that minimum, rounding
 additional SME NII shares down to whole trading lots. With missing extra demand it
-can show the expected minimum for a larger bid and mark the extra shares as unknown.
+can show the expected minimum for a saved custom bid and mark the extra shares as
+unknown. Estimates include `shares_if_allotted`; where larger bids may reduce the
+standard estimate, they also show `minimum_allotment_shares` for a successful form.
 If both eligible NII pools have demand estimates, the model can move unused shares
 between them up to the other pool's shortfall. A forecast is available per form before
 trades are saved. Signed position quantities multiply that per-form estimate.

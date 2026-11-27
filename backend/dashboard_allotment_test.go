@@ -15,7 +15,7 @@ func TestEstimatePool(t *testing.T) {
 		{"full bid exactly at quota", "100", "10000", "5", "full_bid", "250.000000", "1.000000"},
 		{"minimum and proportionate balance", "100", "15000", "5", "proportionate", "150.000000", "1.000000"},
 		{"minimums use all shares", "200", "", "5", "minimum", "50.000000", "1.000000"},
-		{"minimum bid", "100", "", "", "minimum", "50.000000", "1.000000"},
+		{"standard minimum bid fits", "100", "", "", "full_bid", "50.000000", "1.000000"},
 		{"minimum only with demand missing", "100", "", "5", "minimum_only", "50.000000", "1.000000"},
 		{"market demand smaller than minimum bids", "100", "4999", "", "pool_demand_invalid", "", ""},
 		{"market cannot include this bid", "100", "5000", "5", "pool_demand_invalid", "", ""},
@@ -32,6 +32,36 @@ func TestEstimatePool(t *testing.T) {
 				}
 			} else if *got.ExpectedShares != tc.shares || *got.AllotmentChance != tc.chance {
 				t.Fatalf("estimate %s shares and %s chance, want %s and %s", *got.ExpectedShares, *got.AllotmentChance, tc.shares, tc.chance)
+			}
+		})
+	}
+}
+
+func TestStandardBidsSwitchAllotmentWithExpectedForms(t *testing.T) {
+	pools := catalogueAllotmentPools([]byte(`{
+		"ipo":{"board":"Mainboard","lot_size":110,"price_high":"136","opens_on":"2026-11-19"},
+		"reservations":[{"category":"Retail","reserved_shares":"196896299"},
+			{"category":"SHNI","reserved_shares":"28128042"},{"category":"BHNI","reserved_shares":"56256086"}]
+	}`))
+	for _, tc := range []struct {
+		category, forms, method, expected, ifAllotted, minimum, chance string
+	}{
+		{"BHNI", "3464", "full_bid", "7370.000000", "7370", "1540", "1.000000"},
+		{"BHNI", "10000", "proportionate", "5626.000000", "5626", "1540", "1.000000"},
+		{"BHNI", "73058", "lottery", "770.000000", "1540", "", "0.500000"},
+		{"SHNI", "11326", "full_bid", "1540.000000", "1540", "", "1.000000"},
+		{"RETAIL", "485803", "full_bid", "110.000000", "110", "", "1.000000"},
+		{"RETAIL_199", "485803", "full_bid", "1430.000000", "1430", "110", "1.000000"},
+		{"RETAIL_199", "1789966", "proportionate", "149.000000", "149", "110", "1.000000"},
+	} {
+		t.Run(tc.category+"/"+tc.forms, func(t *testing.T) {
+			got := estimatePool(pools[tc.category], tc.forms, bidForecast{}, "")
+			if got.Method != tc.method || !got.StandardBidSizes || got.ExpectedShares == nil ||
+				*got.ExpectedShares != tc.expected || *got.SharesIfAllotted != tc.ifAllotted ||
+				*got.AllotmentChance != tc.chance ||
+				(tc.minimum == "" && got.MinimumShares != nil) ||
+				(tc.minimum != "" && (got.MinimumShares == nil || *got.MinimumShares != tc.minimum)) {
+				t.Fatalf("unexpected forecast: %+v", got)
 			}
 		})
 	}
@@ -58,6 +88,11 @@ func TestAllotmentMatchesSEBIScheduleXIVExamples(t *testing.T) {
 	if *got.ExpectedShares != "12000.000000" || got.Method != "full_bid" {
 		t.Fatal("SME Individual demand should follow from two lots per form")
 	}
+	sme.ReservedShares = "179999"
+	got = estimatePool(sme, "15", bidForecast{}, "")
+	if got.Method != "lottery" || *got.AllotmentChance != "0.933333" {
+		t.Fatal("SME lottery must count only complete minimum allotments", got)
+	}
 }
 
 func TestNIIQuotaTransferAndSubjectTwo(t *testing.T) {
@@ -76,9 +111,17 @@ func TestNIIQuotaTransferAndSubjectTwo(t *testing.T) {
 	if moves = transferNIIQuota(pools, inputs, forms); moves["SHNI"] != "10000" || moves["BHNI"] != "-10000" {
 		t.Fatal("transfer should also apply in the opposite direction", moves)
 	}
+	forms.SHNI = nil
 	delete(inputs, "SHNI")
 	if len(transferNIIQuota(pools, inputs, forms)) != 0 {
 		t.Fatal("unknown demand should leave the pools as published")
+	}
+	forms.SHNI = new("500")
+	forms.BHNI = new("900")
+	delete(inputs, "BHNI")
+	pools["SHNI"], pools["BHNI"] = small, large
+	if moves = transferNIIQuota(pools, inputs, forms); moves["BHNI"] != "25000" || pools["BHNI"].ReservedShares != "125000" {
+		t.Fatal("standard bids should supply NII demand for quota transfers", pools, moves)
 	}
 
 	pool := allotmentPool{ReservedShares: "10000", MinimumShares: 50, LotSize: 50, MinBidLots: 1}

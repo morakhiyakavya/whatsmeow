@@ -237,6 +237,16 @@ func testRetailBidForecastAPI(t *testing.T, owner *sql.DB, admin, cashier testCl
 	if len(body["bid_forecasts"].(map[string]any)) != 0 {
 		t.Fatal("explicitly cleared bid forecast was retained", body)
 	}
+	status, body, _ = cashier.request("GET", base+"/dashboard/ipos/"+ipoID, nil, "")
+	expectStatus(t, 200, status, body)
+	estimates = body["allotment_estimates"].(map[string]any)
+	retail = estimates["RETAIL"].(map[string]any)
+	bigRetail = estimates["RETAIL_199"].(map[string]any)
+	if retail["method"] != "full_bid" || retail["expected_shares_per_form"] != "50.000000" ||
+		bigRetail["method"] != "full_bid" || bigRetail["expected_shares_per_form"] != "300.000000" ||
+		bigRetail["standard_bid_sizes"] != true || bigRetail["minimum_allotment_shares"] != "50" {
+		t.Fatal("pre-open forecast should use standard bids when only expected forms are saved", estimates)
+	}
 }
 
 func testLivePositionAPI(t *testing.T, owner *sql.DB, admin, cashier, other testClient, base, otherBase string, request map[string]any) {

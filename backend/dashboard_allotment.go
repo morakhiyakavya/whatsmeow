@@ -63,6 +63,9 @@ type allotmentEstimate struct {
 	Method           string  `json:"method"`
 	ReservedShares   string  `json:"reserved_shares"`
 	ExpectedShares   *string `json:"expected_shares_per_form,omitempty"`
+	SharesIfAllotted *string `json:"shares_if_allotted,omitempty"`
+	MinimumShares    *string `json:"minimum_allotment_shares,omitempty"`
+	StandardBidSizes bool    `json:"standard_bid_sizes,omitempty"`
 	AllotmentChance  *string `json:"allotment_chance,omitempty"`
 	QuotaTransfer    string  `json:"quota_transfer_shares,omitempty"`
 	sharesIfAllotted *big.Rat
@@ -75,11 +78,16 @@ func (p allotmentPool) bidShares(lots int64) *big.Int {
 
 func (p allotmentPool) expectedDemand(input bidForecast, forms *string) (shares *big.Int, valid bool) {
 	if input.ExpectedBidShares == "" {
-		if forms != nil && p.MaxBidLots != nil && p.MinBidLots == *p.MaxBidLots {
-			count, _ := new(big.Int).SetString(*forms, 10)
-			return new(big.Int).Mul(count, p.bidShares(p.MinBidLots)), true
+		if forms == nil || input.BidLots != "" && (p.MaxBidLots == nil || p.MinBidLots != *p.MaxBidLots) {
+			return nil, true
 		}
-		return nil, true
+		count, _ := new(big.Int).SetString(*forms, 10)
+		demand := new(big.Int).Mul(count, p.bidShares(p.MinBidLots))
+		// shortcut: assume other Retail forms are one lot until we have a bid-size mix.
+		if p.fixedBidLots != nil && count.Sign() > 0 {
+			demand.Add(demand, p.bidShares(*p.fixedBidLots-p.MinBidLots))
+		}
+		return demand, true
 	}
 	shares, _ = new(big.Int).SetString(input.ExpectedBidShares, 10)
 	if forms == nil {
@@ -157,7 +165,7 @@ func estimatePool(pool allotmentPool, forms string, inputs bidForecast, transfer
 		return result
 	}
 	bid := new(big.Int).Mul(lots, big.NewInt(pool.LotSize))
-	if demand != nil {
+	if inputs.ExpectedBidShares != "" {
 		// The market demand must cover this bid and the minimum bids on the other forms.
 		otherMinimumBids := new(big.Int).Sub(count, big.NewInt(1))
 		otherMinimumBids.Mul(otherMinimumBids, pool.bidShares(pool.MinBidLots))
@@ -172,12 +180,12 @@ func estimatePool(pool allotmentPool, forms string, inputs bidForecast, transfer
 	switch {
 	case neededForMinimums.Cmp(quota) > 0:
 		result.Method = "lottery"
-		slots, _ := new(big.Int).SetString(pool.basis().Capacity, 10)
+		slots := new(big.Int).Quo(quota, minimum)
 		chance.SetFrac(slots, count)
 	case demand != nil && demand.Cmp(quota) <= 0:
 		result.Method = "full_bid"
 		shareCount.SetInt(bid)
-	case bid.Cmp(minimum) == 0 || quota.Cmp(neededForMinimums) == 0:
+	case bid.Cmp(minimum) == 0 || demand == nil && quota.Cmp(neededForMinimums) == 0:
 		result.Method = "minimum"
 	case demand == nil:
 		result.Method = "minimum_only"
@@ -200,5 +208,11 @@ func estimatePool(pool allotmentPool, forms string, inputs bidForecast, transfer
 	result.sharesIfAllotted, result.chance = shareCount, chance
 	result.ExpectedShares = positionString(new(big.Rat).Mul(shareCount, chance), 6)
 	result.AllotmentChance = positionString(chance, 6)
+	result.SharesIfAllotted = positionString(shareCount, 0)
+	result.StandardBidSizes = inputs == (bidForecast{}) && (pool.MaxBidLots == nil || pool.MinBidLots != *pool.MaxBidLots)
+	if result.StandardBidSizes && shareCount.Cmp(new(big.Rat).SetInt(minimum)) > 0 &&
+		(maxLots == nil || new(big.Int).Mul(count, pool.bidShares(*maxLots)).Cmp(quota) > 0) {
+		result.MinimumShares = new(minimum.String())
+	}
 	return result
 }

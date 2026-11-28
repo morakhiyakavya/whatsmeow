@@ -235,7 +235,7 @@ func (a *api) editTransaction(w http.ResponseWriter, r *http.Request, user actor
         version=version+1,change_reason=$15 WHERE business_id=$1 AND id=$2 AND version=$3
         AND created_by_user_id=$14 AND status='confirmed' RETURNING `+transactionJSON,
 		user.BusinessID, id, input.ExpectedVersion, input.IPOID, input.CustomerID, input.OccurredAt, input.FormType, input.Category, input.CEPE, input.Quantity, input.Rate, input.StaffID, input.ConversationID, user.UserID, input.Reason).Scan(&data)
-	if !checkUpdate(w, r, tx, user, id, true, err) {
+	if !checkUpdate(w, r, tx, user, id, "edit", err) {
 		return
 	}
 	if input.WhatsAppAccountID != nil {
@@ -266,23 +266,31 @@ func (a *api) cancelTransaction(w http.ResponseWriter, r *http.Request, user act
 	if !decode(w, r, &input) {
 		return
 	}
+	if input.ExpectedVersion < 1 || input.ExpectedVersion >= 2147483647 {
+		fail(w, 400, "invalid_revision", "Supply a valid expected_version")
+		return
+	}
 	input.Reason = strings.TrimSpace(input.Reason)
-	if input.ExpectedVersion < 1 || input.ExpectedVersion >= 2147483647 || !validText(input.Reason, 2048) {
-		fail(w, 400, "invalid_revision", "Supply expected_version and a nonempty change_reason")
+	if input.Reason == "" {
+		input.Reason = "Manual deletion"
+	}
+	if !validText(input.Reason, 2048) {
+		fail(w, 400, "invalid_reason", "change_reason must contain at most 2048 bytes")
 		return
 	}
 	var data json.RawMessage
 	err := a.db.QueryRowContext(r.Context(), `UPDATE ipo_pos.transactions AS t SET status='cancelled',version=version+1,
         changed_by_user_id=$4,automation_run_id=NULL,change_reason=$5
-        WHERE business_id=$1 AND id=$2 AND version=$3 AND status='confirmed' RETURNING `+transactionJSON, user.BusinessID, id, input.ExpectedVersion, user.UserID, input.Reason).Scan(&data)
-	if checkUpdate(w, r, a.db, user, id, false, err) {
+        WHERE business_id=$1 AND id=$2 AND version=$3 AND created_by_user_id=$4 AND status='confirmed'
+        RETURNING `+transactionJSON, user.BusinessID, id, input.ExpectedVersion, user.UserID, input.Reason).Scan(&data)
+	if checkUpdate(w, r, a.db, user, id, "delete", err) {
 		writeJSON(w, 200, data)
 	}
 }
 
 func checkUpdate(w http.ResponseWriter, r *http.Request, db interface {
 	QueryRowContext(context.Context, string, ...any) *sql.Row
-}, user actor, id string, creatorOnly bool, err error) bool {
+}, user actor, id, action string, err error) bool {
 	if errors.Is(err, sql.ErrNoRows) {
 		var creator sql.NullString
 		err = db.QueryRowContext(r.Context(), "SELECT created_by_user_id FROM ipo_pos.transactions WHERE business_id=$1 AND id=$2", user.BusinessID, id).Scan(&creator)
@@ -291,8 +299,8 @@ func checkUpdate(w http.ResponseWriter, r *http.Request, db interface {
 			fail(w, 404, "not_found", "Transaction not found")
 		case err != nil:
 			dbFailure(w, err)
-		case creatorOnly && (!creator.Valid || creator.String != user.UserID):
-			fail(w, 403, "not_transaction_creator", "Only the staff member who recorded this transaction can edit it")
+		case !creator.Valid || creator.String != user.UserID:
+			fail(w, 403, "not_transaction_creator", "Only the staff member who recorded this transaction can "+action+" it")
 		default:
 			fail(w, 409, "version_conflict", "Transaction changed or is already cancelled; fetch the current record before retrying")
 		}

@@ -323,8 +323,8 @@ for WhatsApp-only authentication; it defaults to false.
 | View IPOs and form types | Yes | Yes |
 | Create IPOs in the shared catalogue | Yes | No |
 | View/create staff in their business | Yes | No |
-| View/create/cancel transactions and view history | Yes | Yes |
-| Edit confirmed transactions | Original creator only | Original creator only |
+| View/create transactions and view history | Yes | Yes |
+| Edit or cancel confirmed transactions | Original creator only | Original creator only |
 
 There is no separate signup endpoint or client-supplied actor identity. Login attempts are
 limited to 10 per minute per source IP, with bounded process memory. The server
@@ -388,13 +388,12 @@ business). The first request returns 201; identical retries by its creator retur
 payloads/actors using that key return 409. The original normalized request hash
 is retained even after edits. A legitimate second order must use a new key.
 
-Edits and cancellations require `expected_version`. For an edit, `change_reason`
-is optional and defaults to `Manual edit` when omitted or blank. Cancellation
-requires a nonempty `change_reason`.
+Edits and cancellations require `expected_version`. If `change_reason` is
+omitted or blank, the audit history records `Manual edit` or `Manual deletion`.
 A successful write advances the version and produces its snapshot atomically.
 A stale version returns 409; a record outside the selected business returns 404.
-Only the recorded creator can edit a confirmed transaction. Other staff, including
-admins, receive 403 for edit requests within the same business.
+Only the recorded creator can edit or cancel a confirmed transaction. Other staff,
+including admins, receive 403 for either request within the same business.
 Retries cannot create extra versions. Cancellation preserves amount and history;
 use `status=confirmed` when listing current active transactions.
 

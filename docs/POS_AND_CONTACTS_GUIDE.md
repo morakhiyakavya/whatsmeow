@@ -63,8 +63,9 @@ Each business has its own customer records and contributed contact names. A staf
 member belonging to two businesses must explicitly choose which business receives
 an upload. An upload to one business does not propagate to the other.
 
-Admins and cashiers can upload/resolve contacts, create customers, record transactions,
-edit/cancel transactions and inspect history. Only admins can create staff or IPO entries.
+Admins and cashiers can upload/resolve contacts, create customers, record transactions
+and inspect history. They can edit or cancel confirmed transactions they created.
+Only admins can create staff or IPO entries.
 Only the registering user can pair an account or use it as the transaction's sender;
 being an admin does not grant the right to send through a colleague's account.
 
@@ -875,23 +876,24 @@ transaction. Lack of an eligible connected worker can leave a receipt pending.
 
 ## 11. Correct or cancel a saved transaction
 
-Only the original creator can edit a confirmed transaction. On Android, only that person
-sees **Edit trade** on Transactions. Fetch the current transaction first with
-`GET .../transactions/{transactionID}`. To edit it, use
+Only the original creator can edit or cancel a confirmed transaction. On Android,
+only that person sees **Edit trade** and **Delete trade** on Transactions. Fetch the
+current transaction with `GET .../transactions/{transactionID}`. To edit it, use
 `PUT .../transactions/{transactionID}` with the complete editable transaction fields and the current
 `expected_version`. The audit history records `Manual edit` when `change_reason` is omitted or blank.
 Include `whatsapp_account_id` only to request a separate WhatsApp
 update from the creator's paired account. The Android checkbox starts unchecked.
 If the sender or recipient cannot be used, the edit and message request are both rejected.
 
-To cancel, supply the current `expected_version` and a nonempty `change_reason`.
+To cancel, supply the current `expected_version`. The audit history records
+`Manual deletion` when `change_reason` is omitted or blank.
 
 ```http
 POST /api/businesses/{businessID}/transactions/{transactionID}/cancel
 Authorization: Bearer YOUR_ACCESS_TOKEN
 Content-Type: application/json
 
-{"expected_version":1,"change_reason":"Customer cancelled the order"}
+{"expected_version":1}
 ```
 
 Successful edits/cancellation advance the version and preserve earlier snapshots.

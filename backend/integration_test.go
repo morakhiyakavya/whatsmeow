@@ -298,11 +298,12 @@ func TestManualLedgerIntegration(t *testing.T) {
 	if object["version"] != float64(2) {
 		t.Fatal("creation replay overwrote edited transaction")
 	}
-	status, object, _ = cashier.request("POST", base+"/transactions/"+transactionID+"/cancel", map[string]any{"expected_version": 2}, "")
-	expectStatus(t, 400, status, object)
-	status, object, _ = cashier.request("POST", base+"/transactions/"+transactionID+"/cancel", map[string]any{"expected_version": 2, "change_reason": "Customer cancelled"}, "")
+	cancellation := map[string]any{"expected_version": 2}
+	status, object, _ = client.request("POST", base+"/transactions/"+transactionID+"/cancel", cancellation, "")
+	expectStatus(t, 403, status, object)
+	status, object, _ = cashier.request("POST", base+"/transactions/"+transactionID+"/cancel", cancellation, "")
 	expectStatus(t, 200, status, object)
-	if field(t, object, "status") != "cancelled" || object["version"] != float64(3) {
+	if field(t, object, "status") != "cancelled" || object["version"] != float64(3) || field(t, object, "change_reason") != "Manual deletion" {
 		t.Fatal("cancellation did not preserve history")
 	}
 	edit["expected_version"] = 3
